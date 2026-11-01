@@ -11,4 +11,4 @@ Run it locally by serving the folder (`python -m http.server`) and opening `inde
 
 ## The game
 
-Monsters patrol every floor of L1, L2 and B1. They see you inside a view cone (walls block it) and hear you when you run nearby; once they see you they chase, and if they catch you, you die and restart. `world/monsters.json` configures them (model, height, speed, sight, counts per floor); drop your own animated `.glb` files into `monsters/` and set `glb` to use them.
+Monsters patrol every floor of L1, L2 and B1. They see you inside a view cone (walls block it) and hear you when you run nearby; once they see you they chase, and if they catch you, you die and restart. `world/monsters.json` configures them (model, height, speed, sight, counts per floor); `monsters/creature.glb` is the Meshy character (textured, rigged); its idle/walk/run/attack clips were generated in Blender by `make_monster_anims.py` because the Meshy export had a skeleton but no animation. Drop in other animated `.glb` files and set `glb` to use them.

@@ -194,7 +194,9 @@ class Monster {
     const asset = monsterAssets[cfg.name];
     if (asset) {
       this.obj = SkeletonUtils.clone(asset.scene);
-      const bb = new THREE.Box3().setFromObject(this.obj), hgt = bb.max.y - bb.min.y || 1, s = cfg.height / hgt;
+      const bb = new THREE.Box3(); this.obj.updateWorldMatrix(true, true);
+      this.obj.traverse(o => { if (o.geometry && (o.isMesh || o.isSkinnedMesh)) { o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });   // rest-pose geometry, not skinned bounds
+      const hgt = bb.max.y - bb.min.y || 1, s = cfg.height / hgt;
       this.obj.scale.setScalar(s); this.obj.position.y = -bb.min.y * s;
       this.root = new THREE.Group(); this.root.add(this.obj);
       this.mixer = new THREE.AnimationMixer(this.obj); this.clips = {};
@@ -241,7 +243,7 @@ class Monster {
     const c = this.cfg, seen = this.sees();
     const dist = Math.hypot(P.p.x - this.pos.x, P.p.z - this.pos.z);
     if (seen) { this.state = "chase"; this.lost = 0; this.last = [P.p.x, P.p.z]; }
-    else if (this.state === "chase") { this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
+    else if (this.state === "chase") { this.last = this.last || [P.p.x, P.p.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
     else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
     if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
     this.repath -= dt;
@@ -273,7 +275,7 @@ class Monster {
       const want = Math.atan2(-(P.p.x - this.pos.x), -(P.p.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
       this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
     }
-    this.root.position.set(this.pos.x, this.fy, this.pos.z); this.root.rotation.y = this.yaw;
+    this.root.position.set(this.pos.x, this.fy, this.pos.z); this.root.rotation.y = this.yaw + (this.mixer ? (c.yawOffset ?? Math.PI) : 0);
     if (this.mixer) { this.play(this.speed > c.alert + 0.3 ? "run" : this.speed > 0.1 ? "walk" : "idle"); this.mixer.update(dt); }
     else this.root.position.y = this.fy + Math.sin(performance.now() / 260 + this.home[0]) * 0.02;
     return {dist, chasing: this.state === "chase" && this.onFloor(), catches: dist < 1.0 && this.onFloor() && this.los()};

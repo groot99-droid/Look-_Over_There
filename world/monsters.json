@@ -1,7 +1,28 @@
 {
-  "_note": "Set glb to a path (e.g. monsters/stalker.glb) to use your own animated, textured model. anim maps roles to clip names; leave it out to match by name (idle/walk/run/attack). With glb null a placeholder figure is used.",
+  "_note": "glb = your animated, textured model (clips named idle/walk/run/attack are used automatically, or map them with anim). yawOffset turns the model so its front points where it walks (Meshy/Blender models face +Z, so 3.14159). With glb null a placeholder figure is used.",
   "monsters": [
-    {"name": "stalker", "glb": null, "height": 2.3, "perLevel": {"L1": 4, "L2": 4, "B1": 4},
-     "patrol": 1.3, "alert": 2.6, "chase": 5.6, "sight": 16, "fov": 110, "hear": 9}
+    {
+      "name": "creature",
+      "glb": "monsters/creature.glb",
+      "height": 2.1,
+      "yawOffset": 3.14159,
+      "perLevel": {
+        "L1": 4,
+        "L2": 4,
+        "B1": 4
+      },
+      "patrol": 1.3,
+      "alert": 2.6,
+      "chase": 5.6,
+      "sight": 16,
+      "fov": 110,
+      "hear": 9,
+      "anim": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack"
+      }
+    }
   ]
 }
