@@ -8,3 +8,7 @@ A walkable multi-level Backrooms building (flooded poolrooms, office maze, white
 - `.github/workflows/pages.yml` publishes `index.html` and `world/` to GitHub Pages on every push to `main`.
 
 Run it locally by serving the folder (`python -m http.server`) and opening `index.html`.
+
+## The game
+
+Monsters patrol every floor of L1, L2 and B1. They see you inside a view cone (walls block it) and hear you when you run nearby; once they see you they chase, and if they catch you, you die and restart. `world/monsters.json` configures them (model, height, speed, sight, counts per floor); drop your own animated `.glb` files into `monsters/` and set `glb` to use them.

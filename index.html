@@ -7,19 +7,24 @@
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none}
   canvas{display:block;width:100%;height:100%}
-  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#8a8a7a;font:14px/1.4 system-ui,sans-serif;letter-spacing:.08em;z-index:2;transition:opacity .6s}
+  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#8a8a7a;font:14px/1.4 system-ui,sans-serif;letter-spacing:.08em;z-index:5;transition:opacity .6s}
+  #fear{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(120,0,0,.85) 100%);z-index:2}
+  #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
 <body>
 <div id="load">LOADING</div>
+<div id="fear"></div>
+<div id="death">YOU DIED</div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from "three";
 import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
 import {DRACOLoader} from "three/addons/loaders/DRACOLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
-const GLB = "world/backrooms_L1.glb", JSON_URL = "world/backrooms_L1_colliders.json";
-const loadEl = document.getElementById("load");
+const GLB = "world/backrooms_L1.glb", JSON_URL = "world/backrooms_L1_colliders.json", MON_URL = "world/monsters.json";
+const $ = id => document.getElementById(id);
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -59,7 +64,7 @@ function near(x, z, r) {
   return out;
 }
 const R = 0.28, H = 1.7, EYE = 1.55, STEP = 0.46;
-const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false};
+const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, speed: 0, running: false};
 const overlap = (b, p) => p.x + R > b.n[0] && p.x - R < b.x[0] && p.z + R > b.n[2] && p.z - R < b.x[2] && p.y + H > b.n[1] && p.y < b.x[1];
 function collide(p) { for (const id of near(p.x, p.z, 1.5)) if (overlap(boxes[id], p)) return boxes[id]; return null; }
 function move(dx, dy, dz) {
@@ -83,7 +88,7 @@ teleport(spawn);
 
 // ---------------------------------------------------------------- stairs / hatches: stepping into one carries you to the other end
 const links = data.links || [];
-let armed = true;                       // after a jump, stay quiet until the player has left every trigger
+let armed = true;
 function linkAt() {
   for (const l of links) {
     const dx = P.p.x - l.position[0], dz = P.p.z - l.position[2], dy = P.p.y - l.position[1];
@@ -97,51 +102,266 @@ function checkLinks() {
   if (armed) { armed = false; teleport(l.target.position); }
 }
 
+// ---------------------------------------------------------------- navigation grid per floor (monsters walk the same colliders the player does)
+const NAV = 0.5, NX0 = -27, NZ0 = -24, NW = Math.ceil(54 / NAV), NH = Math.ceil(54 / NAV);
+const FLOORS = {L1: 0, L2: 3.2, B1: -3.0};
+function buildNav(fy) {
+  const walk = new Uint8Array(NW * NH);
+  for (let j = 0; j < NH; j++) for (let i = 0; i < NW; i++) {
+    const x = NX0 + (i + .5) * NAV, z = NZ0 + (j + .5) * NAV;
+    let ground = false, blocked = false;
+    for (const id of near(x, z, 0.6)) {
+      const b = boxes[id];
+      if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
+      if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
+    }
+    walk[j * NW + i] = ground && !blocked ? 1 : 0;
+  }
+  return walk;
+}
+const NAVS = {}; for (const k in FLOORS) NAVS[k] = buildNav(FLOORS[k]);
+const cellOf = (x, z) => { const i = Math.floor((x - NX0) / NAV), j = Math.floor((z - NZ0) / NAV); return (i >= 0 && j >= 0 && i < NW && j < NH) ? j * NW + i : -1; };
+const cellXZ = c => [NX0 + ((c % NW) + .5) * NAV, NZ0 + (Math.floor(c / NW) + .5) * NAV];
+function nearestWalk(walk, x, z) {
+  let c = cellOf(x, z); if (c >= 0 && walk[c]) return c;
+  for (let r = 1; r < 8; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+    const i = Math.floor((x - NX0) / NAV) + di, j = Math.floor((z - NZ0) / NAV) + dj;
+    if (i >= 0 && j >= 0 && i < NW && j < NH && walk[j * NW + i]) return j * NW + i;
+  }
+  return -1;
+}
+function astar(walk, a, b) {
+  if (a < 0 || b < 0) return null;
+  const open = [[0, a]], came = new Map([[a, -1]]), g = new Map([[a, 0]]);
+  const hx = c => { const [x, z] = cellXZ(c), [bx, bz] = cellXZ(b); return Math.hypot(x - bx, z - bz); };
+  let it = 0;
+  while (open.length && it++ < 9000) {
+    let mi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[mi][0]) mi = k;
+    const [, c] = open.splice(mi, 1)[0];
+    if (c === b) { const path = []; for (let q = c; q !== -1; q = came.get(q)) path.push(q); return path.reverse().map(cellXZ); }
+    const ci = c % NW, cj = Math.floor(c / NW);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      if (!di && !dj) continue;
+      const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= NW || j >= NH) continue;
+      const n = j * NW + i; if (!walk[n]) continue;
+      if (di && dj && (!walk[cj * NW + i] || !walk[j * NW + ci])) continue;          // no corner cutting
+      const ng = g.get(c) + (di && dj ? 1.414 : 1) * NAV;
+      if (!g.has(n) || ng < g.get(n)) { g.set(n, ng); came.set(n, c); open.push([ng + hx(n), n]); }
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- monsters
+const monCfg = await fetch(MON_URL).then(r => r.ok ? r.json() : null).catch(() => null) ||
+  {monsters: [{name: "stalker", glb: null, height: 2.3, perLevel: {L1: 4, L2: 4, B1: 4}, patrol: 1.3, alert: 2.6, chase: 5.6, sight: 16, fov: 110, hear: 9}]};
+const monsterAssets = {};
+for (const m of monCfg.monsters) {
+  if (!m.glb) continue;
+  try { monsterAssets[m.name] = await new Promise((res, rej) => loader.load(m.glb, res, undefined, rej)); } catch (e) { console.warn("monster model missing, using placeholder:", m.glb); }
+}
+function placeholderMonster(h) {
+  const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({color: 0x0d0d0f, roughness: .9});
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.22, h * .55, 6, 10), mat); body.position.y = h * .62; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.2, 12, 10), mat); head.position.y = h * .98; head.scale.set(.8, 1.2, .9); g.add(head);
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(.05, .04, h * .36, 6), mat); leg.position.set(s * .09, h * .17, 0); g.add(leg);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(.04, .035, h * .62, 6), mat); arm.position.set(s * .3, h * .6, 0); arm.rotation.z = s * .12; g.add(arm);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), new THREE.MeshBasicMaterial({color: 0xff2a1a})); eye.position.set(s * .07, h * .99, -.16); g.add(eye);
+  }
+  g.userData.placeholder = true; return g;
+}
+const monsters = [];
+function rng32(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function pickSpots(level, count, rnd) {
+  const walk = NAVS[level], out = []; let tries = 0;
+  while (out.length < count && tries++ < 4000) {
+    const c = Math.floor(rnd() * NW * NH); if (!walk[c]) continue;
+    const [x, z] = cellXZ(c);
+    if (level === "L1" && Math.hypot(x - spawn[0], z - spawn[2]) < 14) continue;      // never right on top of the start
+    if (links.some(l => Math.abs(l.position[1] - FLOORS[level]) < 2 && Math.hypot(x - l.position[0], z - l.position[2]) < 4)) continue;
+    if (out.some(o => Math.hypot(x - o[0], z - o[1]) < 9)) continue;
+    out.push([x, z]);
+  }
+  return out;
+}
+class Monster {
+  constructor(cfg, level, x, z) {
+    this.cfg = cfg; this.level = level; this.fy = FLOORS[level]; this.walk = NAVS[level];
+    this.home = [x, z]; this.pos = new THREE.Vector3(x, this.fy, z); this.yaw = Math.random() * 6.28;
+    this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0;
+    const asset = monsterAssets[cfg.name];
+    if (asset) {
+      this.obj = SkeletonUtils.clone(asset.scene);
+      const bb = new THREE.Box3().setFromObject(this.obj), hgt = bb.max.y - bb.min.y || 1, s = cfg.height / hgt;
+      this.obj.scale.setScalar(s); this.obj.position.y = -bb.min.y * s;
+      this.root = new THREE.Group(); this.root.add(this.obj);
+      this.mixer = new THREE.AnimationMixer(this.obj); this.clips = {};
+      const find = (re, i = 0) => asset.animations.find(a => re.test(a.name)) || asset.animations[i];
+      const an = cfg.anim || {};
+      const pick = (k, re) => an[k] ? asset.animations.find(a => a.name === an[k]) : find(re);
+      for (const [k, re] of [["idle", /idle|stand|breath/i], ["walk", /walk|crawl|shamble/i], ["run", /run|sprint|chase/i], ["attack", /attack|bite|swing|scream/i]]) {
+        const c = pick(k, re); if (c) this.clips[k] = this.mixer.clipAction(c);
+      }
+      this.clips.walk = this.clips.walk || this.clips.idle || Object.values(this.clips)[0];
+      this.clips.run = this.clips.run || this.clips.walk; this.clips.idle = this.clips.idle || this.clips.walk;
+      this.playing = null; this.play("walk");
+    } else this.root = placeholderMonster(cfg.height || 2.3);
+    scene.add(this.root);
+  }
+  play(name) {
+    if (!this.mixer || !this.clips[name] || this.playing === this.clips[name]) return;
+    const n = this.clips[name]; n.reset().fadeIn(0.25).play(); if (this.playing) this.playing.fadeOut(0.25); this.playing = n;
+  }
+  onFloor() { return Math.abs(P.p.y - this.fy) < 1.6; }
+  los() {
+    const ex = this.pos.x, ez = this.pos.z, ey = this.fy + 1.6, px = P.p.x, pz = P.p.z, py = P.p.y + 1.4;
+    const d = Math.hypot(px - ex, pz - ez), steps = Math.ceil(d / 0.3);
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps, x = ex + (px - ex) * t, z = ez + (pz - ez) * t, y = ey + (py - ey) * t;
+      for (const id of near(x, z, 0.2)) { const b = boxes[id]; if (x > b.n[0] && x < b.x[0] && z > b.n[2] && z < b.x[2] && y > b.n[1] && y < b.x[1] && b.x[1] - b.n[1] > 0.6) return false; }
+    }
+    return true;
+  }
+  sees() {
+    if (!this.onFloor()) return false;
+    const dx = P.p.x - this.pos.x, dz = P.p.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (d > this.cfg.sight) return false;
+    const fwd = [-Math.sin(this.yaw), -Math.cos(this.yaw)];                  // model front is -Z at yaw 0
+    const ang = Math.acos(Math.max(-1, Math.min(1, (fwd[0] * dx + fwd[1] * dz) / (d || 1)))) * 180 / Math.PI;
+    if (d > 2.5 && ang > this.cfg.fov / 2) return false;
+    return this.los();
+  }
+  goTo(x, z) {
+    const a = nearestWalk(this.walk, this.pos.x, this.pos.z), b = nearestWalk(this.walk, x, z);
+    this.path = astar(this.walk, a, b) || []; this.path.shift(); this.target = [x, z];
+  }
+  update(dt, noiseAt) {
+    const c = this.cfg, seen = this.sees();
+    const dist = Math.hypot(P.p.x - this.pos.x, P.p.z - this.pos.z);
+    if (seen) { this.state = "chase"; this.lost = 0; this.last = [P.p.x, P.p.z]; }
+    else if (this.state === "chase") { this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
+    else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
+    if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
+    this.repath -= dt;
+    let speed = c.patrol;
+    if (this.state === "chase") {
+      speed = c.chase;
+      if (this.repath <= 0) { this.goTo(P.p.x, P.p.z); this.repath = 0.35; }
+    } else if (this.state === "search") speed = c.alert;
+    else {                                                                      // patrol: wander between random spots on this floor
+      if (this.wait > 0) { this.wait -= dt; speed = 0; }
+      else if (!this.path.length) {
+        const spots = pickSpots(this.level, 1, Math.random);
+        if (spots.length) this.goTo(spots[0][0], spots[0][1]);
+        this.wait = 0.6 + Math.random() * 2.5;
+      }
+    }
+    // follow the path
+    this.speed = 0;
+    if (this.path.length && speed > 0) {
+      const [tx, tz] = this.path[0], dx = tx - this.pos.x, dz = tz - this.pos.z, dd = Math.hypot(dx, dz);
+      if (dd < 0.25) this.path.shift();
+      else {
+        const want = Math.atan2(-dx, -dz); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+        this.yaw += Math.sign(da) * Math.min(Math.abs(da), (this.state === "chase" ? 7 : 3.5) * dt);
+        const step = Math.min(dd, speed * dt);
+        this.pos.x += (dx / dd) * step; this.pos.z += (dz / dd) * step; this.speed = speed;
+      }
+    } else if (this.state === "chase" && dist > 0.1) {                         // standing close with nothing to path to: just face the player
+      const want = Math.atan2(-(P.p.x - this.pos.x), -(P.p.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+      this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
+    }
+    this.root.position.set(this.pos.x, this.fy, this.pos.z); this.root.rotation.y = this.yaw;
+    if (this.mixer) { this.play(this.speed > c.alert + 0.3 ? "run" : this.speed > 0.1 ? "walk" : "idle"); this.mixer.update(dt); }
+    else this.root.position.y = this.fy + Math.sin(performance.now() / 260 + this.home[0]) * 0.02;
+    return {dist, chasing: this.state === "chase" && this.onFloor(), catches: dist < 1.0 && this.onFloor() && this.los()};
+  }
+  dispose() { scene.remove(this.root); }
+}
+function spawnMonsters() {
+  monsters.forEach(m => m.dispose()); monsters.length = 0;
+  const rnd = rng32(1999);
+  for (const cfg of monCfg.monsters) for (const [level, n] of Object.entries(cfg.perLevel || {L1: 3})) {
+    if (!NAVS[level]) continue;
+    for (const [x, z] of pickSpots(level, n, rnd)) monsters.push(new Monster(cfg, level, x, z));
+  }
+}
+spawnMonsters();
+
 // ---------------------------------------------------------------- input: keyboard (WASD + arrows), mouse look, Xbox controller
 const keys = {};
 addEventListener("keydown", e => { keys[e.code] = true; if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault(); });
 addEventListener("keyup", e => { keys[e.code] = false; });
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
-renderer.domElement.addEventListener("click", () => { if (!navigator.getGamepads().some(g => g)) renderer.domElement.requestPointerLock?.(); });
+renderer.domElement.addEventListener("click", () => { if (![...navigator.getGamepads()].some(g => g)) renderer.domElement.requestPointerLock?.(); });
 addEventListener("mousemove", e => {
   if (document.pointerLockElement !== renderer.domElement) return;
   P.yaw -= e.movementX * 0.0024; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0024));
 });
 const dz = (v, t = 0.16) => Math.abs(v) < t ? 0 : Math.sign(v) * (Math.abs(v) - t) / (1 - t);
+let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
+  rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
   if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, run: false};
   const a = gp.axes, b = gp.buttons;
   return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12),
           jump: !!(b[0] && b[0].pressed), run: !!((b[10] && b[10].pressed) || (b[7] && b[7].value > 0.4) || (b[5] && b[5].pressed))};
 }
 
-// ---------------------------------------------------------------- loop
-loadEl.style.opacity = 0; setTimeout(() => loadEl.remove(), 700);
-const clock = new THREE.Clock();
-function tick() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+// ---------------------------------------------------------------- game loop
+let dead = false, deadT = 0, rumbleT = 0;
+function die() {
+  dead = true; deadT = 0; $("death").style.opacity = 1; $("fear").style.opacity = 1;
+  rumble?.playEffect?.("dual-rumble", {duration: 700, strongMagnitude: 1, weakMagnitude: 1});
+}
+function respawn() {
+  dead = false; teleport(spawn); P.yaw = 0; P.pitch = 0; armed = false; spawnMonsters();
+  $("death").style.opacity = 0; $("fear").style.opacity = 0;
+}
+function update(dt) {
+  if (dead) { deadT += dt; if (deadT > 3.2) respawn(); return; }
   const g = pad();
-  // looking: right stick, mouse, arrow left/right; walking: left stick, WASD, arrow up/down
   P.yaw += (((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.9 - g.lx * 2.6) * dt;
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
   const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
   const side = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
-  const sp = (keys.ShiftLeft || keys.ShiftRight || g.run ? 7 : 3.6) * dt;
+  P.running = !!(keys.ShiftLeft || keys.ShiftRight || g.run) && Math.hypot(fwd, side) > 0.2;
+  const sp = (P.running ? 7 : 3.6) * dt;
   let wx = -Math.sin(P.yaw) * fwd + Math.cos(P.yaw) * side, wz = -Math.cos(P.yaw) * fwd - Math.sin(P.yaw) * side;
-  const mag = Math.min(1, Math.hypot(wx, wz)); const l = Math.hypot(wx, wz) || 1;
+  const mag = Math.min(1, Math.hypot(wx, wz)), l = Math.hypot(wx, wz) || 1;
   wx = wx / l * mag * sp; wz = wz / l * mag * sp;
   P.v.y -= 22 * dt;
   if ((keys.Space || g.jump) && P.ground) { P.v.y = 6.2; P.ground = false; }
   move(wx, 0, wz); move(0, P.v.y * dt, 0);
   if (P.p.y < -160) teleport(spawn);
   checkLinks();
-  camera.position.set(P.p.x, P.p.y + EYE, P.p.z);
-  camera.rotation.set(P.pitch, P.yaw, 0, "YXZ");
-  renderer.render(scene, camera);
-  requestAnimationFrame(tick);
+  // monsters: they hear you running, see you in their view cone, chase, and catch
+  const noise = P.running ? [P.p.x, P.p.z] : null;
+  let closest = 99, caught = false;
+  for (const m of monsters) {
+    const r = m.update(dt, noise);
+    if (r.chasing) closest = Math.min(closest, r.dist);
+    if (r.catches) caught = true;
+  }
+  const fear = Math.max(0, 1 - closest / 16);
+  $("fear").style.opacity = fear * 0.9;
+  if (rumble && closest < 8 && (rumbleT -= dt) <= 0) { rumble.playEffect?.("dual-rumble", {duration: 120, strongMagnitude: .5 * fear, weakMagnitude: .7 * fear}); rumbleT = 0.15; }
+  if (caught) die();
 }
-tick();
+function frame() {
+  update(Math.min(clock.getDelta(), 0.05));
+  camera.position.set(P.p.x, P.p.y + EYE - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
+  camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+const clock = new THREE.Clock();
+$("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
+window.__game = {P, monsters, update, teleport, boxes, data, NAVS, FLOORS, die, respawn, get dead() { return dead; }};
+frame();
 </script>
 </body>
 </html>
