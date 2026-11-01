@@ -9,7 +9,9 @@ import math
 import sys
 from mathutils import Quaternion, Vector
 
-src, dst = sys.argv[sys.argv.index("--") + 1:][:2]
+args = sys.argv[sys.argv.index("--") + 1:]
+src, dst = args[:2]
+MAKE_CLIPS = "keepclips" not in args          # "keepclips": the file already has Meshy's own animations, only shrink textures and re-export
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
@@ -20,6 +22,16 @@ Q = {b.name: b.matrix_local.to_quaternion() for b in bones}
 kids = {b.name: [c.name for c in b.children] for b in bones}
 root = next(b.name for b in bones if b.parent is None)
 
+def shrink_images():
+    for im in bpy.data.images:                                              # web-sized textures: the Meshy exports carry 4K-8K PNGs (one file was 96 MB)
+        if im.size[0] > 1024 or im.size[1] > 1024:
+            r = 1024 / max(im.size); im.scale(max(1, int(im.size[0] * r)), max(1, int(im.size[1] * r)))
+if not MAKE_CLIPS:
+    shrink_images()
+    bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_animations=True, export_animation_mode="ACTIONS", export_skins=True,
+                              export_image_format="JPEG", export_image_quality=85)
+    print("EXPORTED", dst, [a.name for a in bpy.data.actions]); raise SystemExit
+
 def chain(start, n):
     out, cur = [], start
     while cur and len(out) < n:
@@ -27,12 +39,12 @@ def chain(start, n):
     return out
 # the two legs hang from the pelvis: the children whose heads sit lowest; the arms leave the chest and are the widest bones
 pelvis = kids[root][0]
-leg_roots = sorted([k for k in kids[pelvis] if head[k].z < head[pelvis].z + 0.05], key=lambda k: head[k].x)
+leg_roots = sorted([k for k in kids[pelvis] if head[k].z < head[pelvis].z + 0.05 and tail[k].z < head[k].z - 0.1], key=lambda k: head[k].x)
 legs = {"L": chain(leg_roots[-1], 3), "R": chain(leg_roots[0], 3)}                 # x>0 and x<0
 spine = [pelvis]
 cur = pelvis
 while True:
-    ups = [k for k in kids[cur] if head[k].z > head[cur].z + 0.03 and abs(head[k].x) < 0.12]
+    ups = [k for k in kids[cur] if tail[k].z > head[cur].z + 0.02 and abs(head[k].x) < 0.15]
     if not ups: break
     cur = max(ups, key=lambda k: head[k].z); spine.append(cur)
 arm_roots = [k for b in spine for k in kids[b] if k not in spine and head[k].z > head[pelvis].z + 0.3 and abs(tail[k].x) > 0.07]
@@ -91,15 +103,17 @@ def attack(t):
         sh = arms[side]; setq(sh[0], -1.9 * k); setq(sh[1], -0.6 * k)
     for side in legs: setq(legs[side][0], 0.25 * k * (1 if side == "L" else -1))
 
-actions = [make_action("idle", 72, idle),
-           make_action("walk", 33, gait(0.50, 0.40, 0.08, 0.025, 0.55)),
-           make_action("run", 18, gait(0.80, 0.75, 0.30, 0.05, 0.95)),
-           make_action("attack", 27, attack)]
-arm.animation_data.action = None
-for a in actions:                                                           # push each clip to its own NLA strip so the exporter writes all of them
-    tr = arm.animation_data.nla_tracks.new(); tr.name = a.name
-    st = tr.strips.new(a.name, 1, a); st.name = a.name
-for pb in pose.bones: pb.rotation_quaternion = Quaternion((1, 0, 0, 0)); pb.location = (0, 0, 0)
-bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_animations=True, export_animation_mode="NLA_TRACKS",
-                          export_skins=True, export_apply=False, export_draco_mesh_compression_enable=False, export_image_format="AUTO")
-print("EXPORTED", dst, [a.name for a in actions])
+shrink_images()
+if MAKE_CLIPS:
+    actions = [make_action("idle", 72, idle),
+               make_action("walk", 33, gait(0.50, 0.40, 0.08, 0.025, 0.55)),
+               make_action("run", 18, gait(0.80, 0.75, 0.30, 0.05, 0.95)),
+               make_action("attack", 27, attack)]
+    arm.animation_data.action = None
+    for a in actions:                                                           # push each clip to its own NLA strip so the exporter writes all of them
+        tr = arm.animation_data.nla_tracks.new(); tr.name = a.name
+        st = tr.strips.new(a.name, 1, a); st.name = a.name
+    for pb in pose.bones: pb.rotation_quaternion = Quaternion((1, 0, 0, 0)); pb.location = (0, 0, 0)
+bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", export_animations=True, export_animation_mode="NLA_TRACKS" if MAKE_CLIPS else "ACTIONS",
+                          export_skins=True, export_apply=False, export_draco_mesh_compression_enable=False, export_image_format="JPEG", export_image_quality=85)
+print("EXPORTED", dst, [a.name for a in bpy.data.actions])

@@ -1,28 +1,86 @@
 {
-  "_note": "glb = your animated, textured model (clips named idle/walk/run/attack are used automatically, or map them with anim). yawOffset turns the model so its front points where it walks (Meshy/Blender models face +Z, so 3.14159). With glb null a placeholder figure is used.",
+  "_note": "One monster kind per floor. glb = animated, textured model; anim maps roles to the clip names inside it; yawOffset turns it to face the way it walks (Meshy models face +Z: 3.14159); perLevel = how many patrol each floor.",
   "monsters": [
+    {
+      "name": "sinew",
+      "glb": "monsters/sinew.glb",
+      "height": 2.3,
+      "yawOffset": 3.14159,
+      "perLevel": {
+        "B1": 4
+      },
+      "patrol": 1.4,
+      "alert": 2.7,
+      "chase": 5.5,
+      "anim": {
+        "idle": "Alert",
+        "walk": "Walking",
+        "run": "Running"
+      },
+      "sight": 16,
+      "fov": 110,
+      "hear": 9
+    },
+    {
+      "name": "pale_traveler",
+      "glb": "monsters/pale_traveler.glb",
+      "height": 2.0,
+      "yawOffset": 3.14159,
+      "perLevel": {
+        "L1": 4
+      },
+      "patrol": 1.2,
+      "alert": 2.5,
+      "chase": 5.4,
+      "anim": {
+        "walk": "Walking",
+        "run": "Running"
+      },
+      "sight": 16,
+      "fov": 110,
+      "hear": 9
+    },
+    {
+      "name": "clawed",
+      "glb": "monsters/clawed.glb",
+      "height": 2.2,
+      "yawOffset": 3.14159,
+      "perLevel": {
+        "L2": 4
+      },
+      "patrol": 1.3,
+      "alert": 2.8,
+      "chase": 5.7,
+      "anim": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "attack"
+      },
+      "sight": 16,
+      "fov": 110,
+      "hear": 9
+    },
     {
       "name": "creature",
       "glb": "monsters/creature.glb",
       "height": 2.1,
       "yawOffset": 3.14159,
       "perLevel": {
-        "L1": 4,
-        "L2": 4,
-        "B1": 4
+        "L4": 4
       },
       "patrol": 1.3,
       "alert": 2.6,
-      "chase": 5.6,
-      "sight": 16,
-      "fov": 110,
-      "hear": 9,
+      "chase": 5.4,
       "anim": {
         "idle": "idle",
         "walk": "walk",
         "run": "run",
         "attack": "attack"
-      }
+      },
+      "sight": 16,
+      "fov": 110,
+      "hear": 9
     }
   ]
 }
