@@ -456,7 +456,7 @@ function pad() {
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
     if (edge(5) || edge(15)) cycleCam(1);                     // RB / D-pad right: next camera
   }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1) || down(10)};
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
 }
 
 // ---------------------------------------------------------------- game loop
