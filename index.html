@@ -10,6 +10,15 @@
   #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#8a8a7a;font:14px/1.4 system-ui,sans-serif;letter-spacing:.08em;z-index:5;transition:opacity .6s}
   #fear{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(120,0,0,.85) 100%);z-index:2}
   #fade{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;z-index:3;transition:opacity .35s}
+  #lobby{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#050505;color:#b8b8a8;font:15px/1.5 system-ui,sans-serif;z-index:6}
+  #lobby form{display:flex;flex-direction:column;gap:12px;width:min(340px,86vw)}
+  #lobby h1{margin:0 0 6px;font:700 28px/1 Georgia,serif;letter-spacing:.18em;color:#cfcfbf}
+  #lobby input,#lobby button{font:inherit;padding:10px 12px;border:1px solid #3a3a32;background:#111;color:#e6e6d6;border-radius:3px}
+  #lobby button{cursor:pointer;letter-spacing:.06em}
+  #lobby button.go{background:#2b2a1c;border-color:#6d6a3d}
+  #lobby small{color:#7a7a6a}
+  #l-err{color:#d46a5a;min-height:1.4em}
+  #hud{position:fixed;left:12px;top:10px;color:#9a9a8a;font:12px/1.5 system-ui,sans-serif;letter-spacing:.06em;z-index:1;pointer-events:none;text-shadow:0 0 4px #000}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
@@ -18,6 +27,16 @@
 <div id="fear"></div>
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
+<div id="hud"></div>
+<div id="lobby"><form id="l-form" autocomplete="off">
+  <h1>LOOK OVER THERE</h1>
+  <input id="l-name" placeholder="Your name" maxlength="16">
+  <input id="l-room" placeholder="Room code (share it with friends)" maxlength="8">
+  <button class="go" id="l-join" type="submit">JOIN ROOM</button>
+  <button id="l-solo" type="button">PLAY SOLO</button>
+  <div id="l-err"></div>
+  <small>Everyone in a room shares the building and its monsters. Doors you open stay open for all.</small>
+</form></div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -64,7 +83,7 @@ let pendingLink = null, loading = false;
 function openDoor(dr, byPlayer) {
   if (dr.target !== 0) return;
   if (dr.link && !byPlayer) return;                           // monsters do not use the stair doors
-  dr.target = 1; if (dr.link) pendingLink = dr;
+  dr.target = 1; if (dr.link) pendingLink = dr; else if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name});
 }
 function updateDoors(dt) {
   for (const dr of doors) {
@@ -83,7 +102,7 @@ function disposeTree(root) {
 }
 async function loadGlb(url) { return new Promise((res, rej) => loader.load(url, res, undefined, rej)); }
 async function loadScene(id, arrival) {
-  loading = true; pendingLink = null; devOn.v = false;
+  loading = true; pendingLink = null; devOn.v = false; net.snap = null;
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
   monsters.forEach(m => m.dispose()); monsters.length = 0;
@@ -121,7 +140,7 @@ async function loadScene(id, arrival) {
   }
   if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
   else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
-  armedFall = true; loading = false;
+  armedFall = true; loading = false; net.t = 0;                 // tell the room which floor you are on right away
   fade.style.opacity = 0;
 }
 function goLink(dr) { const l = dr.link; loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); }
@@ -236,6 +255,7 @@ function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
   }
   return out;
 }
+const MON_STATES = ["patrol", "chase", "search"];
 class Monster {
   constructor(cfg, level, x, z) {
     this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
@@ -268,24 +288,24 @@ class Monster {
     const n = this.clips[name]; n.reset(); n.setEffectiveTimeScale(name === "idle" && this.idleSlow ? 0.06 : 1); n.fadeIn(0.25).play();
     if (this.playing) this.playing.fadeOut(0.25); this.playing = n;
   }
-  onFloor() { return Math.abs(P.p.y - this.fy) < 1.6; }
-  los() {
-    const ex = this.pos.x, ez = this.pos.z, ey = this.fy + 1.6, px = P.p.x, pz = P.p.z, py = P.p.y + 1.4;
+  onFloorY(y) { return Math.abs(y - this.fy) < 1.6; }
+  los(t) {
+    const ex = this.pos.x, ez = this.pos.z, ey = this.fy + 1.6, px = t.x, pz = t.z, py = t.y + 1.4;
     const d = Math.hypot(px - ex, pz - ez), steps = Math.ceil(d / 0.3);
     for (let s = 1; s < steps; s++) {
-      const t = s / steps, x = ex + (px - ex) * t, z = ez + (pz - ez) * t, y = ey + (py - ey) * t;
+      const u = s / steps, x = ex + (px - ex) * u, z = ez + (pz - ez) * u, y = ey + (py - ey) * u;
       for (const id of near(x, z, 0.2)) { const b = boxes[id]; if (!b.off && x > b.n[0] && x < b.x[0] && z > b.n[2] && z < b.x[2] && y > b.n[1] && y < b.x[1] && b.x[1] - b.n[1] > 0.6) return false; }
     }
     return true;
   }
-  sees() {
-    if (!this.onFloor()) return false;
-    const dx = P.p.x - this.pos.x, dz = P.p.z - this.pos.z, d = Math.hypot(dx, dz);
-    if (d > this.cfg.sight * (P.crouch ? 0.5 : 1)) return false;                  // crouching halves how far they can see you
+  sees(t) {                                                                         // t: a player {x, y, z, crouch}: me or anyone in the room
+    if (!this.onFloorY(t.y)) return false;
+    const dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (d > this.cfg.sight * (t.crouch ? 0.5 : 1)) return false;                  // crouching halves how far they can see you
     const fwd = [-Math.sin(this.yaw), -Math.cos(this.yaw)];
     const ang = Math.acos(Math.max(-1, Math.min(1, (fwd[0] * dx + fwd[1] * dz) / (d || 1)))) * 180 / Math.PI;
     if (d > 2.5 && ang > this.cfg.fov / 2) return false;
-    return this.los();
+    return this.los(t);
   }
   goTo(x, z) {
     const a = nearestWalk(this.walk, this.pos.x, this.pos.z), b = nearestWalk(this.walk, x, z);
@@ -299,18 +319,23 @@ class Monster {
     }
     return null;
   }
-  update(dt, noiseAt) {
-    const c = this.cfg, seen = this.sees();
-    const dist = Math.hypot(P.p.x - this.pos.x, P.p.z - this.pos.z);
-    if (seen) { this.state = "chase"; this.lost = 0; this.last = [P.p.x, P.p.z]; }
-    else if (this.state === "chase") { this.last = this.last || [P.p.x, P.p.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
+  // The simulation runs on one client per scene (the host). targets = every living player on this floor: {id, x, y, z, crouch, moving}.
+  update(dt, targets) {
+    const c = this.cfg;
+    let seenT = null, sd = 1e9;
+    for (const t of targets) if (this.sees(t)) { const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z); if (d < sd) { sd = d; seenT = t; } }
+    let noiseAt = null, nd = c.hear;                                                // moving about is loud, crouching is silent
+    for (const t of targets) if (t.moving && !t.crouch && this.onFloorY(t.y)) { const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z); if (d < nd) { nd = d; noiseAt = [t.x, t.z]; } }
+    const ct = seenT || targets.find(t => t.id === this.tgt) || null;               // whoever it is chasing
+    if (seenT) { this.state = "chase"; this.lost = 0; this.tgt = seenT.id; this.last = [seenT.x, seenT.z]; }
+    else if (this.state === "chase") { this.last = this.last || [this.pos.x, this.pos.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
     else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
-    if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
+    if (noiseAt && this.state !== "chase") { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
     this.repath -= dt;
     let speed = c.patrol;
     if (this.state === "chase") {
       speed = c.chase;
-      if (this.repath <= 0) { this.goTo(P.p.x, P.p.z); this.repath = 0.35; }
+      if (this.repath <= 0) { const g = ct ? [ct.x, ct.z] : this.last; if (g) this.goTo(...g); this.repath = 0.35; }
     } else if (this.state === "search") speed = c.alert;
     else {
       if (this.wait > 0) { this.wait -= dt; speed = 0; }
@@ -335,14 +360,28 @@ class Monster {
           this.pos.x += (dx / dd) * step; this.pos.z += (dz / dd) * step; this.speed = speed;
         }
       }
-    } else if (this.state === "chase" && dist > 0.1) {
-      const want = Math.atan2(-(P.p.x - this.pos.x), -(P.p.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+    } else if (this.state === "chase" && ct && Math.hypot(ct.x - this.pos.x, ct.z - this.pos.z) > 0.1) {
+      const want = Math.atan2(-(ct.x - this.pos.x), -(ct.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
       this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
     }
+    this.visual(dt);
+    return {caught: targets.filter(t => this.onFloorY(t.y) && Math.hypot(t.x - this.pos.x, t.z - this.pos.z) < 1.0 && this.los(t)).map(t => t.id)};
+  }
+  // On every other client in the scene the monster only follows the host's snapshot: s = [x, z, yaw, speed, stateIndex].
+  follow(dt, s) {
+    if (s) {
+      const k = Math.min(1, dt * 12), dx = s[0] - this.pos.x, dz = s[1] - this.pos.z;
+      if (Math.hypot(dx, dz) > 8) { this.pos.x = s[0]; this.pos.z = s[1]; } else { this.pos.x += dx * k; this.pos.z += dz * k; }
+      let da = s[2] - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); this.yaw += da * k;
+      this.speed = s[3]; this.state = MON_STATES[s[4]] || "patrol";
+    } else this.speed = 0;
+    this.visual(dt);
+  }
+  visual(dt) {
+    const c = this.cfg;
     this.root.position.set(this.pos.x, this.fy, this.pos.z); this.root.rotation.y = this.yaw + (this.mixer ? (c.yawOffset ?? Math.PI) : 0);
     if (this.mixer) { this.play(this.speed > c.alert + 0.3 ? "run" : this.speed > 0.1 ? "walk" : "idle"); this.mixer.update(dt); }
     else this.root.position.y = this.fy + Math.sin(performance.now() / 260 + this.home[0]) * 0.02;
-    return {dist, chasing: this.state === "chase" && this.onFloor(), catches: dist < 1.0 && this.onFloor() && this.los()};
   }
   dispose() { scene.remove(this.root); }
 }
@@ -412,6 +451,12 @@ function drawMap(t) {
     mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke();
     mctx.fillStyle = "#ff4a3d"; mctx.beginPath(); mctx.arc(a, b, 3, 0, 7); mctx.fill();
   }
+  for (const p of net.peers.values()) {                                     // the others in the room, on this floor
+    if (p.scene !== S.id || p.dead) continue;
+    const [a, b] = mapXY(p.x, p.z);
+    mctx.save(); mctx.translate(a, b); mctx.rotate(-p.yaw); mctx.fillStyle = p.color;
+    mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4, 4); mctx.lineTo(-4, 4); mctx.closePath(); mctx.fill(); mctx.restore();
+  }
   const [px, pz] = mapXY(P.p.x, P.p.z);
   mctx.save(); mctx.translate(px, pz); mctx.rotate(-P.yaw);
   mctx.fillStyle = "#d8fff0"; mctx.beginPath(); mctx.moveTo(0, -7); mctx.lineTo(5, 5); mctx.lineTo(-5, 5); mctx.closePath(); mctx.fill(); mctx.restore();
@@ -480,6 +525,127 @@ function pad() {
   return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
 }
 
+// ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
+// Everyone sees the same monsters because one client per scene (the host) simulates them and sends snapshots; the rest follow.
+const net = {on: false, ws: null, id: 0, room: "", hosts: {}, peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null,
+  host() { return !this.on || this.hosts[S.id] === this.id; },
+  send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }};
+const r2 = v => Math.round(v * 100) / 100;
+function addPeer(info) {
+  if (net.peers.has(info.id)) return;
+  const col = new THREE.Color(info.color), mat = new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: .35, roughness: .7});
+  const obj = new THREE.Group(), pivot = new THREE.Group(); obj.add(pivot);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.24, .85, 4, 10), mat); body.position.y = .75; pivot.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.17, 12, 10), mat); head.position.y = 1.45; pivot.add(head);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(.08, .06, .16), new THREE.MeshBasicMaterial({color: 0xffffff})); nose.position.set(0, 1.47, -.2); pivot.add(nose);
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64; const g = cv.getContext("2d");
+  g.font = "700 34px system-ui,sans-serif"; g.textAlign = "center"; g.fillStyle = info.color; g.strokeStyle = "#000"; g.lineWidth = 5;
+  g.strokeText(info.name, 128, 44); g.fillText(info.name, 128, 44);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true})); label.scale.set(1.2, .3, 1); label.position.y = 1.95; obj.add(label);
+  obj.visible = false; scene.add(obj);
+  net.peers.set(info.id, {id: info.id, name: info.name, color: info.color, scene: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, tyaw: 0, crouch: false, moving: false, dead: false, fresh: true, obj, pivot});
+  hud();
+}
+function removePeer(id) {
+  const p = net.peers.get(id); if (!p) return;
+  scene.remove(p.obj); disposeTree(p.obj); net.peers.delete(id); hud();
+}
+function hud() {
+  $("hud").textContent = net.on ? `ROOM ${net.room} · ${net.peers.size + 1} in the building · ${[...net.peers.values()].map(p => p.name).join(", ")}` : "";
+}
+function onNet(m) {
+  switch (m.t) {
+    case "welcome":
+      net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true;
+      for (const p of m.players) if (p.id !== m.id) addPeer(p);
+      hud(); net.ready?.(); net.ready = null; break;
+    case "join": addPeer(m); break;
+    case "leave": removePeer(m.id); break;
+    case "hosts": net.hosts = m.hosts; break;
+    case "s": {
+      const p = net.peers.get(m.id); if (!p) break;
+      const moved = p.scene !== m.scene;
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.dead = !!m.dead;
+      if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
+      break;
+    }
+    case "m":
+      if (m.scene !== S.id || net.host()) break;
+      net.snap = m;
+      if (m.d) for (const dr of doors) if (!dr.link && dr.target === 0 && m.d.includes(dr.d.name)) dr.target = 1;
+      break;
+    case "door": {
+      if (m.scene !== S.id) break;
+      const dr = doors.find(x => x.d.name === m.name); if (dr && !dr.link && dr.target === 0) dr.target = 1;
+      break;
+    }
+    case "caught": if (!dead && !loading) die(); break;
+  }
+}
+function updatePeers(dt) {
+  const k = Math.min(1, dt * 14);
+  for (const p of net.peers.values()) {
+    const here = p.scene === S.id && !loading;
+    p.obj.visible = here; if (!here) continue;
+    p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.z += (p.tz - p.z) * k;
+    let da = p.tyaw - p.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); p.yaw += da * k;
+    p.obj.position.set(p.x, p.y, p.z); p.obj.rotation.y = p.yaw;
+    p.pivot.scale.y += ((p.crouch ? .7 : 1) - p.pivot.scale.y) * k;
+    p.pivot.rotation.z = p.dead ? 1.45 : 0; p.pivot.position.set(p.dead ? .6 : 0, p.dead ? .25 : 0, 0);
+  }
+}
+function netTick(dt) {
+  if (!net.on) return;
+  if ((net.t -= dt) <= 0) {
+    net.t = 1 / 15;
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, dead: dead ? 1 : 0});
+  }
+  if (!loading && net.host() && (net.mt -= dt) <= 0) {
+    net.mt = 0.1;
+    const msg = {t: "m", scene: S.id, l: monsters.map(m => [r2(m.pos.x), r2(m.pos.z), r2(m.yaw), r2(m.speed), Math.max(0, MON_STATES.indexOf(m.state))])};
+    if (net.ticks++ % 10 === 0) msg.d = doors.filter(dr => !dr.link && dr.target === 1).map(dr => dr.d.name);          // late joiners learn which doors are open
+    net.send(msg);
+  }
+}
+function connect(name, room) {
+  const q = new URLSearchParams(location.search);
+  const url = q.get("server") || ((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  return new Promise((resolve, reject) => {
+    let ws; try { ws = new WebSocket(url); } catch (e) { return reject(new Error("That server address is not valid.")); }
+    const fail = msg => { clearTimeout(timer); net.ready = null; try { ws.close(); } catch (e) {} reject(new Error(msg)); };
+    const timer = setTimeout(() => fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."), 5000);
+    net.ready = () => { clearTimeout(timer); resolve(); };
+    ws.onopen = () => ws.send(JSON.stringify({t: "join", room, name}));
+    ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === "full") fail("That room is full (8 players)."); else onNet(m); };
+    ws.onerror = () => { if (!net.on) fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."); };
+    ws.onclose = () => {
+      if (!net.on) return;
+      net.on = false; for (const id of [...net.peers.keys()]) removePeer(id); net.hosts = {}; net.snap = null;
+      $("hud").textContent = "DISCONNECTED · playing solo";
+    };
+    net.ws = ws;
+  });
+}
+function lobby() {
+  const q = new URLSearchParams(location.search), el = $("lobby");
+  const store = {get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+  $("l-name").value = q.get("name") || store.get("lot-name");
+  $("l-room").value = (q.get("room") || store.get("lot-room")).toUpperCase();
+  el.style.display = "flex";
+  return new Promise(resolve => {
+    $("l-solo").onclick = () => { el.remove(); resolve(); };
+    $("l-form").onsubmit = async e => {
+      e.preventDefault();
+      const name = $("l-name").value.trim() || "Player", room = $("l-room").value.trim().toUpperCase() || "MAIN";
+      $("l-err").textContent = "Connecting…"; $("l-join").disabled = true;
+      try { await connect(name, room); store.set("lot-name", name); store.set("lot-room", room); el.remove(); resolve(); }
+      catch (err) { $("l-err").textContent = err.message; $("l-join").disabled = false; }
+    };
+    if (q.get("room") && q.get("auto")) $("l-form").requestSubmit();
+  });
+}
+
 // ---------------------------------------------------------------- game loop
 let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
 function die() {
@@ -489,13 +655,30 @@ function die() {
 }
 function respawn() {
   dead = false; teleport(randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;
-  for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }
+  if (!net.on) for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }   // in a room the monsters belong to everyone, so they are not reset for you
   $("death").style.opacity = 0; $("fear").style.opacity = 0;
+}
+// the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
+function targetList() {
+  const out = [];
+  if (!dead && !loading) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving});
+  return out;
+}
+function simMonsters(dt) {
+  let caught = false;
+  if (net.host()) {
+    const targets = targetList();
+    for (const m of monsters) {
+      for (const id of m.update(dt, targets).caught) { if (id === net.id) caught = true; else net.send({t: "caught", to: id}); }
+    }
+  } else monsters.forEach((m, i) => m.follow(dt, net.snap && net.snap.l[i]));
+  return caught;
 }
 function update(dt) {
   if (loading) return;
-  if (dead) { deadT += dt; if (deadT > 3.2) respawn(); return; }
   updateDoors(dt);
+  if (dead) { deadT += dt; if (net.on) simMonsters(dt); if (deadT > 3.2) respawn(); return; }
   const g = pad();
   P.yaw += (((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.9 - g.lx * 2.6) * dt;
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
@@ -512,13 +695,9 @@ function update(dt) {
   move(wx, 0, wz); move(0, P.v.y * dt, 0);
   checkFall();
   P.eye += ((P.crouch ? 0.95 : EYE) - P.eye) * Math.min(1, dt * 10);
-  const noise = P.moving && !P.crouch ? [P.p.x, P.p.z] : null;           // moving about is loud, crouching is silent
-  let closest = 99, caught = false;
-  for (const m of monsters) {
-    const r = m.update(dt, noise);
-    if (r.chasing) closest = Math.min(closest, r.dist);
-    if (r.catches) caught = true;
-  }
+  const caught = simMonsters(dt);
+  let closest = 99;                                                        // fear: the nearest monster that is chasing and on your floor, whoever it chases
+  for (const m of monsters) if (m.state === "chase" && m.onFloorY(P.p.y)) closest = Math.min(closest, Math.hypot(P.p.x - m.pos.x, P.p.z - m.pos.z));
   const fear = Math.max(0, 1 - closest / 16);
   $("fear").style.opacity = fear * 0.9;
   if (rumble && closest < 8 && (rumbleT -= dt) <= 0) { rumble.playEffect?.("dual-rumble", {duration: 120, strongMagnitude: .5 * fear, weakMagnitude: .7 * fear}); rumbleT = 0.15; }
@@ -526,7 +705,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt);
+  update(dt); updatePeers(dt); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -548,10 +727,11 @@ function step(dtOverride) {
 }
 function frame() { step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
+await lobby();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {net, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

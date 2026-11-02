@@ -18,3 +18,9 @@ If a monster sees you it chases; if it catches you, you die and come back on the
 
 Monsters (config in `world/monsters.json`): Sinew of the Abyss on B1, The Pale Traveler on L1, a clawed creature on L2, the first creature in the showroom (L4).
 Models are in `monsters/`; the two Meshy exports that came with their own animations are used as-is (textures shrunk), and the rig-only ones got idle/walk/run/attack clips from `tools/make_monster_anims.py`.
+
+## Multiplayer
+
+Up to 8 players share one building and its monsters. `node server/server.js` (after `cd server && npm ci`) serves the game and relays the room on one port; open `http://localhost:8080/`, enter a name and a room code, and send friends the same code (or `/?room=CODE`). Everyone in a room sees each other (name tags, positions on the handheld map), shares open doors, and is hunted by the same monsters: one client per floor (chosen by the server, handed over when they leave) simulates that floor's monsters and the others follow its snapshots. A monster that catches you kills only you.
+
+"Play solo" skips the server entirely, so the GitHub Pages build still works alone. To play online from Pages, point it at a server with `?server=wss://your-host/ws`. `Dockerfile` deploys the server to Railway. Test: `node tools/mp_test.mjs` (two headless browsers).
