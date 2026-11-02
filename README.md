@@ -18,3 +18,5 @@ If a monster sees you it chases; if it catches you, you die and come back on the
 
 Monsters (config in `world/monsters.json`): Sinew of the Abyss on B1, The Pale Traveler on L1, a clawed creature on L2, the first creature in the showroom (L4).
 Models are in `monsters/`; the two Meshy exports that came with their own animations are used as-is (textures shrunk), and the rig-only ones got idle/walk/run/attack clips from `tools/make_monster_anims.py`.
+
+Every door that sends you to another scene (the stair doors and the two gates) opens into a short lit passage first; its far door leads on and its near door leads back.

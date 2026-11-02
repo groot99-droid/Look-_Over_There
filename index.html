@@ -87,16 +87,51 @@ function disposeTree(root) {
   });
 }
 async function loadGlb(url) { return new Promise((res, rej) => loader.load(url, res, undefined, rej)); }
+// ---------------------------------------------------------------- transition passages: every door pair is joined by a short walkable corridor (built here, no model)
+const PASSAGE_TINT = {B1: 0x7aa7a0, L1: 0xd9c36a, L2: 0xc9b27a, L3: 0xe8e4d8, L4: 0xcfd8dc, rdwe: 0x4a7a3e, intern: 0x4a4a52};
+const PASSAGE_LEN = 10, PASSAGE_W = 2.4, PASSAGE_H = 2.7;
+function buildPassage(p) {
+  const root = new THREE.Group(), cols = [], W = PASSAGE_W, L = PASSAGE_LEN, H = PASSAGE_H, T = 0.2;
+  const tint = PASSAGE_TINT[p.fwd.game || p.fwd.scene] || 0xcccccc;
+  const wallM = new THREE.MeshStandardMaterial({color: tint, roughness: 0.95}), floorM = new THREE.MeshStandardMaterial({color: 0x2c2a26, roughness: 1}),
+        ceilM = new THREE.MeshStandardMaterial({color: 0xe9e6dc, roughness: 1}), lampM = new THREE.MeshStandardMaterial({color: 0xfff6d8, emissive: 0xfff0c0, emissiveIntensity: 2.2}),
+        doorM = new THREE.MeshStandardMaterial({color: 0x6b4a2c, roughness: 0.7});
+  const box = (x0, x1, y0, y1, z0, z1, m, solid = true) => {
+    const me = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), m); me.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); root.add(me);
+    if (solid) cols.push({s: "Passage", min: [x0, y0, z0], max: [x1, y1, z1]});
+  };
+  const hw = W / 2, dw = 1.1;
+  box(-hw - T, hw + T, -0.3, 0, -L - T, T, floorM);
+  box(-hw - T, hw + T, H, H + 0.2, -L - T, T, ceilM);
+  box(-hw - T, -hw, -0.3, H + 0.2, -L - T, T, wallM);
+  box(hw, hw + T, -0.3, H + 0.2, -L - T, T, wallM);
+  for (const z of [0, -L]) {                                              // an end wall with a door opening, at each end
+    const z0 = z === 0 ? 0 : -L - T, z1 = z === 0 ? T : -L;
+    box(-hw, -dw / 2, 0, H, z0, z1, wallM); box(dw / 2, hw, 0, H, z0, z1, wallM); box(-dw / 2, dw / 2, 2.16, H, z0, z1, wallM);
+  }
+  for (let z = -1.5; z > -L; z -= 3) box(-0.4, 0.4, H - 0.06, H, z - 0.2, z + 0.2, lampM, false);
+  const mkDoor = (name, z, swing, link) => {
+    const lw = dw - 0.06, lh = 2.12, hx = -dw / 2 + 0.03;
+    const g = new THREE.BoxGeometry(lw, lh, 0.05); g.translate(lw / 2, lh / 2, 0);
+    const leaf = new THREE.Mesh(g, doorM); leaf.position.set(hx, 0, z); root.add(leaf);
+    return {name, level: "T", hinge: [hx, 0, z], width: lw, height: lh, closed_yaw_deg: 0, swing_deg: swing, link, _leaf: leaf};
+  };
+  const back = Object.assign({direct: true}, p.back), fwd = Object.assign({}, p.fwd, {direct: true});
+  return {root, cols, doors: [mkDoor("T_entry", T / 2, -90, back), mkDoor("T_far", -L - T / 2, 90, fwd)]};
+}
+
 async function loadScene(id, arrival) {
   loading = true; pendingLink = null; devOn.v = false;
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
   monsters.forEach(m => m.dispose()); monsters.length = 0;
-  const cfg = SCENES[id], doc = await (await fetch(`world/${id}.json`)).json();
-  const root = new THREE.Group();
+  const passage = arrival && arrival.passage ? buildPassage(arrival.passage) : null;
+  const cfg = passage ? {glbs: [], floor: 0} : SCENES[id], doc = passage ? {colliders: passage.cols, doors: passage.doors, cameras: [], markers: []} : await (await fetch(`world/${id}.json`)).json();
+  const root = passage ? passage.root : new THREE.Group();
   const gl = await Promise.all(cfg.glbs.map(loadGlb));
   for (const g of gl) { g.scene.traverse(o => { if (o.isMesh) { o.matrixAutoUpdate = false; o.updateMatrix(); } }); root.add(g.scene); }
   scene.add(root);
+  if (passage) id = "T";
   Object.assign(S, {id, floor: cfg.floor, root, grid: new Map(), cams: doc.cameras || [], mapLayer: null, markers: doc.markers || [], colliders: doc.colliders});
   boxes.length = 0; doors.length = 0;
   for (const c of doc.colliders) boxes.push({n: c.min, x: c.max});
@@ -105,7 +140,7 @@ async function loadScene(id, arrival) {
     const hx = d.hinge[0], hy = d.hinge[1], hz = d.hinge[2], w = d.width, tx = Math.abs(dir[0]) < .5 ? .07 : 0, tz = Math.abs(dir[1]) < .5 ? .07 : 0;
     const box = {n: [Math.min(hx, hx + dir[0] * w) - tx, hy, Math.min(hz, hz + dir[1] * w) - tz],
                  x: [Math.max(hx, hx + dir[0] * w) + tx, hy + (d.height || 2.1), Math.max(hz, hz + dir[1] * w) + tz], door: true, off: false, link: !!d.link};
-    const leaf = root.getObjectByName(d.name);
+    const leaf = d._leaf || root.getObjectByName(d.name);
     const sign = d.swing_deg < 0 ? -1 : 1;
     const dr = {d, box, leaf, p: 0, target: 0, link: d.link || null, cx: hx + dir[0] * w / 2, cz: hz + dir[1] * w / 2, cy: hy,
                 qClosed: qy(th), qOpen: qy(th + sign * 95 * Math.PI / 180)};
@@ -120,6 +155,7 @@ async function loadScene(id, arrival) {
   });
   S.nav = buildNav(cfg.floor);
   spawnMonsters();
+  if (passage) arrival = {pos: [0, 0, -1.8], face: [0, -1], door: "T_entry"};
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
     if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
@@ -131,6 +167,10 @@ async function loadScene(id, arrival) {
 }
 function goLink(dr) {
   const l = dr.link;
+  if (!l.direct && S.id !== "T") {                                       // every door pair is joined by a walkable passage
+    const f = [-Math.sin(P.yaw), -Math.cos(P.yaw)];
+    loadScene("T", {passage: {fwd: l, back: {scene: S.id, arrive: P.p.toArray(), face: [-f[0], -f[1]], door: dr.d.name}}}); return;
+  }
   if (l.game) enterGame(l); else loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door});
 }
 
