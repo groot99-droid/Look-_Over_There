@@ -50,6 +50,7 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
   let dragLooking = false;
   let lastPointerType = 'mouse';
   let moved = 0; // metres walked this frame (footstep cadence)
+  let jumpY = 0, jumpV = 0, crouchY = 0, extraY = 0, wantJump = false, padJump = false, padCrouch = false, padRun = false;
   let eyeOffset = 0; // head-bob, added on top of EYE_HEIGHT wherever the floor sets y
   let enabled = true;
   let lockable = true;
@@ -76,6 +77,8 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
       case 'KeyA': case 'ArrowLeft': keys.left = true; break;
       case 'KeyD': case 'ArrowRight': keys.right = true; break;
       case 'ShiftLeft': case 'ShiftRight': keys.sprint = true; return;
+      case 'KeyC': case 'ControlLeft': case 'ControlRight': keys.crouch = true; return;
+      case 'Space': if (!e.repeat) wantJump = true; break;
       default: return;
     }
     e.preventDefault();
@@ -87,10 +90,11 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
       case 'KeyA': case 'ArrowLeft': keys.left = false; break;
       case 'KeyD': case 'ArrowRight': keys.right = false; break;
       case 'ShiftLeft': case 'ShiftRight': keys.sprint = false; break;
+      case 'KeyC': case 'ControlLeft': case 'ControlRight': keys.crouch = false; break;
       default: break;
     }
   }
-  function onBlur() { keys.forward = keys.back = keys.left = keys.right = keys.sprint = false; }
+  function onBlur() { keys.forward = keys.back = keys.left = keys.right = keys.sprint = keys.crouch = false; }
   function rotateRadians(dYaw, dPitch) {
     if (!enabled) return;
     yaw -= dYaw;
@@ -160,10 +164,10 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
     const len = moveVec.length();
     if (len === 0) return;
     if (len > 1) moveVec.divideScalar(len);
-    const speed = (swim ? SWIM_SPEED : (keys.sprint || padSprint) ? SPRINT_SPEED : MOVE_SPEED) * speedScale;
+    const speed = (swim ? SWIM_SPEED : (keys.sprint || padSprint) && !(keys.crouch || padCrouch) ? SPRINT_SPEED : MOVE_SPEED) * ((keys.crouch || padCrouch) ? 0.5 : 1) * speedScale;
     moveVec.multiplyScalar(speed * delta);
     const { walls } = getCollidables();
-    const feetY = camera.position.y - EYE_HEIGHT - eyeOffset;
+    const feetY = camera.position.y - EYE_HEIGHT - eyeOffset - extraY;
     let dx = 0, dz = 0;
     if (Math.abs(moveVec.x) > 0) {
       axisDir.set(Math.sign(moveVec.x), 0, 0);
@@ -187,7 +191,7 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
     if (swim) return;
     const { floors } = getCollidables();
     if (!floors || floors.length === 0) return;
-    const feetY = footY === null ? camera.position.y - EYE_HEIGHT - eyeOffset : footY;
+    const feetY = footY === null ? camera.position.y - EYE_HEIGHT - eyeOffset - extraY : footY;
     // snapping (a teleport, the end of a carried move) looks down from the eye,
     // so a camera left low (seated) still finds the floor under it
     rayOrigin.set(camera.position.x, snap ? camera.position.y + 0.2 : feetY + STEP_UP, camera.position.z);
@@ -214,7 +218,7 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
         fallV = 0;
       }
     }
-    if (footY !== null) camera.position.y = footY + EYE_HEIGHT + eyeOffset;
+    if (footY !== null) camera.position.y = footY + EYE_HEIGHT + eyeOffset + extraY;
   }
   // Smoothed toward `target` so the bob eases in and out with the stride
   // instead of snapping when a key is released.
@@ -235,8 +239,18 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
       padX = dzf(gp.axes[0] || 0, 0.16); padY = -dzf(gp.axes[1] || 0, 0.16);
       const lx = dzf(gp.axes[2] || 0, 0.12), ly = dzf(gp.axes[3] || 0, 0.12);
       if (lx || ly) rotateRadians(lx * 2.6 * delta, ly * 2.0 * delta);
-      padSprint = !!((gp.buttons[5] && gp.buttons[5].pressed) || (gp.buttons[11] && gp.buttons[11].pressed));
-    } else padSprint = false;
+      padSprint = !!((gp.buttons[10] && gp.buttons[10].pressed) || (gp.buttons[6] && (gp.buttons[6].pressed || gp.buttons[6].value > 0.5)));   // LT / L-stick click: run
+      padCrouch = !!(gp.buttons[1] && gp.buttons[1].pressed);                                                                                // B: crouch
+      const jump = !!(gp.buttons[0] && gp.buttons[0].pressed);                                                                               // A: jump
+      if (jump && !padJump) wantJump = true;
+      padJump = jump;
+    } else { padSprint = false; padCrouch = false; padJump = false; }
+    const crouching = keys.crouch || padCrouch;                                // the same three paces and the same jump as the rest of the world
+    crouchY += ((crouching ? -0.45 / SCALE : 0) - crouchY) * Math.min(1, (delta || 0.016) * 10);
+    if (wantJump && !swim && jumpY === 0 && jumpV === 0 && !crouching) jumpV = 3.1 / SCALE;
+    wantJump = false;
+    if (jumpV !== 0 || jumpY > 0) { jumpV -= (9.8 / SCALE) * delta; jumpY += jumpV * delta; if (jumpY <= 0) { jumpY = 0; jumpV = 0; } }
+    extraY = crouchY + jumpY;
     camera.getWorldDirection(forwardVec);
     if (!swim) forwardVec.y = 0;
     forwardVec.normalize();
@@ -268,7 +282,7 @@ export function createControls(camera, domElement, getCollidables, { onBump = nu
     yaw = euler.y;
     pitch = Math.max(-Math.PI / 2 + 0.08, Math.min(Math.PI / 2 - 0.08, euler.x));
     setLook(yaw, pitch);
-    footY = camera.position.y - EYE_HEIGHT - eyeOffset;
+    footY = camera.position.y - EYE_HEIGHT - eyeOffset - extraY;
     followFloor(0, true);
   }
   function setMoveAxis(x, y) {

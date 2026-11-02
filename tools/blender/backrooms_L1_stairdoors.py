@@ -141,7 +141,31 @@ for sp in SPECS:
     doors_json += [d_lo, d_up]
     links.append({"key": sp["key"], "lower": sp["lower"], "upper": sp["upper"]})
 
+
+# --- ceilings: every level's ceiling is the floor slab of the level above, which now lives in another scene. Give each lower scene its own copy
+# (the slab is a box, so its underside is already the ceiling face), plus a collider so a jump stops at it.
+CEIL = {"B1": "Floor_L1", "L1": "Floor_L2_Loop", "L2": "Floor_L3_L2_Loop", "L3": "Floor_L4_L3_Room"}
+ceil_ref = next((o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("Ceiling_") and o.data.materials and not o.get("stairdoor")), None)
+mat_ceiling = ceil_ref.data.materials[0] if ceil_ref and ceil_ref.data.materials else mat_wall
+made = []
+for lower, src in CEIL.items():
+    ob = bpy.data.objects.get(src)
+    if not ob: continue
+    new = ob.copy(); new.data = ob.data.copy(); new.name = f"Ceiling_{lower}_cap"
+    new.data.materials.clear(); new.data.materials.append(mat_ceiling)
+    for c in list(new.users_collection): c.objects.unlink(new)
+    coll_for(f"Detail_{lower}").objects.link(new)
+    new["level"], new["stairdoor"], new["keep_mat"] = lower, True, True
+    new.pop("collider", None)
+    made.append(new.name)
+    colsrc = [o for o in bpy.data.objects if o.name.startswith("COL_") and o.get("source") == ob.get("source", src) and not o.get("stairdoor")]
+    for co in colsrc:
+        cc = co.copy(); cc.data = co.data.copy(); cc.name = f"COL_Ceiling_{lower}_cap"
+        for c in list(cc.users_collection): c.objects.unlink(cc)
+        coll_for(f"{lower}_Collision").objects.link(cc)
+        cc["level"], cc["stairdoor"], cc["source"] = lower, True, f"Ceiling_{lower}_cap"
+        cc.hide_set(True)
 scene["bk_doors"] = json.dumps(doors_json)
 bpy.context.view_layer.update()
-result = {"stair_links": links, "doors": len(doors_json)}
+result = {"stair_links": links, "doors": len(doors_json), "ceilings": made}
 print("STAIRDOORS", result)

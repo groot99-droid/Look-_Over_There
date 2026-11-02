@@ -26,7 +26,8 @@ function isEditable(t) {
 }
 
 export function createControls(camera, domElement, { reducedMotion = false } = {}) {
-  const keys = { forward: false, back: false, left: false, right: false };
+  const keys = { forward: false, back: false, left: false, right: false, run: false, crouch: false };
+  let jumpY = 0, jumpV = 0, crouchY = 0, padJump = false, wantJump = false;
   const axis = { x: 0, y: 0 };
   let yaw = 0, pitch = 0;
   let enabled = false;
@@ -39,7 +40,7 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
   let eyeOffset = 0;            // added to the camera height (waking up on the sofa)
   let moving = false;
   let lastPointerType = 'mouse';
-  let padUse = false;
+  let padUse = false, padRun = false, padCrouch = false;
   let onUseFn = null;           // walk.js: the player pressed "use"
 
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -75,8 +76,11 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       case 'KeyS': case 'ArrowDown': keys.back = true; break;
       case 'KeyA': case 'ArrowLeft': keys.left = true; break;
       case 'KeyD': case 'ArrowRight': keys.right = true; break;
-      case 'KeyE': case 'Space': case 'Enter': case 'NumpadEnter':
-        // Space and Enter still press a focused button (SKIP, SOUND); E is never a button key
+      case 'ShiftLeft': case 'ShiftRight': keys.run = true; break;
+      case 'KeyC': case 'ControlLeft': case 'ControlRight': keys.crouch = true; break;
+      case 'Space': if (!e.repeat) wantJump = true; break;
+      case 'KeyE': case 'Enter': case 'NumpadEnter':
+        // Enter still presses a focused button (SKIP, SOUND); E is never a button key
         if (e.code !== 'KeyE' && e.target !== domElement && e.target.closest && e.target.closest('button, a, [role="button"]')) return;
         if (!e.repeat && onUseFn) onUseFn();
         break;
@@ -90,6 +94,8 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       case 'KeyS': case 'ArrowDown': keys.back = false; break;
       case 'KeyA': case 'ArrowLeft': keys.left = false; break;
       case 'KeyD': case 'ArrowRight': keys.right = false; break;
+      case 'ShiftLeft': case 'ShiftRight': keys.run = false; break;
+      case 'KeyC': case 'ControlLeft': case 'ControlRight': keys.crouch = false; break;
     }
   }
   function onMouseMove(e) {
@@ -186,10 +192,15 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       padX = dz(gp.axes[0] || 0, 0.16); padY = -dz(gp.axes[1] || 0, 0.16);
       const lx = dz(gp.axes[2] || 0, 0.12), ly = dz(gp.axes[3] || 0, 0.12);
       if (lx || ly) rotateBy(lx * 2.6 * delta, ly * 2.0 * delta, 1);
-      const use = !!((gp.buttons[2] && gp.buttons[2].pressed) || (gp.buttons[0] && gp.buttons[0].pressed));
+      const use = !!(gp.buttons[2] && gp.buttons[2].pressed);                       // X: use
       if (use && !padUse && onUseFn) onUseFn();
       padUse = use;
-    }
+      const jump = !!(gp.buttons[0] && gp.buttons[0].pressed);                      // A: jump
+      if (jump && !padJump) wantJump = true;
+      padJump = jump;
+      padRun = !!((gp.buttons[10] && gp.buttons[10].pressed) || (gp.buttons[6] && (gp.buttons[6].pressed || gp.buttons[6].value > 0.5)));   // LT / L-stick click: run
+      padCrouch = !!(gp.buttons[1] && gp.buttons[1].pressed);                       // B: crouch
+    } else { padRun = padCrouch = false; }
     camera.getWorldDirection(forward);
     forward.y = 0;
     forward.normalize();
@@ -208,7 +219,8 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
     moving = len > 0.01;
     if (moving) {
       if (len > 1) move.divideScalar(len);
-      move.multiplyScalar(MOVE_SPEED * delta);
+      const crouching = keys.crouch || padCrouch, running = (keys.run || padRun) && !crouching;
+      move.multiplyScalar(MOVE_SPEED * (crouching ? 0.5 : running ? 1.9 : 1) * delta);
       // Slide: each axis on its own, a few sub-steps so a fast frame cannot tunnel.
       const steps = 2;
       for (let s = 0; s < steps; s++) {
@@ -219,11 +231,20 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       }
       walkTime += delta * (reducedMotion ? 0 : 1);
     }
+    // jump (cosmetic: the rooms' colliders are flat) and crouch: the same three paces and the same jump as the rest of the world
+    const crouchNow = keys.crouch || padCrouch;
+    crouchY += ((crouchNow ? -0.45 / PLAYER_SCALE : 0) - crouchY) * Math.min(1, delta * 10);
+    if (wantJump && jumpY === 0 && jumpV === 0 && !crouchNow) jumpV = 3.1 / PLAYER_SCALE;
+    wantJump = false;
+    if (jumpV !== 0 || jumpY > 0) {
+      jumpV -= (9.8 / PLAYER_SCALE) * delta; jumpY += jumpV * delta;
+      if (jumpY <= 0) { jumpY = 0; jumpV = 0; }
+    }
     // Head bob: a slow vertical sway and a smaller lateral one, faded out when standing.
     const bob = reducedMotion ? 0 : (moving ? bobScale : 0);
     camera.position.set(
       base.x + Math.sin(walkTime * 6.2) * 0.012 * bob / PLAYER_SCALE,
-      base.y + eyeOffset + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob / PLAYER_SCALE,
+      base.y + eyeOffset + crouchY + jumpY + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob / PLAYER_SCALE,
       base.z,
     );
   }

@@ -179,7 +179,7 @@ const levelOfY = () => S.id;
 
 // ---------------------------------------------------------------- player
 const R = 0.28, H = 1.7, EYE = 1.55, STEP = 0.46;
-const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false};
+const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false, run: false};
 const overlap = (b, p) => !b.off && p.x + R > b.n[0] && p.x - R < b.x[0] && p.z + R > b.n[2] && p.z - R < b.x[2] && p.y + H > b.n[1] && p.y < b.x[1];
 function collide(p) { for (const id of near(p.x, p.z, 1.5)) if (overlap(boxes[id], p)) return boxes[id]; return null; }
 function move(dx, dy, dz) {
@@ -355,7 +355,7 @@ class Monster {
     if (seen) { this.state = "chase"; this.lost = 0; this.last = [P.p.x, P.p.z]; }
     else if (this.state === "chase") { this.last = this.last || [P.p.x, P.p.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
     else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
-    if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
+    if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear * (P.run ? 1 : 0.55)) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
     this.repath -= dt;
     let speed = c.patrol;
     if (this.state === "chase") {
@@ -518,7 +518,7 @@ let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
   rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
-  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false};
+  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, run: false};
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
@@ -528,7 +528,7 @@ function pad() {
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
     if (edge(5) || edge(15)) cycleCam(1);                     // RB / D-pad right: next camera
   }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1), run: down(10) || (b[6] && (b[6].pressed || b[6].value > 0.5))};   // B crouches; LT / L-stick click runs
 }
 
 // ---------------------------------------------------------------- game loop
@@ -552,9 +552,10 @@ function update(dt) {
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
   const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
   const side = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
-  P.crouch = !!(keys.ShiftLeft || keys.ShiftRight || g.crouch);
+  P.crouch = !!(keys.KeyC || keys.ControlLeft || keys.ControlRight || g.crouch);
+  P.run = !!(keys.ShiftLeft || keys.ShiftRight || g.run) && !P.crouch;
   P.moving = Math.hypot(fwd, side) > 0.2;
-  const sp = (P.crouch ? 2.2 : 5.6) * dt;
+  const sp = (P.crouch ? 1.6 : P.run ? 5.6 : 3.2) * dt;                 // crouch / walk / run: the same three paces in every game
   let wx = -Math.sin(P.yaw) * fwd + Math.cos(P.yaw) * side, wz = -Math.cos(P.yaw) * fwd - Math.sin(P.yaw) * side;
   const mag = Math.min(1, Math.hypot(wx, wz)), l = Math.hypot(wx, wz) || 1;
   wx = wx / l * mag * sp; wz = wz / l * mag * sp;
