@@ -1,9 +1,9 @@
 # Look Over There
 
-A walkable multi-level Backrooms building (flooded poolrooms, office maze, white plaster room, the "Look Over There" showroom, parking lot, plus The Intern's city and Right Door, Wrong Exit's rooms stacked underneath), built in Blender and served as a static three.js page.
+A walkable multi-level Backrooms building (flooded poolrooms, office maze, white plaster room, the "Look Over There" showroom, parking lot, ), built in Blender and served as a static three.js page.
 
 - `index.html` is the whole game: keyboard (WASD / arrow keys), mouse look, or an Xbox controller.
-- `world/backrooms_L1.glb` is the Draco-compressed level geometry. `world/backrooms_L1_colliders.json` holds the collision boxes, markers, doors, lights, cameras and the stair/hatch links between stacked levels.
+- `world/<scene>.glb` + `world/<scene>.json` are the Draco-compressed geometry and the collision boxes, doors and cameras of one scene (B1, L1, L2, L3, L4; L4 includes the parking lot and the city). Only one scene is loaded at a time; the floors are joined by a door at the top of each staircase.
 - `blender/Look_Over_There.blend` is the final Blender file (all textures packed, stored with Git LFS).
 - `.github/workflows/pages.yml` publishes `index.html` and `world/` to GitHub Pages on every push to `main`.
 

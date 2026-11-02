@@ -9,12 +9,14 @@
   canvas{display:block;width:100%;height:100%}
   #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#8a8a7a;font:14px/1.4 system-ui,sans-serif;letter-spacing:.08em;z-index:5;transition:opacity .6s}
   #fear{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(120,0,0,.85) 100%);z-index:2}
+  #fade{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;z-index:3;transition:opacity .35s}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
 <body>
 <div id="load">LOADING</div>
 <div id="fear"></div>
+<div id="fade"></div>
 <div id="death">YOU DIED</div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
@@ -23,7 +25,12 @@ import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
 import {DRACOLoader} from "three/addons/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
-const GLB = "world/backrooms_L1.glb", JSON_URL = "world/backrooms_L1_colliders.json", MON_URL = "world/monsters.json";
+const MON_URL = "world/monsters.json";
+// one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
+const SCENES = {
+  B1: {glbs: ["world/B1.glb"], floor: -3.0}, L1: {glbs: ["world/L1.glb"], floor: 0}, L2: {glbs: ["world/L2.glb"], floor: 3.2},
+  L3: {glbs: ["world/L3.glb"], floor: 6.4}, L4: {glbs: ["world/L4.glb", "world/Exterior.glb"], floor: 9.6},
+};
 const $ = id => document.getElementById(id);
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
@@ -40,47 +47,25 @@ const torch = new THREE.PointLight(0xfff0d0, 14, 16, 1.6);
 camera.add(torch); torch.position.set(0, 0, 0.2);
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-// ---------------------------------------------------------------- world
+// ---------------------------------------------------------------- world: one scene at a time
 const draco = new DRACOLoader(); draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
 const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
-const data = await (await fetch(JSON_URL)).json();
-const gltf = await new Promise((res, rej) => loader.load(GLB, res, undefined, rej));
-gltf.scene.traverse(o => { if (o.isMesh) { o.matrixAutoUpdate = false; o.updateMatrix(); } });
-scene.add(gltf.scene);
-
-// ---------------------------------------------------------------- collision: axis-aligned boxes (glTF Y-up) in a hash grid
-const boxes = data.colliders.map(c => ({n: c.min, x: c.max}));
-
-// ---------------------------------------------------------------- doors: every door starts closed (leaf shut + a collider) and has to be opened
-const FLOOR_Y = {B1: -3.0, L1: 0, L2: 3.2, L3: 6.4, L4: 9.6};
+const S = {id: null, floor: 0, root: null, boxes: [], grid: new Map(), doors: [], cams: [], nav: null, mapLayer: null, markers: []};
+const boxes = S.boxes, doors = S.doors;                       // live arrays: emptied and refilled on every scene change
 const qy = a => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
-const doors = [];
-for (const d of data.doors || []) {
-  const th = d.closed_yaw_deg * Math.PI / 180, dir = [Math.cos(th), -Math.sin(th)];            // the leaf runs along its local +X from the hinge
-  const hx = d.hinge[0], hy = d.hinge[1], hz = d.hinge[2], w = d.width, tx = Math.abs(dir[0]) < .5 ? .07 : 0, tz = Math.abs(dir[1]) < .5 ? .07 : 0;
-  const box = {n: [Math.min(hx, hx + dir[0] * w) - tx, hy, Math.min(hz, hz + dir[1] * w) - tz],
-               x: [Math.max(hx, hx + dir[0] * w) + tx, hy + (d.height || 2.1), Math.max(hz, hz + dir[1] * w) + tz], door: true, off: false};
-  const leaf = gltf.scene.getObjectByName(d.name);
-  const sign = d.swing_deg < 0 ? -1 : 1;
-  const dr = {d, box, leaf, p: 0, target: 0, level: d.level, cx: hx + dir[0] * w / 2, cz: hz + dir[1] * w / 2, cy: hy,
-              qClosed: qy(th), qOpen: qy(th + sign * 95 * Math.PI / 180)};
-  if (leaf) { leaf.matrixAutoUpdate = true; leaf.quaternion.copy(dr.qClosed); leaf.updateMatrix(); }
-  boxes.push(box); doors.push(dr);
-}
-const CELL = 8, grid = new Map(), key = (i, k) => i + "," + k;
-boxes.forEach((b, id) => {
-  for (let i = Math.floor(b.n[0] / CELL); i <= Math.floor(b.x[0] / CELL); i++)
-    for (let k = Math.floor(b.n[2] / CELL); k <= Math.floor(b.x[2] / CELL); k++) {
-      const kk = key(i, k); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(id);
-    }
-});
+const CELL = 8, key = (i, k) => i + "," + k;
 function near(x, z, r) {
   const out = new Set();
   for (let i = Math.floor((x - r) / CELL); i <= Math.floor((x + r) / CELL); i++)
-    for (let k = Math.floor((z - r) / CELL); k <= Math.floor((z + r) / CELL); k++) (grid.get(key(i, k)) || []).forEach(id => out.add(id));
+    for (let k = Math.floor((z - r) / CELL); k <= Math.floor((z + r) / CELL); k++) (S.grid.get(key(i, k)) || []).forEach(id => out.add(id));
   return out;
 }
-function openDoor(dr) { if (dr.target === 0) dr.target = 1; }
+let pendingLink = null, loading = false;
+function openDoor(dr, byPlayer) {
+  if (dr.target !== 0) return;
+  if (dr.link && !byPlayer) return;                           // monsters do not use the stair doors
+  dr.target = 1; if (dr.link) pendingLink = dr;
+}
 function updateDoors(dt) {
   for (const dr of doors) {
     if (dr.p === dr.target) continue;
@@ -88,8 +73,59 @@ function updateDoors(dt) {
     if (dr.leaf) { const e = dr.p * dr.p * (3 - 2 * dr.p); dr.leaf.quaternion.slerpQuaternions(dr.qClosed, dr.qOpen, e); }
     dr.box.off = dr.p > 0.5;
   }
+  if (pendingLink && pendingLink.p > 0.7 && !loading) { const l = pendingLink; pendingLink = null; goLink(l); }
 }
-const levelOfY = y => { let best = "B1", bd = 1e9; for (const [k, v] of Object.entries(FLOOR_Y)) { const d = Math.abs(y - v); if (d < bd) { bd = d; best = k; } } return best; };
+function disposeTree(root) {
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) { for (const k in m) if (m[k] && m[k].isTexture) m[k].dispose(); m.dispose(); }
+  });
+}
+async function loadGlb(url) { return new Promise((res, rej) => loader.load(url, res, undefined, rej)); }
+async function loadScene(id, arrival) {
+  loading = true; pendingLink = null; devOn.v = false;
+  const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
+  if (S.root) { scene.remove(S.root); disposeTree(S.root); }
+  monsters.forEach(m => m.dispose()); monsters.length = 0;
+  const cfg = SCENES[id], doc = await (await fetch(`world/${id}.json`)).json();
+  const root = new THREE.Group();
+  const gl = await Promise.all(cfg.glbs.map(loadGlb));
+  for (const g of gl) { g.scene.traverse(o => { if (o.isMesh) { o.matrixAutoUpdate = false; o.updateMatrix(); } }); root.add(g.scene); }
+  scene.add(root);
+  Object.assign(S, {id, floor: cfg.floor, root, grid: new Map(), cams: doc.cameras || [], mapLayer: null, markers: doc.markers || [], colliders: doc.colliders});
+  boxes.length = 0; doors.length = 0;
+  for (const c of doc.colliders) boxes.push({n: c.min, x: c.max});
+  for (const d of doc.doors || []) {
+    const th = d.closed_yaw_deg * Math.PI / 180, dir = [Math.cos(th), -Math.sin(th)];            // the leaf runs along its local +X from the hinge
+    const hx = d.hinge[0], hy = d.hinge[1], hz = d.hinge[2], w = d.width, tx = Math.abs(dir[0]) < .5 ? .07 : 0, tz = Math.abs(dir[1]) < .5 ? .07 : 0;
+    const box = {n: [Math.min(hx, hx + dir[0] * w) - tx, hy, Math.min(hz, hz + dir[1] * w) - tz],
+                 x: [Math.max(hx, hx + dir[0] * w) + tx, hy + (d.height || 2.1), Math.max(hz, hz + dir[1] * w) + tz], door: true, off: false, link: !!d.link};
+    const leaf = root.getObjectByName(d.name);
+    const sign = d.swing_deg < 0 ? -1 : 1;
+    const dr = {d, box, leaf, p: 0, target: 0, link: d.link || null, cx: hx + dir[0] * w / 2, cz: hz + dir[1] * w / 2, cy: hy,
+                qClosed: qy(th), qOpen: qy(th + sign * 95 * Math.PI / 180)};
+    if (leaf) { leaf.matrixAutoUpdate = true; leaf.quaternion.copy(dr.qClosed); leaf.updateMatrix(); }
+    boxes.push(box); doors.push(dr);
+  }
+  boxes.forEach((b, i) => {
+    for (let a = Math.floor(b.n[0] / CELL); a <= Math.floor(b.x[0] / CELL); a++)
+      for (let k = Math.floor(b.n[2] / CELL); k <= Math.floor(b.x[2] / CELL); k++) {
+        const kk = key(a, k); if (!S.grid.has(kk)) S.grid.set(kk, []); S.grid.get(kk).push(i);
+      }
+  });
+  S.nav = buildNav(cfg.floor);
+  spawnMonsters();
+  if (arrival && arrival.door) {                              // the door you came through stays open behind you
+    const dr = doors.find(x => x.d.name === arrival.door);
+    if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
+  }
+  if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
+  else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
+  armedFall = true; loading = false;
+  fade.style.opacity = 0;
+}
+function goLink(dr) { const l = dr.link; loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); }
+const levelOfY = () => S.id;
 
 // ---------------------------------------------------------------- player
 const R = 0.28, H = 1.7, EYE = 1.55, STEP = 0.46;
@@ -113,18 +149,9 @@ function move(dx, dy, dz) {
 }
 const teleport = pos => { P.p.set(pos[0], pos[1] + 0.02, pos[2]); P.v.set(0, 0, 0); };
 
-// ---------------------------------------------------------------- stairs / hatches between the stacked site levels
-const links = data.links || [];
-let armed = true;
-function checkLinks() {
-  let hit = null;
-  for (const l of links) {
-    const dx = P.p.x - l.position[0], dz = P.p.z - l.position[2], dy = P.p.y - l.position[1];
-    if (Math.hypot(dx, dz) < l.radius && Math.abs(dy) < 1.4) { hit = l; break; }
-  }
-  if (!hit) { armed = true; return; }
-  if (armed) { armed = false; teleport(hit.target.position); }
-}
+// ---------------------------------------------------------------- fall catch: anything that drops far below this scene's floor is put back on it
+let armedFall = true;
+function checkFall() { if (P.p.y < S.floor - 14 && !loading) { teleport(randomSpawn(S.id)); P.pitch = 0; } }
 
 // ---------------------------------------------------------------- navigation grid per floor (monsters walk the same colliders the player does; doors are passable for them)
 const NAV = 0.5, NX0 = -27, NZ0 = -24, NW = Math.ceil(54 / NAV), NH = Math.ceil(54 / NAV);
@@ -134,7 +161,7 @@ function buildNav(fy) {
     const x = NX0 + (i + .5) * NAV, z = NZ0 + (j + .5) * NAV;
     let ground = false, blocked = false;
     for (const id of near(x, z, 0.6)) {
-      const b = boxes[id]; if (b.door) continue;
+      const b = boxes[id]; if (b.door && !b.link) continue;
       if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
       if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
     }
@@ -142,7 +169,6 @@ function buildNav(fy) {
   }
   return walk;
 }
-const NAVS = {}; for (const k in FLOOR_Y) NAVS[k] = buildNav(FLOOR_Y[k]);
 const cellOf = (x, z) => { const i = Math.floor((x - NX0) / NAV), j = Math.floor((z - NZ0) / NAV); return (i >= 0 && j >= 0 && i < NW && j < NH) ? j * NW + i : -1; };
 const cellXZ = c => [NX0 + ((c % NW) + .5) * NAV, NZ0 + (Math.floor(c / NW) + .5) * NAV];
 function nearestWalk(walk, x, z) {
@@ -199,11 +225,11 @@ function placeholderMonster(h) {
 const monsters = [];
 function rng32(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
 function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
-  const walk = NAVS[level], out = []; let tries = 0;
+  const walk = S.nav, out = []; let tries = 0;
   while (out.length < count && tries++ < 6000) {
     const c = Math.floor(rnd() * NW * NH); if (!walk[c]) continue;
     const [x, z] = cellXZ(c);
-    if (links.some(l => Math.abs(l.position[1] - FLOOR_Y[level]) < 2 && Math.hypot(x - l.position[0], z - l.position[2]) < 4)) continue;
+    if (doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4)) continue;
     if (out.some(o => Math.hypot(x - o[0], z - o[1]) < minGap)) continue;
     if (avoid.some(o => Math.hypot(x - o[0], z - o[1]) < 16)) continue;
     out.push([x, z]);
@@ -212,7 +238,7 @@ function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
 }
 class Monster {
   constructor(cfg, level, x, z) {
-    this.cfg = cfg; this.level = level; this.fy = FLOOR_Y[level]; this.walk = NAVS[level];
+    this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
     this.home = [x, z]; this.pos = new THREE.Vector3(x, this.fy, z); this.yaw = Math.random() * 6.28;
     this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0; this.doorT = 0; this.last = null;
     const asset = monsterAssets[cfg.name];
@@ -324,24 +350,20 @@ function spawnMonsters() {
   monsters.forEach(m => m.dispose()); monsters.length = 0;
   const rnd = rng32(1999);
   for (const cfg of monCfg.monsters) for (const [level, n] of Object.entries(cfg.perLevel || {})) {
-    if (!NAVS[level]) continue;
+    if (level !== S.id) continue;
     for (const [x, z] of pickSpots(level, n, rnd)) monsters.push(new Monster(cfg, level, x, z));
   }
 }
-spawnMonsters();
 
 // ---------------------------------------------------------------- spawning: everyone starts on the pool level; dying puts you back on that floor, somewhere random
 function randomSpawn(level) {
   const away = monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]);
   const s = pickSpots(level, 1, Math.random, away)[0] || pickSpots(level, 1, Math.random)[0];
-  return [s[0], FLOOR_Y[level], s[1]];
+  return [s[0], S.floor, s[1]];
 }
-teleport(randomSpawn("B1"));
-P.yaw = Math.random() * Math.PI * 2;
 
 // ---------------------------------------------------------------- the handheld device: security feeds for the floor you are on, and a map of it
 const devOn = {v: false}; let devMode = "cams", camIdx = 0, devSlide = 0;
-const camsByLevel = {}; for (const c of data.cameras || []) (camsByLevel[c.level] = camsByLevel[c.level] || []).push(c);
 const rt = new THREE.WebGLRenderTarget(384, 240); rt.texture.colorSpace = THREE.SRGBColorSpace;
 const feedCam = new THREE.PerspectiveCamera(50, 384 / 240, 0.05, 80);
 const mapCanvas = document.createElement("canvas"); mapCanvas.width = 512; mapCanvas.height = 320;
@@ -364,21 +386,20 @@ const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.262), mapMat);
 screenMesh.position.z = 0.0125; device.add(screenMesh);
 device.visible = false; camera.add(device);
 
-const mapStatic = {};
 const mapXY = (x, z) => [256 + x * 5.6, 160 + (z - 2.5) * 5.6];
 function mapLayer(level) {
-  if (mapStatic[level]) return mapStatic[level];
+  if (S.mapLayer) return S.mapLayer;
   const cv = document.createElement("canvas"); cv.width = 512; cv.height = 320; const g = cv.getContext("2d");
   g.fillStyle = "#06100c"; g.fillRect(0, 0, 512, 320);
-  const fy = FLOOR_Y[level];
+  const fy = S.floor;
   g.fillStyle = "#4f9a78";
-  for (const c of data.colliders) {
-    if (c.level !== level || /floor|ceiling|water|pipes|prop|stair|furnish|detail|exit|ground/i.test(c.source)) continue;   // no stairs on the map
+  for (const c of S.colliders) {
+    if (/floor|ceiling|water|pipes|prop|stair|furnish|detail|exit|ground/i.test(c.s)) continue;   // no stairs on the map
     if (c.max[1] - c.min[1] < 1.2 || c.min[1] > fy + 1.0 || c.max[1] < fy + 1.6) continue;
     const [x0, y0] = mapXY(c.min[0], c.min[2]), [x1, y1] = mapXY(c.max[0], c.max[2]);
     g.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.max(1.2, Math.abs(x1 - x0)), Math.max(1.2, Math.abs(y1 - y0)));
   }
-  return mapStatic[level] = cv;
+  return S.mapLayer = cv;
 }
 function drawMap(t) {
   const level = levelOfY(P.p.y);
@@ -410,19 +431,19 @@ function aimFeed(c, t) {
 }
 function toggleDevice() { devOn.v = !devOn.v; if (devOn.v) device.visible = true; }
 function toggleMode() { if (devOn.v) devMode = devMode === "cams" ? "map" : "cams"; else toggleDevice(); }
-function cycleCam(d) { const n = (camsByLevel[levelOfY(P.p.y)] || []).length; if (n) camIdx = (camIdx + d + n * 100) % n; }
+function cycleCam(d) { const n = S.cams.length; if (n) camIdx = (camIdx + d + n * 100) % n; }
 
 // ---------------------------------------------------------------- input: keyboard (WASD + arrows), mouse look, Xbox controller
 const keys = {}, padPrev = {};
 function useDoor() {
-  const fy = FLOOR_Y[levelOfY(P.p.y)], fwdx = -Math.sin(P.yaw), fwdz = -Math.cos(P.yaw);
+  const fwdx = -Math.sin(P.yaw), fwdz = -Math.cos(P.yaw);
   let best = null, bd = 1.9;
   for (const dr of doors) {
-    if (dr.target || Math.abs(dr.cy - fy) > 1.5) continue;
+    if (dr.target || Math.abs(dr.cy - P.p.y) > 1.5) continue;
     const dx = dr.cx - P.p.x, dz = dr.cz - P.p.z, d = Math.hypot(dx, dz);
     if (d < bd && (dx * fwdx + dz * fwdz) / (d || 1) > 0.25) { best = dr; bd = d; }
   }
-  if (best) openDoor(best);
+  if (best) openDoor(best, true);
 }
 addEventListener("keydown", e => {
   keys[e.code] = true;
@@ -462,16 +483,17 @@ function pad() {
 // ---------------------------------------------------------------- game loop
 let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
 function die() {
-  dead = true; deadT = 0; deathLevel = levelOfY(P.p.y); devOn.v = false;
+  dead = true; deadT = 0; deathLevel = S.id; devOn.v = false;
   $("death").style.opacity = 1; $("fear").style.opacity = 1;
   rumble?.playEffect?.("dual-rumble", {duration: 700, strongMagnitude: 1, weakMagnitude: 1});
 }
 function respawn() {
-  dead = false; teleport(randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; armed = false; P.crouch = false;
+  dead = false; teleport(randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;
   for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }
   $("death").style.opacity = 0; $("fear").style.opacity = 0;
 }
 function update(dt) {
+  if (loading) return;
   if (dead) { deadT += dt; if (deadT > 3.2) respawn(); return; }
   updateDoors(dt);
   const g = pad();
@@ -488,8 +510,7 @@ function update(dt) {
   P.v.y -= 22 * dt;
   if ((keys.Space || g.jump) && P.ground && !P.crouch) { P.v.y = 6.2; P.ground = false; }
   move(wx, 0, wz); move(0, P.v.y * dt, 0);
-  if (P.p.y < -160) teleport(randomSpawn(levelOfY(P.p.y)));
-  checkLinks();
+  checkFall();
   P.eye += ((P.crouch ? 0.95 : EYE) - P.eye) * Math.min(1, dt * 10);
   const noise = P.moving && !P.crouch ? [P.p.x, P.p.z] : null;           // moving about is loud, crouching is silent
   let closest = 99, caught = false;
@@ -515,7 +536,7 @@ function step(dtOverride) {
   if (device.visible) {
     if (devMode === "map") { screenMesh.material = mapMat; drawMap(t); }
     else {
-      const cams = camsByLevel[levelOfY(P.p.y)] || [];
+      const cams = S.cams;
       if (cams.length) {
         camIdx %= cams.length; aimFeed(cams[camIdx], t);
         device.visible = false; renderer.setRenderTarget(rt); renderer.render(scene, feedCam); renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); device.visible = true;
@@ -527,8 +548,10 @@ function step(dtOverride) {
 }
 function frame() { step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
+await loadScene("B1");
+$("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {step, P, monsters, doors, update, teleport, boxes, data, NAVS, FLOOR_Y, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>
