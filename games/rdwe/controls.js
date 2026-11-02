@@ -10,9 +10,13 @@
 // cheap enough for a phone and never lets the player through a wall.
 import * as THREE from 'three';
 
-export const EYE_HEIGHT = 1.62;
-const MOVE_SPEED = 2.2;       // m/s: a wary walk, not a museum stroll
-const RADIUS = 0.28;          // player capsule radius
+export let EYE_HEIGHT = 1.62;
+let MOVE_SPEED = 2.2;       // m/s: a wary walk, not a museum stroll
+let RADIUS = 0.28;          // player capsule radius
+let PLAYER_SCALE = 1;
+// The host makes a room larger by making the walker smaller: eye height, pace, body radius and head bob all shrink by k, so the room's own
+// coordinates, colliders, triggers and exit paths stay exactly as authored.
+export function setPlayerScale(k) { PLAYER_SCALE = k; EYE_HEIGHT = 1.62 / k; MOVE_SPEED = 2.2 / k; RADIUS = 0.28 / k; }
 const LOOK_GAIN_MOUSE = 0.0022;
 const LOOK_GAIN_TOUCH = 0.0052;
 const PITCH_LIMIT = Math.PI / 2 - 0.08;
@@ -218,8 +222,8 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
     // Head bob: a slow vertical sway and a smaller lateral one, faded out when standing.
     const bob = reducedMotion ? 0 : (moving ? bobScale : 0);
     camera.position.set(
-      base.x + Math.sin(walkTime * 6.2) * 0.012 * bob,
-      base.y + eyeOffset + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob,
+      base.x + Math.sin(walkTime * 6.2) * 0.012 * bob / PLAYER_SCALE,
+      base.y + eyeOffset + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob / PLAYER_SCALE,
       base.z,
     );
   }

@@ -15,7 +15,7 @@
 //   cancel()                           -> tears the current walk down without resolving as reached
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createControls, EYE_HEIGHT } from './controls.js';
+import { createControls, EYE_HEIGHT, setPlayerScale } from './controls.js';
 import { disposeScene } from './build.js';
 import { createPlay } from './play.js';
 import * as sound from './sound.js';
@@ -163,7 +163,8 @@ export async function start(id, elements, opts = {}) {
   const q = quality;
   const reduced = q.reducedMotion || !!opts.reducedMotion;
   const scene = built.scene;
-  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, built.far || 80);
+  setPlayerScale(opts.scale || 1);
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05 / (opts.scale || 1), built.far || 80);
   scene.add(camera);
   r.toneMappingExposure = built.exposure || 1;
   if (opts.sound !== undefined) sound.setEnabled(!!opts.sound);
@@ -436,6 +437,7 @@ export async function start(id, elements, opts = {}) {
     // Free the room. A revisit rebuilds it (the loop returns to the title card first).
     prepared.delete(id);
     if (built.dispose) built.dispose();
+    scene.traverse((o) => { if (o.isLight && o.shadow && o.shadow.map) { o.shadow.map.dispose(); o.shadow.map = null; } });   // shadow maps are not covered by disposeScene
     disposeScene(scene);
     fade.style.opacity = result === 'reached' ? '1' : '0';
     resolveWalk(result);

@@ -136,6 +136,7 @@ function goLink(dr) {
 
 // ---------------------------------------------------------------- hidden games: each keeps its own renderer and canvas; the host shows exactly one at a time
 let inGame = null;
+const RDWE_SCALE = 1.7;                                                              // rooms are made larger by shrinking the walker (see games/rdwe/controls.js)
 const RDWE_ORDER = ["dining", "hallway", "teal", "teal2", "flooded", "trampoline", "grocery"];
 const mkEl = (tag = "div") => document.createElement(tag);                          // detached elements: the original HUD stays invisible
 async function enterGame(l) {
@@ -151,7 +152,7 @@ async function enterGame(l) {
     const joy = mkEl(); const knob = mkEl(); knob.className = "knob"; joy.appendChild(knob);
     const els = {mount, fade: gf, objective: mkEl(), hint: mkEl(), joystick: joy, readout: mkEl(), tally: mkEl(), use: mkEl("button")};
     for (let i = Math.max(0, RDWE_ORDER.indexOf(l.room)); i < RDWE_ORDER.length; i++) {
-      result = await walk.start(RDWE_ORDER[i], els, {sound: true});
+      result = await walk.start(RDWE_ORDER[i], els, {sound: true, scale: RDWE_SCALE});
       if (result !== "reached") break;
     }
     walk.cancel();
@@ -588,7 +589,7 @@ const clock = new THREE.Clock();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, enterGame, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>
