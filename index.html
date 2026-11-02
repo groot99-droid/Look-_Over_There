@@ -137,6 +137,7 @@ function goLink(dr) {
 // ---------------------------------------------------------------- hidden games: each keeps its own renderer and canvas; the host shows exactly one at a time
 let inGame = null;
 const RDWE_SCALE = 1.7;                                                              // rooms are made larger by shrinking the walker (see games/rdwe/controls.js)
+const INTERN_SCALE = 1.6;
 const RDWE_ORDER = ["dining", "hallway", "teal", "teal2", "flooded", "trampoline", "grocery"];
 const mkEl = (tag = "div") => document.createElement(tag);                          // detached elements: the original HUD stays invisible
 async function enterGame(l) {
@@ -156,6 +157,18 @@ async function enterGame(l) {
       if (result !== "reached") break;
     }
     walk.cancel();
+  } else if (l.game === "intern") {
+    const fr = document.createElement("iframe");              // its own window: removing it ends the game's renderer, listeners and drone with it
+    fr.src = `games/intern/index.html?scale=${INTERN_SCALE}`; fr.allow = "autoplay; gamepad; fullscreen";
+    fr.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;background:#000";
+    mount.appendChild(fr);
+    await new Promise(res => {
+      const onMsg = e => { if (e.source === fr.contentWindow && e.data && e.data.type === "intern-ending") { removeEventListener("message", onMsg); res(); } };
+      addEventListener("message", onMsg);
+      fr.addEventListener("load", () => { const st = fr.contentDocument.createElement("style"); st.textContent = "#sound-toggle{display:none!important}"; fr.contentDocument.head.appendChild(st); fr.contentWindow.focus(); setTimeout(() => { gf.style.opacity = 0; fr.contentWindow.focus(); }, 1800); });
+    });
+    gf.style.opacity = 1; await new Promise(r => setTimeout(r, 650));
+    fr.remove();
   }
   mount.style.display = "none"; renderer.domElement.style.display = "block";
   inGame = null;

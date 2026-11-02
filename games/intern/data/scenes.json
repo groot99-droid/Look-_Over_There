@@ -1,0 +1,1793 @@
+{
+  "_comment": "Single source of truth linking Doc 1's logic to the building (Doc 4 §15). The game is one continuous walk: each scene's branch names the ROOM it is played in (data/rooms.json) and its two THRESHOLDS -- zones in that room the candidate walks to; stepping into one commits the choice (src/director.js). A threshold's `exit` is the door that opens onto `via` (a CN_* connector) with the next scene's room joined behind it; when the next scene's room is the same set (S1 -> S2, S5 C -> S6 C, S6 H -> S7 H) the scene changes where he stands. `next` is per branch and the same for both thresholds: the spine never forks, only the render does (state.js renderFor). Beats (`beat`, `onEnter`, `approach`) are run in order: sfxCue (+ sfxOpts {volume, detuneCents}), oneShot, music (a mood, + musicRender), caption, rattle, open/close (door; open + amount 0..1 swings it only that far, and it stays locked), show/hide (a named prop or box), light {id, on, seconds}, env {fog, background, exposure, ambient, sun, grain, vignette, base, seconds} (this room's own atmosphere, lerped over seconds; base: back to the room as built), breath {every, gain, filterHz, durationMs, inhale} | false (his breathing, one breath every `every` s, or none), footfall {gain, filterHz, durationMs} | false (heavier footsteps, or the floors' own back), screen, display {prop, text} (a new reading on a text-capable prop: floorind), swing {prop, amount (m at its lowest point, 0.03), decay (per s, 0.8), axis 'x'|'z', period} (a damped swing of a named prop about the top of its bounds; knocks add up; not the prop-level `swing` key that keeps a curtain swaying), setFlag, hold/drop (a prop in his hands; held with a `hide` of a prop of its type in the same beat, it keeps that prop's material), actor {name, from (0..1 | 'here'), to, speed, stopNear}, lookAt, sit {into: the committed zone's chair, eye, holdMs, stand}, moveTo, shot, ride {drop, seconds, stops: [{at, show, hide, sfxCue, display, swing, ...}]}, shake, together [beats as one carried move], seal, waitMs. A threshold may set `viaDark` (its passage stays unlit until he is in it); a branch may carry `idle` {seconds, after, beat, commit} (nothing chosen for that long, counted once he has stood in zone `after`), `stillness` {seconds, beat} (he has stayed within 5 cm of one spot that long), `bumpCount` {door, at, caption, setFlag, friction, show: {count: prop}} (pushes on a locked door), `drive` {actor, footstep, end} (the beats of an actor rooms.json drives by his progress: footstep every `footsteps` m the actor moves, end when the drive ends, and then a zone whose armAfter names the actor arms), `unseen` {after, point: [x, z], r, beat} or a list (run once, after he has stood in zone `after`, on the first frame the area within r of point is out of his view and he stands clear of it), `env` (the env beat's pieces: the room's atmosphere for this scene, set when the room is joined and lerped to over `seconds` when the scene starts) and `hum` {hz, gain, lowpassHz, followDrone, room} (a hum of its own that carries the drone's detune and never touches the drone; it plays while he is in `room` and fades when he walks out of it, or at the card). The mini-games are gone (the author's call); friction now comes from how he walks to the choice (src/friction.js).",
+  "spineOrder": [
+    "S0",
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+  ],
+  "_musicNote": "`music` (scene-level, or a per-branch override): 'muzak' | 'pad' | 'deep' | 'water' | {file} | null. Generated live by src/music.js on audio.js's music bus -- no licensed tracks. See the music.js header.",
+  "scenes": {
+    "S0": {
+      "id": "S0",
+      "name": "THE UPLOAD",
+      "music": null,
+      "branches": {
+        "X": {
+          "room": "S0_X",
+          "ambience": "S0_X_AMB.wav",
+          "next": "S1",
+          "start": {
+            "zone": "desk",
+            "label": "APPLY",
+            "sit": "sit",
+            "lean": "lean",
+            "stand": "stand",
+            "_note": "Walking up to the lit screen sits him down at it: the application (application.js) is laid over the CRT, the portal answers on the screen, ACCEPTED stays there. Hands show while seated (C6)."
+          },
+          "out": {
+            "exit": "door",
+            "via": "CN_STAIRS_APT",
+            "to": "SET_STREET",
+            "ambience": "S0_X_AMB_STREET.wav",
+            "_note": "The apartment door unlocks after ACCEPTED: stairs down to the street, the first descent. The street bed comes in on the stairs."
+          },
+          "report": {
+            "zone": "report",
+            "label": "666 HALLAM ROW.",
+            "exit": "tower",
+            "via": "CN_VESTIBULE",
+            "_note": "At the tower the glass doors open; through the vestibule into the lobby. When the lobby doors close behind him the drone begins (C7) and S1 starts."
+          }
+        }
+      }
+    },
+    "S1": {
+      "id": "S1",
+      "name": "THE WAITING ROOM",
+      "music": "muzak",
+      "branches": {
+        "C": {
+          "room": "S1_C",
+          "next": "S2",
+          "ambience": "S1_C_AMB.wav",
+          "onEnter": [
+            {
+              "waitMs": 1300
+            },
+            {
+              "show": "front_dark"
+            }
+          ],
+          "thresholds": {
+            "succumb": {
+              "label": "TAKE A SEAT",
+              "zone": [
+                "seat0",
+                "seat1",
+                "seat2",
+                "seat3",
+                "seat4",
+                "seat5",
+                "seat6",
+                "seat7"
+              ],
+              "beat": [
+                {
+                  "lookAt": "receptionist",
+                  "lookY": 1.3,
+                  "seconds": 1.0
+                },
+                {
+                  "sfxCue": "package-drag"
+                },
+                {
+                  "sit": {
+                    "into": true,
+                    "eye": 1.12,
+                    "seconds": 1.6,
+                    "holdMs": 2800
+                  }
+                }
+              ]
+            },
+            "resist": {
+              "label": "STAY STANDING",
+              "zone": "counter",
+              "setFlag": "NEVER_SAT",
+              "beat": [
+                {
+                  "waitMs": 1800
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S1_H",
+          "next": "S2",
+          "ambience": "S1_H_AMB.wav",
+          "onEnter": [
+            {
+              "waitMs": 1300
+            },
+            {
+              "show": "front_dark"
+            }
+          ],
+          "thresholds": {
+            "succumb": {
+              "label": "TAKE A SEAT",
+              "zone": [
+                "seat0",
+                "seat1",
+                "seat2",
+                "seat4",
+                "seat5",
+                "seat7"
+              ],
+              "beat": [
+                {
+                  "lookAt": "receptionist",
+                  "lookY": 1.3,
+                  "seconds": 1.0
+                },
+                {
+                  "sfxCue": "package-drag"
+                },
+                {
+                  "sit": {
+                    "into": true,
+                    "eye": 1.12,
+                    "seconds": 1.6,
+                    "holdMs": 2800
+                  }
+                }
+              ]
+            },
+            "resist": {
+              "label": "STAY STANDING",
+              "zone": "counter",
+              "setFlag": "NEVER_SAT",
+              "beat": [
+                {
+                  "waitMs": 1800
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S2": {
+      "id": "S2",
+      "name": "THE CALL",
+      "music": "muzak",
+      "_note": "H: the speaker clicks, then hisses, then the line (Doc 1 S2). The line is a caption, not the 15 s library voice (assets/Asset Revisions.md item 8: five unrelated phrases, unchecked for C4, and with no cut after S2 it would run on under the walk); a single recorded line per render can go back in sfxCue. Her jaw is shown only for the line: four discrete steps, snapping, out of step with the words (C5).",
+      "branches": {
+        "C": {
+          "room": "S2_C",
+          "next": "S3",
+          "ambience": null,
+          "sfxCue": [
+            "speaker-click"
+          ],
+          "captions": [
+            {
+              "textKey": "call.compliant",
+              "atMs": 900,
+              "holdMs": 2600,
+              "className": "scene-caption-receptionist"
+            }
+          ],
+          "onEnter": [
+            {
+              "show": "front_dark"
+            },
+            {
+              "waitMs": 600
+            },
+            {
+              "show": "receptionist_jaw"
+            },
+            {
+              "lookAt": "receptionist",
+              "lookY": 1.45,
+              "seconds": 1.3,
+              "holdMs": 1700
+            },
+            {
+              "hide": "receptionist_jaw"
+            },
+            {
+              "hide": "inner_lamp_red"
+            },
+            {
+              "show": "inner_lamp_green"
+            },
+            {
+              "light": {
+                "id": "inner_lamp",
+                "on": true
+              }
+            }
+          ],
+          "friction": {
+            "t0": 10,
+            "t1": 45
+          },
+          "idle": {
+            "seconds": 25,
+            "beat": [
+              {
+                "sfxCue": "speaker-click"
+              },
+              {
+                "show": "receptionist_jaw"
+              },
+              {
+                "caption": "call.compliant",
+                "holdMs": 2600,
+                "className": "scene-caption-receptionist"
+              },
+              {
+                "waitMs": 1600
+              },
+              {
+                "hide": "receptionist_jaw"
+              }
+            ]
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "STAND",
+              "zone": "inner_door",
+              "exit": "inner",
+              "via": "CN_CORRIDOR_OFFICE",
+              "beat": [
+                {
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "waitMs": 500
+                }
+              ]
+            },
+            "resist": {
+              "label": "RUN",
+              "zone": "front_doors",
+              "exit": "service",
+              "via": "CN_CORRIDOR_SERVICE",
+              "beat": [
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle"
+                },
+                {
+                  "waitMs": 800
+                },
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle"
+                },
+                {
+                  "waitMs": 900
+                },
+                {
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "hide": "service_lamp_red"
+                },
+                {
+                  "show": "service_lamp_green"
+                },
+                {
+                  "light": {
+                    "id": "service_lamp",
+                    "on": true
+                  }
+                },
+                {
+                  "waitMs": 300
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S2_H",
+          "next": "S3",
+          "ambience": null,
+          "sfxCue": [
+            "speaker-click"
+          ],
+          "captions": [
+            {
+              "textKey": "call.hostile",
+              "atMs": 1400,
+              "holdMs": 2600,
+              "className": "scene-caption-receptionist"
+            }
+          ],
+          "onEnter": [
+            {
+              "show": "front_dark"
+            },
+            {
+              "waitMs": 300
+            },
+            {
+              "sfxCue": "speaker-hiss"
+            },
+            {
+              "waitMs": 800
+            },
+            {
+              "show": "receptionist_jaw"
+            },
+            {
+              "lookAt": "receptionist",
+              "lookY": 1.45,
+              "seconds": 1.3,
+              "holdMs": 1800
+            },
+            {
+              "hide": "receptionist_jaw"
+            },
+            {
+              "hide": "inner_lamp_red"
+            },
+            {
+              "show": "inner_lamp_green"
+            },
+            {
+              "light": {
+                "id": "inner_lamp",
+                "on": true
+              }
+            }
+          ],
+          "friction": {
+            "t0": 10,
+            "t1": 45
+          },
+          "idle": {
+            "seconds": 25,
+            "beat": [
+              {
+                "sfxCue": "speaker-click"
+              },
+              {
+                "show": "receptionist_jaw"
+              },
+              {
+                "caption": "call.hostile",
+                "holdMs": 2600,
+                "className": "scene-caption-receptionist"
+              },
+              {
+                "waitMs": 1600
+              },
+              {
+                "hide": "receptionist_jaw"
+              }
+            ]
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "STAND",
+              "zone": "inner_door",
+              "exit": "inner",
+              "via": "CN_CORRIDOR_OFFICE",
+              "beat": [
+                {
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "waitMs": 500
+                }
+              ]
+            },
+            "resist": {
+              "label": "RUN",
+              "zone": "front_doors",
+              "exit": "service",
+              "via": "CN_CORRIDOR_SERVICE",
+              "beat": [
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle"
+                },
+                {
+                  "waitMs": 800
+                },
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle"
+                },
+                {
+                  "waitMs": 900
+                },
+                {
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "hide": "service_lamp_red"
+                },
+                {
+                  "show": "service_lamp_green"
+                },
+                {
+                  "light": {
+                    "id": "service_lamp",
+                    "on": true
+                  }
+                },
+                {
+                  "waitMs": 300
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S3": {
+      "id": "S3",
+      "name": "THE THRESHOLD",
+      "music": "pad",
+      "branches": {
+        "C": {
+          "room": "S3_C",
+          "next": "S4",
+          "ambience": "S3_C_AMB.wav",
+          "thresholds": {
+            "succumb": {
+              "label": "PART THE CURTAIN",
+              "zone": "curtain",
+              "exit": "curtain",
+              "via": "CN_CORRIDOR_OFFICE",
+              "viaDark": true,
+              "approach": [
+                {
+                  "caption": "scan.prompt",
+                  "holdMs": 1800
+                }
+              ],
+              "beat": [
+                {
+                  "sfxCue": "curtain-rustle",
+                  "open": "curtain",
+                  "seconds": 1.6,
+                  "await": true
+                },
+                {
+                  "caption": "scan.pass",
+                  "holdMs": 2600
+                }
+              ]
+            },
+            "resist": {
+              "label": "TRY THE DOOR",
+              "zone": "glass",
+              "exit": "service",
+              "via": "CN_CORRIDOR_SERVICE",
+              "beat": [
+                {
+                  "rattle": "glass",
+                  "sfxCue": "door-rattle",
+                  "waitMs": 700
+                },
+                {
+                  "rattle": "glass",
+                  "sfxCue": "door-rattle",
+                  "waitMs": 900
+                },
+                {
+                  "sfxCue": "speaker-click",
+                  "caption": "door.violation",
+                  "className": "scene-caption-receptionist",
+                  "holdMs": 3400,
+                  "waitMs": 2200
+                },
+                {
+                  "sfxCue": "door-buzz"
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S3_H",
+          "next": "S4",
+          "ambience": "S3_H_AMB.wav",
+          "bumpCount": {
+            "door": "front",
+            "at": 31,
+            "caption": "door.counted",
+            "setFlag": "COUNTED_DOOR",
+            "friction": 0.5,
+            "show": {
+              "6": "handprint4",
+              "14": "handprint5",
+              "22": "handprint6"
+            }
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "PART THE CURTAIN",
+              "zone": "curtain",
+              "exit": "curtain",
+              "via": "CN_CORRIDOR_SERVICE",
+              "viaDark": true,
+              "beat": [
+                {
+                  "sfxCue": "curtain-rustle"
+                },
+                {
+                  "open": "curtain",
+                  "seconds": 1.6,
+                  "await": true
+                }
+              ]
+            },
+            "resist": {
+              "label": "TRY THE DOOR",
+              "zone": "glass",
+              "exit": "service",
+              "via": "CN_CORRIDOR_SERVICE",
+              "beat": [
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle",
+                  "show": "handprint1",
+                  "waitMs": 700
+                },
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle",
+                  "show": "handprint2",
+                  "waitMs": 700
+                },
+                {
+                  "rattle": "front",
+                  "sfxCue": "door-rattle",
+                  "show": "handprint3",
+                  "waitMs": 1100
+                },
+                {
+                  "caption": "door.violation",
+                  "className": "scene-caption-receptionist",
+                  "holdMs": 3400,
+                  "show": "receptionist_jaw",
+                  "waitMs": 2400
+                },
+                {
+                  "hide": "receptionist_jaw"
+                },
+                {
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "hide": "service_lamp_red"
+                },
+                {
+                  "show": "service_lamp_green"
+                },
+                {
+                  "light": {
+                    "id": "service_lamp",
+                    "on": true
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S4": {
+      "id": "S4",
+      "name": "THE FLOOR",
+      "music": "pad",
+      "branches": {
+        "C": {
+          "room": "S4_C",
+          "next": "S5",
+          "ambience": "S4_C_AMB.wav",
+          "onEnter": [
+            {
+              "actor": {
+                "name": "manager",
+                "speed": 0.45
+              }
+            }
+          ],
+          "unseen": {
+            "_note": "Doc 3 MG-03 C: look behind you and the floor already walked is just more cubicles. Once he is past the cross aisle and the aisle behind him (point, r: the workstations' footprint in rooms.json) is out of his view, it closes up.",
+            "after": "past_cross",
+            "point": [
+              0.0,
+              9.1
+            ],
+            "r": 7.0,
+            "beat": [
+              {
+                "show": "aisle_fill"
+              }
+            ]
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "TAKE THE PAPERS",
+              "zone": "manager",
+              "exit": "back",
+              "via": "CN_CORRIDOR_OFFICE",
+              "sfxCue": "paper-handoff",
+              "approach": [
+                {
+                  "caption": "manager.line",
+                  "className": "scene-caption-receptionist",
+                  "holdMs": 3800
+                }
+              ],
+              "beat": [
+                {
+                  "hide": "evidence",
+                  "hold": "evidence"
+                },
+                {
+                  "waitMs": 1700
+                },
+                {
+                  "hide": "manager",
+                  "light": {
+                    "id": "hold_light",
+                    "on": false
+                  }
+                },
+                {
+                  "hide": "hold_troffer"
+                },
+                {
+                  "waitMs": 240
+                },
+                {
+                  "show": "hold_troffer",
+                  "light": {
+                    "id": "hold_light",
+                    "on": true
+                  }
+                },
+                {
+                  "waitMs": 800
+                },
+                {
+                  "sfxCue": "deadbolt"
+                }
+              ]
+            },
+            "resist": {
+              "label": "TAKE THE SIDE DOOR",
+              "zone": "side_door",
+              "exit": "side",
+              "via": "CN_STAIRS_CONCRETE",
+              "sfxCue": "deadbolt",
+              "beat": [
+                {
+                  "moveTo": {
+                    "pos": [
+                      10.8,
+                      0.9
+                    ],
+                    "seconds": 0.7
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S4_H",
+          "next": "S5",
+          "ambience": "S4_H_AMB.wav",
+          "drive": {
+            "_note": "The manager (rooms.json actors.manager.drive) recedes as he walks, 20 m ahead, never back. footstep: every 8 m he moves. end: at the far door: the evidence at its foot, the door, through it, shut, the end bulb; TAKE THE PAPERS arms when this has played.",
+            "actor": "manager",
+            "footstep": [
+              {
+                "oneShot": "S4_H_SFX_FOOTSTEPS.wav"
+              }
+            ],
+            "end": [
+              {
+                "show": "evidence_h"
+              },
+              {
+                "open": "far",
+                "seconds": 0.9
+              },
+              {
+                "waitMs": 500
+              },
+              {
+                "actor": {
+                  "name": "manager",
+                  "from": "here",
+                  "to": 1,
+                  "speed": 1.1
+                }
+              },
+              {
+                "waitMs": 1500
+              },
+              {
+                "hide": "manager"
+              },
+              {
+                "close": "far",
+                "seconds": 1.1
+              },
+              {
+                "waitMs": 700
+              },
+              {
+                "show": "end_cage_on",
+                "light": {
+                  "id": "end_bulb",
+                  "on": true
+                }
+              },
+              {
+                "hide": "end_cage_off"
+              }
+            ]
+          },
+          "stillness": {
+            "_note": "Doc 3 MG-03 H: stand completely still for 8 seconds and a door opens -- the ajar door swings wider (still locked: it is stepped into, not through) and its cold light comes up.",
+            "seconds": 8,
+            "beat": [
+              {
+                "open": "ajar",
+                "amount": 0.46,
+                "seconds": 2.8,
+                "light": {
+                  "id": "ajar_wide",
+                  "on": true,
+                  "seconds": 2.4
+                }
+              },
+              {
+                "waitMs": 900
+              },
+              {
+                "show": "ajar_spill_wide"
+              }
+            ]
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "TAKE THE PAPERS",
+              "zone": "far_end",
+              "exit": "far",
+              "via": "CN_CORRIDOR_SERVICE",
+              "sfxCue": "paper-handoff",
+              "beat": [
+                {
+                  "hide": "evidence_h",
+                  "hold": "evidence"
+                },
+                {
+                  "waitMs": 700
+                },
+                {
+                  "moveTo": {
+                    "pos": [
+                      0.0,
+                      -15.5
+                    ],
+                    "seconds": 0.6
+                  }
+                }
+              ]
+            },
+            "resist": {
+              "label": "TAKE THE SIDE DOOR",
+              "zone": "ajar",
+              "exit": "ajar",
+              "via": "CN_STAIRS_CONCRETE",
+              "beat": [
+                {
+                  "moveTo": {
+                    "pos": [
+                      -0.3,
+                      -5.6
+                    ],
+                    "seconds": 0.7
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S5": {
+      "id": "S5",
+      "name": "THE DESK / THE GARAGE",
+      "music": "deep",
+      "branches": {
+        "C": {
+          "room": "S5_C",
+          "next": "S6",
+          "ambience": "S5_C_AMB.wav",
+          "thresholds": {
+            "succumb": {
+              "label": "STAPLE",
+              "zone": "desk",
+              "beat": [
+                {
+                  "lookAt": "stapler",
+                  "lookY": 0.04,
+                  "seconds": 0.9,
+                  "holdMs": 350
+                },
+                {
+                  "sfxCue": "stapler-thud",
+                  "shake": {
+                    "seconds": 0.3,
+                    "amount": 0.012
+                  }
+                },
+                {
+                  "waitMs": 700
+                }
+              ]
+            },
+            "resist": {
+              "label": "WAKE THE TERMINAL",
+              "zone": "terminal",
+              "setFlag": "SAW_HARLOWE",
+              "approach": [
+                {
+                  "screen": {
+                    "prop": "harlowe",
+                    "page": "harlowe"
+                  },
+                  "light": {
+                    "id": "harlowe_glow",
+                    "on": true
+                  },
+                  "sfxCue": "crt-degauss",
+                  "setFlag": "SAW_HARLOWE",
+                  "hide": "harlowe_led"
+                }
+              ],
+              "beat": [
+                {
+                  "lookAt": "harlowe",
+                  "lookY": 0.27,
+                  "seconds": 1.2,
+                  "holdMs": 2800
+                },
+                {
+                  "waitMs": 300
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S5_H",
+          "next": "S6",
+          "ambience": "S5_H_AMB.wav",
+          "sfxCue": "car-alarm",
+          "thresholds": {
+            "succumb": {
+              "label": "REST",
+              "zone": "curb",
+              "exit": "ramp",
+              "via": "CN_RAMP_DOWN",
+              "beat": [
+                {
+                  "show": "fifth_car",
+                  "lookAt": "boom_down",
+                  "lookY": 1.1,
+                  "seconds": 1.1
+                },
+                {
+                  "sit": {
+                    "eye": 0.95,
+                    "seconds": 1.5,
+                    "holdMs": 5200
+                  }
+                },
+                {
+                  "hide": "boom_down",
+                  "show": "boom_up",
+                  "sfxCue": "door-rattle",
+                  "open": "ramp",
+                  "seconds": 3.2
+                },
+                {
+                  "waitMs": 900
+                }
+              ]
+            },
+            "resist": {
+              "label": "TAKE THE SIDE DOOR",
+              "zone": "stairs",
+              "exit": "stairs",
+              "via": "CN_STAIRS_CONCRETE",
+              "sfxCue": "door-rattle"
+            }
+          }
+        }
+      }
+    },
+    "S6": {
+      "id": "S6",
+      "name": "THE REQUISITION / THE RUN",
+      "music": "pad",
+      "branches": {
+        "C": {
+          "room": "S6_C",
+          "next": "S7",
+          "ambience": "S6_C_AMB.wav",
+          "onEnter": [
+            {
+              "screen": {
+                "prop": "terminal",
+                "page": "requisition"
+              },
+              "light": {
+                "id": "terminal_glow",
+                "on": true
+              },
+              "sfxCue": "crt-degauss"
+            },
+            {
+              "waitMs": 1100
+            },
+            {
+              "show": "tube_lamp",
+              "light": {
+                "id": "tube_lamp",
+                "on": true
+              },
+              "sfxCue": "deadbolt"
+            },
+            {
+              "waitMs": 450
+            },
+            {
+              "show": "flag_lamp",
+              "light": {
+                "id": "flag_lamp",
+                "on": true
+              },
+              "sfxCue": "deadbolt"
+            }
+          ],
+          "beatZones": [
+            {
+              "zone": "read",
+              "label": "THE REQUISITION",
+              "beat": [
+                {
+                  "lookAt": "terminal",
+                  "lookY": 0.27,
+                  "seconds": 1.1
+                },
+                {
+                  "sit": {
+                    "eye": 1.14,
+                    "seconds": 1.2,
+                    "holdMs": 5200
+                  }
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "succumb": {
+              "label": "ORDER",
+              "zone": "tube",
+              "exit": "freight",
+              "via": "CN_CORRIDOR_DOWN",
+              "beat": [
+                {
+                  "lookAt": "tube",
+                  "lookY": 1.05,
+                  "seconds": 0.8,
+                  "holdMs": 250
+                },
+                {
+                  "hide": "canister",
+                  "sfxCue": "door-thud"
+                },
+                {
+                  "waitMs": 650
+                },
+                {
+                  "sfxCue": "requisition-chime"
+                },
+                {
+                  "waitMs": 550
+                },
+                {
+                  "sfxCue": "requisition-chime",
+                  "hide": "tube_lamp",
+                  "light": {
+                    "id": "tube_lamp",
+                    "on": false
+                  }
+                },
+                {
+                  "waitMs": 800
+                }
+              ]
+            },
+            "resist": {
+              "label": "FLAG",
+              "zone": "flagbox",
+              "exit": "service",
+              "via": "CN_CORRIDOR_SERVICE",
+              "beat": [
+                {
+                  "lookAt": "flagbox",
+                  "lookY": 1.25,
+                  "seconds": 0.9
+                },
+                {
+                  "sfxCue": "flag-reject-beep",
+                  "caption": "flag.reject.1",
+                  "holdMs": 1600
+                },
+                {
+                  "waitMs": 1900
+                },
+                {
+                  "sfxCue": "flag-reject-beep",
+                  "caption": "flag.reject.2",
+                  "holdMs": 1600
+                },
+                {
+                  "waitMs": 1900
+                },
+                {
+                  "sfxCue": "flag-reject-beep",
+                  "caption": "flag.reject.3",
+                  "holdMs": 1800
+                },
+                {
+                  "waitMs": 2100
+                },
+                {
+                  "sfxCue": "flag-reject-beep",
+                  "caption": "flag.reject.4",
+                  "holdMs": 2600
+                },
+                {
+                  "waitMs": 2000
+                },
+                {
+                  "hide": "flag_lamp",
+                  "light": {
+                    "id": "flag_lamp",
+                    "on": false
+                  },
+                  "sfxCue": "deadbolt"
+                },
+                {
+                  "waitMs": 500
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S6_H",
+          "next": "S7",
+          "ambience": "S6_H_AMB.wav",
+          "music": "water",
+          "env": {
+            "fog": {
+              "color": "#1d1209",
+              "near": 5,
+              "far": 44
+            },
+            "ambient": {
+              "color": "#ffb060",
+              "intensity": 0.15
+            },
+            "sun": {
+              "color": "#ffb86a",
+              "intensity": 0.35
+            },
+            "exposure": 1.05,
+            "seconds": 1.5
+          },
+          "onEnter": [
+            {
+              "light": {
+                "id": "pool",
+                "on": false
+              },
+              "hide": "poolkit"
+            }
+          ],
+          "beatZones": [
+            {
+              "zone": "run_breath",
+              "beat": [
+                {
+                  "breath": {
+                    "every": 2.8,
+                    "gain": 0.05,
+                    "filterHz": 950,
+                    "durationMs": 420
+                  }
+                }
+              ]
+            },
+            {
+              "zone": "run_deeper",
+              "beat": [
+                {
+                  "breath": {
+                    "every": 3.3,
+                    "gain": 0.075,
+                    "filterHz": 720,
+                    "durationMs": 640,
+                    "inhale": true
+                  },
+                  "footfall": {
+                    "gain": 0.15,
+                    "filterHz": 600,
+                    "durationMs": 95
+                  }
+                }
+              ]
+            },
+            {
+              "zone": "run_haze",
+              "beat": [
+                {
+                  "env": {
+                    "base": true,
+                    "seconds": 7
+                  }
+                }
+              ]
+            },
+            {
+              "zone": "run_heavy",
+              "beat": [
+                {
+                  "breath": {
+                    "every": 3.9,
+                    "gain": 0.1,
+                    "filterHz": 520,
+                    "durationMs": 880,
+                    "inhale": true
+                  },
+                  "footfall": {
+                    "gain": 0.19,
+                    "filterHz": 460,
+                    "durationMs": 125
+                  }
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "succumb": {
+              "label": "PUSH ON",
+              "zone": "push",
+              "exit": "freight",
+              "via": "CN_CORRIDOR_DOWN",
+              "beat": [
+                {
+                  "breath": false,
+                  "footfall": false,
+                  "shake": {
+                    "seconds": 0.35,
+                    "amount": 0.02
+                  }
+                },
+                {
+                  "sfxCue": "breath",
+                  "sit": {
+                    "eye": 1.3,
+                    "seconds": 0.9,
+                    "holdMs": 4600
+                  }
+                },
+                {
+                  "light": {
+                    "id": "pool",
+                    "on": true
+                  },
+                  "show": "poolkit",
+                  "sfxCue": "door-thud"
+                },
+                {
+                  "waitMs": 3600
+                }
+              ]
+            },
+            "resist": {
+              "label": "STOP",
+              "zone": "stopline",
+              "exit": "freight",
+              "via": "CN_CORRIDOR_DOWN",
+              "beat": [
+                {
+                  "breath": false,
+                  "footfall": false,
+                  "moveTo": {
+                    "pos": [
+                      -8.0,
+                      -21.95
+                    ],
+                    "seconds": 1.0
+                  }
+                },
+                {
+                  "lookAt": "stop_line",
+                  "lookY": 0.0,
+                  "seconds": 0.9,
+                  "holdMs": 1800
+                },
+                {
+                  "light": {
+                    "id": "pool",
+                    "on": true
+                  },
+                  "show": "poolkit",
+                  "sfxCue": "door-thud",
+                  "sit": {
+                    "eye": 1.05,
+                    "seconds": 1.8,
+                    "holdMs": 6400
+                  }
+                },
+                {
+                  "waitMs": 400
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S7": {
+      "id": "S7",
+      "name": "THE DESCENT",
+      "music": "deep",
+      "branches": {
+        "C": {
+          "room": "S7_C",
+          "next": "S8",
+          "ambience": "S7_C_AMB.wav",
+          "idle": {
+            "after": "cab_inside",
+            "seconds": 25,
+            "commit": "resist"
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "DESCEND",
+              "zone": "panel",
+              "exit": "cab",
+              "via": "CN_CORRIDOR_OFFICE",
+              "beat": [
+                {
+                  "sfxCue": "deadbolt",
+                  "waitMs": 250
+                },
+                {
+                  "together": [
+                    {
+                      "lookAt": "ind",
+                      "lookY": -0.62,
+                      "seconds": 1.4
+                    },
+                    {
+                      "sfxCue": "door-rattle",
+                      "show": "gate_1",
+                      "hide": "gate_0",
+                      "waitMs": 170
+                    },
+                    {
+                      "sfxCue": "door-rattle",
+                      "show": "gate_2",
+                      "hide": "gate_1",
+                      "waitMs": 500
+                    },
+                    {
+                      "sfxCue": "metal-tear-screech",
+                      "seal": true,
+                      "close": "cab",
+                      "seconds": 1.0,
+                      "await": true
+                    },
+                    {
+                      "sfxCue": "door-thud",
+                      "swing": {
+                        "prop": "bulb",
+                        "amount": 0.035,
+                        "decay": 0.7
+                      },
+                      "waitMs": 600
+                    },
+                    {
+                      "ride": {
+                        "drop": 20,
+                        "seconds": 9.5,
+                        "shake": 0,
+                        "stops": [
+                          {
+                            "at": 0,
+                            "show": "landing_top",
+                            "open": "cab",
+                            "seconds": 0.02
+                          },
+                          {
+                            "at": 0.05,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b1"
+                            }
+                          },
+                          {
+                            "at": 0.324,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b2"
+                            }
+                          },
+                          {
+                            "at": 0.474,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b7"
+                            }
+                          },
+                          {
+                            "at": 0.594,
+                            "display": {
+                              "prop": "ind",
+                              "text": "b12"
+                            }
+                          },
+                          {
+                            "at": 0.97,
+                            "display": {
+                              "prop": "ind",
+                              "text": " = "
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "close": "cab",
+                      "seconds": 0.02,
+                      "await": true
+                    },
+                    {
+                      "hide": "landing_low"
+                    }
+                  ]
+                },
+                {
+                  "sfxCue": "door-thud",
+                  "swing": {
+                    "prop": "bulb",
+                    "amount": 0.02,
+                    "decay": 0.9
+                  },
+                  "waitMs": 1200
+                },
+                {
+                  "sfxCue": "door-rattle",
+                  "show": "gate_1",
+                  "hide": "gate_2",
+                  "waitMs": 170
+                },
+                {
+                  "sfxCue": "door-rattle",
+                  "show": "gate_0",
+                  "hide": "gate_1",
+                  "waitMs": 450
+                }
+              ]
+            },
+            "resist": {
+              "label": "REFUSE",
+              "zone": "doorway",
+              "exit": "cab",
+              "via": "CN_CORRIDOR_OFFICE",
+              "approach": [
+                {
+                  "sfxCue": "door-buzz"
+                }
+              ],
+              "beat": [
+                {
+                  "caption": "elevator.refuse",
+                  "holdMs": 3800,
+                  "sfxCue": "door-buzz"
+                },
+                {
+                  "together": [
+                    {
+                      "moveTo": {
+                        "pos": [
+                          0.0,
+                          0.0
+                        ],
+                        "seconds": 1.0
+                      }
+                    },
+                    {
+                      "sfxCue": [
+                        "door-thud",
+                        "door-rattle"
+                      ],
+                      "show": "gate_2",
+                      "hide": "gate_0",
+                      "swing": {
+                        "prop": "bulb",
+                        "amount": 0.03,
+                        "decay": 0.7
+                      }
+                    },
+                    {
+                      "lookAt": "ind",
+                      "lookY": -0.6,
+                      "seconds": 0.9
+                    },
+                    {
+                      "ride": {
+                        "drop": 20,
+                        "seconds": 9.5,
+                        "shake": 0,
+                        "stops": [
+                          {
+                            "at": 0.05,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b1"
+                            }
+                          },
+                          {
+                            "at": 0.324,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b2"
+                            }
+                          },
+                          {
+                            "at": 0.474,
+                            "display": {
+                              "prop": "ind",
+                              "text": " b7"
+                            }
+                          },
+                          {
+                            "at": 0.594,
+                            "display": {
+                              "prop": "ind",
+                              "text": "b12"
+                            }
+                          },
+                          {
+                            "at": 0.66,
+                            "sfxCue": "metal-tear-screech",
+                            "close": "cab",
+                            "seconds": 0.8
+                          },
+                          {
+                            "at": 0.745,
+                            "sfxCue": "door-thud",
+                            "swing": {
+                              "prop": "bulb",
+                              "amount": 0.025,
+                              "decay": 0.8
+                            }
+                          },
+                          {
+                            "at": 0.97,
+                            "display": {
+                              "prop": "ind",
+                              "text": " = "
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "hide": "landing_low"
+                    }
+                  ]
+                },
+                {
+                  "sfxCue": "door-thud",
+                  "swing": {
+                    "prop": "bulb",
+                    "amount": 0.02,
+                    "decay": 0.9
+                  },
+                  "waitMs": 1200
+                },
+                {
+                  "sfxCue": "door-rattle",
+                  "show": "gate_1",
+                  "hide": "gate_2",
+                  "waitMs": 170
+                },
+                {
+                  "sfxCue": "door-rattle",
+                  "show": "gate_0",
+                  "hide": "gate_1",
+                  "waitMs": 450
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "S7_H",
+          "next": "S8",
+          "ambience": "S7_H_AMB.wav",
+          "music": "water",
+          "thresholds": {
+            "succumb": {
+              "label": "JUMP",
+              "zone": "gap",
+              "exit": "drop",
+              "via": "fall",
+              "approach": [
+                {
+                  "sfxCue": "concrete-grains",
+                  "waitMs": 2800
+                },
+                {
+                  "sfxCue": "concrete-grains"
+                }
+              ],
+              "beat": [
+                {
+                  "sfxCue": "concrete-grains",
+                  "waitMs": 250
+                }
+              ]
+            },
+            "resist": {
+              "label": "TURN BACK",
+              "zone": "turnback",
+              "exit": "drop",
+              "via": "fall",
+              "beat": [
+                {
+                  "sfxCue": [
+                    "door-thud",
+                    "concrete-grains"
+                  ]
+                },
+                {
+                  "light": {
+                    "id": "run",
+                    "on": false,
+                    "seconds": 1.4
+                  }
+                },
+                {
+                  "shake": {
+                    "seconds": 1.4,
+                    "amount": 0.05
+                  }
+                },
+                {
+                  "sfxCue": "concrete-grains",
+                  "caption": "edge.only",
+                  "holdMs": 3200
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S8": {
+      "id": "S8",
+      "name": "THE DELIVERY / THE DIVE",
+      "music": "deep",
+      "branches": {
+        "C": {
+          "room": "S8_C",
+          "next": "E",
+          "ambience": "S8_C_AMB.wav",
+          "_onEnterNote": "The clerk slides the package across the counter toward him as he walks out of the fog (Doc 2 KLING C: no arm animation beyond the package's linear slide): 0.48 m in about 9 s, done before he reaches it.",
+          "onEnter": [
+            {
+              "actor": {
+                "name": "package",
+                "speed": 0.055
+              }
+            }
+          ],
+          "beatZones": [
+            {
+              "zone": "counter",
+              "label": "THE PACKAGE",
+              "beat": [
+                {
+                  "sfxCue": "package-drag"
+                },
+                {
+                  "hide": "package",
+                  "hold": "soggypackage",
+                  "actor": {
+                    "name": "package",
+                    "from": 1,
+                    "to": 1
+                  }
+                },
+                {
+                  "light": {
+                    "id": "docklamp",
+                    "on": true
+                  },
+                  "hide": "docklamp_dark",
+                  "show": "docklamp_lit"
+                },
+                {
+                  "light": {
+                    "id": "sortlamp",
+                    "on": true
+                  },
+                  "hide": "sortlamp_dark",
+                  "show": "sortlamp_lit"
+                }
+              ]
+            }
+          ],
+          "thresholds": {
+            "succumb": {
+              "label": "DELIVER",
+              "zone": "deliver",
+              "exit": "deliveries",
+              "via": "CN_CORRIDOR_OFFICE",
+              "setFlag": "DELIVERED",
+              "beat": [
+                {
+                  "sfxCue": "door-buzz"
+                }
+              ]
+            },
+            "resist": {
+              "label": "OPEN THE BOX",
+              "zone": "sorting",
+              "setFlag": "OPENED_BOX",
+              "exit": "deliveries",
+              "via": "CN_CORRIDOR_OFFICE",
+              "beat": [
+                {
+                  "drop": true,
+                  "show": "openbox"
+                },
+                {
+                  "sfxCue": "paper-handoff"
+                },
+                {
+                  "caption": "box.contents",
+                  "holdMs": 4800
+                },
+                {
+                  "lookAt": "openbox",
+                  "lookY": 0.1,
+                  "seconds": 1.2,
+                  "holdMs": 3600
+                },
+                {
+                  "sfxCue": "door-buzz"
+                }
+              ]
+            }
+          }
+        },
+        "H": {
+          "room": "SET_DIVE",
+          "next": "E",
+          "ambience": "S8_H_AMB.wav",
+          "music": "water",
+          "hum": {
+            "room": "S8_H",
+            "hz": 48,
+            "gain": 0.018,
+            "followDrone": true
+          },
+          "thresholds": {
+            "succumb": {
+              "label": "DIVE",
+              "zone": "grate",
+              "to": "S8_H",
+              "approach": [
+                {
+                  "light": {
+                    "id": "gratelight2",
+                    "on": true
+                  }
+                }
+              ],
+              "beat": [
+                {
+                  "sfxCue": "door-rattle"
+                },
+                {
+                  "shake": {
+                    "seconds": 0.9,
+                    "amount": 0.03
+                  }
+                },
+                {
+                  "hide": "grate",
+                  "show": "grate_open"
+                },
+                {
+                  "hide": "pitplug",
+                  "sfxCue": "door-thud"
+                }
+              ]
+            },
+            "resist": {
+              "label": "SWIM FOR THE PILLARS",
+              "zone": "pillar",
+              "to": "S8_H",
+              "beat": [
+                {
+                  "light": {
+                    "id": "poollight",
+                    "on": false
+                  },
+                  "hide": "poollamp",
+                  "show": "poollamp_dead",
+                  "sfxCue": "door-thud"
+                },
+                {
+                  "hide": "grate"
+                },
+                {
+                  "show": "grate_open"
+                },
+                {
+                  "hide": "pitplug",
+                  "light": {
+                    "id": "gratelight2",
+                    "on": true
+                  }
+                },
+                {
+                  "shake": {
+                    "seconds": 1.4,
+                    "amount": 0.05
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

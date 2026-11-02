@@ -1,0 +1,30 @@
+file,class,path,seconds,width,height,sample_rate,channels,bits,bytes,sha256_16,in_s1_scheme,qc,note
+S0_X_AMB.wav,aud,/assets/aud/S0_X_AMB.wav,30.0,,,48000,2,24,8640044,5ed9efe7dde3057c,True,pass,Doc 1 calls the prologue S0_C_*; Doc 2 (and these files) use S0_X_*
+S0_X_AMB_STREET.wav,aud,/assets/aud/S0_X_AMB_STREET.wav,30.0,,,48000,2,24,8640044,5801dce374a2e6c1,False,pass,second S0 bed (street) (outside S1 scheme); Doc 1 calls the prologue S0_C_*; Doc 2 (and these files) use S0_X_*
+S1_C_AMB.wav,aud,/assets/aud/S1_C_AMB.wav,30.0,,,48000,2,24,8640044,23558b140218ceeb,True,pass,
+S1_H_AMB.wav,aud,/assets/aud/S1_H_AMB.wav,30.0,,,48000,2,24,8640044,f5f928f59f469733,True,pass,"derived: S1_C_AMB resampled to 80% speed+pitch, re-looped, mixed over generated dispenser/paper bed"
+S3_C_AMB.wav,aud,/assets/aud/S3_C_AMB.wav,30.0,,,48000,2,24,8640044,f16d5087f582c9cf,True,pass,
+S3_H_AMB.wav,aud,/assets/aud/S3_H_AMB.wav,30.0,,,48000,2,24,8640044,9132b5c47ae7087b,True,pass,
+S4_C_AMB.wav,aud,/assets/aud/S4_C_AMB.wav,30.0,,,48000,2,24,8640044,fdbac9d404a7d335,True,pass,
+S4_H_AMB.wav,aud,/assets/aud/S4_H_AMB.wav,30.0,,,48000,2,24,8640044,53ba5b794e3347ac,True,pass,"generated bed + placed distant footsteps (5 at ~6.8s, 3 at ~15.2s)"
+S4_H_SFX_FOOTSTEPS.wav,aud,/assets/aud/S4_H_SFX_FOOTSTEPS.wav,8.0,,,48000,2,16,1536044,270f7010549391c2,False,pass,"one-shot, 8s, raw generator level (not normalised); engine-triggered"
+S5_C_AMB.wav,aud,/assets/aud/S5_C_AMB.wav,30.0,,,48000,2,24,8640044,0b803002e79facfd,True,pass,
+S5_H_AMB.wav,aud,/assets/aud/S5_H_AMB.wav,30.0,,,48000,2,24,8640044,c0605ec1395f0bc4,True,pass,procedurally synthesised ballast buzz + concrete modes + reverb over S6_H air bed (3 generations rejected: rain / whisper artifact / engine)
+S6_C_AMB.wav,aud,/assets/aud/S6_C_AMB.wav,30.0,,,48000,2,24,8640044,005b40c6fa3ec497,True,pass,
+S6_H_AMB.wav,aud,/assets/aud/S6_H_AMB.wav,30.0,,,48000,2,24,8640044,df459d829a70cc35,True,pass,event-free bed; breathing/footfalls belong to S6_H_SFX one-shots
+S7_C_AMB.wav,aud,/assets/aud/S7_C_AMB.wav,30.0,,,48000,2,24,8640044,425dac8d9a7975f1,True,pass,
+S7_H_AMB.wav,aud,/assets/aud/S7_H_AMB.wav,30.0,,,48000,2,24,8640044,b7a84d16837bac12,True,pass,
+S8_C_AMB.wav,aud,/assets/aud/S8_C_AMB.wav,30.0,,,48000,2,24,8640044,57b8d27bbd672bb6,True,pass,
+S8_C_AMB_BOARDROOM.wav,aud,/assets/aud/S8_C_AMB_BOARDROOM.wav,30.0,,,48000,2,24,8640044,dcfeaa4d1f49da23,False,pass,second S8_C bed (outside S1 scheme)
+S8_H_AMB.wav,aud,/assets/aud/S8_H_AMB.wav,30.0,,,48000,2,24,8640044,e352abe3ed39ee70,True,pass,
+S8_H_AMB_STORE.wav,aud,/assets/aud/S8_H_AMB_STORE.wav,30.0,,,48000,2,24,8640044,b026e00a8fbe97fa,False,pass,second S8_H bed (outside S1 scheme)
+S2_C_SFX_SPEAKER.wav,aud,/assets/aud/S2_C_SFX_SPEAKER.wav,1.0,,,48000,2,16,192044,6b3d288d6c00261c,False,pass,"library SFX, not Higgsfield-generated; source SFX/PA Speaker Switching on.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S2_H_SFX_SPEAKER.wav,aud,/assets/aud/S2_H_SFX_SPEAKER.wav,3.0,,,48000,2,16,576044,d1960a774539b5f8,False,pass,"library SFX, not Higgsfield-generated; source SFX/small ceiling PA speaker switching.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S2_X_SFX_RECEPTIONIST.wav,aud,/assets/aud/S2_X_SFX_RECEPTIONIST.wav,15.38,,,48000,2,16,2953004,58a3bf037de7f709,False,pass,"library SFX, not Higgsfield-generated; source SFX/woman's voice.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S3_C_SFX_CURTAIN.wav,aud,/assets/aud/S3_C_SFX_CURTAIN.wav,4.5,,,48000,2,16,864044,a50cf00bdf6faf62,False,pass,"library SFX, not Higgsfield-generated; source SFX/Velvet Theatre Curtain.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S3_H_SFX_DOOR.wav,aud,/assets/aud/S3_H_SFX_DOOR.wav,3.0,,,48000,2,16,576044,141ad8520b6123e4,False,pass,"library SFX, not Higgsfield-generated; source SFX/metal push bar on a locked commercial glass door.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S4_C_SFX_PAPERS.wav,aud,/assets/aud/S4_C_SFX_PAPERS.wav,3.5,,,48000,2,16,672044,11b684543eba4424,False,pass,"library SFX, not Higgsfield-generated; source SFX/thick stack of crisp paper sheets being handed over.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S5_C_SFX_CRT_ON.wav,aud,/assets/aud/S5_C_SFX_CRT_ON.wav,4.5,,,48000,2,16,864044,5629c0c4d6b6fe36,False,pass,"library SFX, not Higgsfield-generated; source SFX/old CRT monitor powering on.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S5_C_SFX_STAPLER.wav,aud,/assets/aud/S5_C_SFX_STAPLER.wav,2.5,,,48000,2,16,480044,8ef0c3e76afe7a7c,False,pass,"library SFX, not Higgsfield-generated; source SFX/heavy steel office stapler slammed down.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S5_H_SFX_CARALARM.wav,aud,/assets/aud/S5_H_SFX_CARALARM.wav,6.0,,,48000,2,16,1152044,915380837d724c7f,False,pass,"library SFX, not Higgsfield-generated; source SFX/Car Alarm.wav; not present in FINAL_NINETY-NINE_aud source folder"
+S6_C_SFX_KEYBOARD.wav,aud,/assets/aud/S6_C_SFX_KEYBOARD.wav,1.0,,,48000,2,16,192044,135d1e565802344b,False,pass,"library SFX, not Higgsfield-generated; source SFX/keyboard key press on.wav; not present in FINAL_NINETY-NINE_aud source folder"

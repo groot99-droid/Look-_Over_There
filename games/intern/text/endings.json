@@ -1,0 +1,30 @@
+{
+  "_comment": "Doc 1 §6.4. Rule C4 (never say 'you') deliberately breaks here and only here -- 'you' appears exactly once per card, in the signoff line. canon.text.js allows these three signoff lines as the only permitted 'you' occurrences besides the single S4-C manager line in system.json.",
+  "_harloweNote": "harloweExtraLine fills Doc 1 §2.5's 'ending cards gain one extra line' for SAW_HARLOWE. Written 2026-09-17 at the user's direction; previously left null because Doc 1 specifies the line exists but never its text. Constraints it is written to: (1) no 'you' -- these lines are inside the card object canon.text.js counts, and the single permitted 'you' is the signoff's; (2) Doc 1 §9.3's guardrail -- Harlowe is 'a haunting instead of an easter egg', so no line adds a fact to chase or explains who Harlowe was; (3) lowercase, in Harlowe's own hand, matching manifest.json's row 019 register rather than the company's caps -- the company never acknowledges Harlowe, which is the whole motif. Rendered by main.js in .ending-harlowe-line (italic, 0.7 opacity, 0.85em), so it reads as a note in another hand, not a system message.",
+  "ending.assimilation": {
+    "title": "ONBOARDING COMPLETE.",
+    "body": "THE CANDIDATE IS NOW PERSONNEL.",
+    "signoff": "Welcome, you.",
+    "harloweExtraLine": "the role was occupied when the offer came through."
+  },
+  "ending.expulsion": {
+    "title": "THE CANDIDATE'S APPLICATION HAS BEEN WITHDRAWN.",
+    "body": "NO FURTHER ACTION IS REQUIRED.",
+    "signoff": "You are not on file.",
+    "harloweExtraLine": "the resignation was never finished either."
+  },
+  "ending.pending": {
+    "title": "THE CANDIDATE'S FILE REMAINS OPEN.",
+    "body": "VELLUM & ASHE WILL RESPOND WITHIN 6 MONTHS.",
+    "signoff": "Please wait, you.",
+    "harloweExtraLine": "the document is still open. unsaved, seven drafts in."
+  },
+  "ending.retained": {
+    "_note": "RETAINED: added post-launch (Doc 1 §9.1 left a fourth door open). Reached only via a near-perfect compliance run (would have been ASSIMILATION) where OPENED_BOX is also set -- he did everything right until the very last second.",
+    "_harloweNote": "Opening the box IS heeding row 019's 'whatever is in the box, do not sign for it' -- so on this ending alone Harlowe's warning was actually taken, and the file records it as the one exception anyway.",
+    "title": "ONBOARDING COMPLETE. ONE EXCEPTION IS ON FILE.",
+    "body": "THE CANDIDATE IS PERSONNEL. THE CONTENTS OF THE BOX ARE NOT RETURNED.",
+    "signoff": "Welcome, you. It will not happen twice.",
+    "harloweExtraLine": "nobody signed for it. that is not nothing."
+  }
+}

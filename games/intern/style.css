@@ -1,0 +1,393 @@
+/* NINETY-NINE. The game is the room: everything the candidate can act on
+   is an object in the building (Doc 4 §14). What sits over the canvas is
+   the least it can be -- the words of a threshold standing over the place
+   it is, a spoken line, the walk hint at the start, the touch joystick --
+   and the one persistent non-diegetic element, the fire-exit bail-out
+   (Doc 4 §9). */
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+:root {
+  --company-face: 'Courier New', Courier, monospace;
+  --company-ink: #e8e2d0;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: #eee;
+  font-family: var(--company-face);
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* the visible viewport on phones with a URL bar */
+}
+
+#ending-card, #boot-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 8;
+}
+
+/* The stage (src/stage/stage.js): one WebGL canvas, the building drawn
+   live through his eyes. No cuts, no fades between rooms. */
+#scene-layer {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+  /* the touch joystick and drag-to-look own every touch on the stage: no
+     browser scroll, pinch or pull-to-refresh taking the pointer away */
+  touch-action: none;
+  --chroma-drift: 0deg;
+}
+#scene-layer .stage-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  touch-action: none;
+  filter: hue-rotate(var(--chroma-drift));
+}
+
+/* Phase 6: fracture overlay (Doc 4 §5.2). Capped smoothness, never a glitch. */
+.fracture-bleed {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 800ms linear;
+}
+.fracture-anomaly {
+  position: absolute;
+  width: 2rem;
+  height: 2.6rem;
+  background: #e8e2d0;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1000ms linear;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transform: rotate(-4deg);
+}
+
+/* Over the canvas: threshold labels, captions, the walk hint, the touch
+   joystick. Transparent to the pointer, so clicks reach the canvas (pointer
+   lock / drag-look). */
+#hud-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+  touch-action: none;
+}
+
+/* A threshold's words, standing in the room over the place it is
+   (src/labels.js). Company text: never says "you" (C4). */
+.threshold-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--company-face);
+  font-size: clamp(0.72rem, 1.5vw, 1rem);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--company-ink);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  /* a soft dark halo, so the words hold over a blown-out wall (S1 H) */
+  padding: 0.45rem 1.4rem;
+  background: radial-gradient(ellipse closest-side, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.22) 60%, rgba(0, 0, 0, 0));
+  white-space: nowrap;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.threshold-label-rule {
+  display: block;
+  width: 2.4rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.65;
+  transform-origin: center;
+  transition: transform 600ms ease-out;
+}
+.threshold-label.stamped { color: #fff; }
+.threshold-label.stamped .threshold-label-rule { transform: scaleX(3.2); opacity: 1; }
+/* A room's own ink (rooms.json `labelInk`, src/labels.js). 'dark': dark
+   words on a pale halo, for walls blown out to white (S1 H). */
+.threshold-label[data-ink="dark"] {
+  color: #17130d;
+  text-shadow: 0 0 6px rgba(255, 253, 247, 0.95), 0 0 2px rgba(255, 253, 247, 0.9);
+  background: radial-gradient(ellipse closest-side, rgba(255, 252, 244, 0.62), rgba(255, 252, 244, 0.34) 60%, rgba(255, 252, 244, 0));
+}
+.threshold-label[data-ink="dark"].stamped { color: #000; }
+/* 'backed': the light words on a translucent dark plate (a bright, busy ground) */
+.threshold-label[data-ink="backed"] {
+  background: rgba(10, 9, 8, 0.58);
+  border-radius: 2px;
+}
+
+/* The first frames: how to walk. Fades on its own. */
+.walk-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  font-family: var(--company-face);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  color: #cfc9b8;
+  opacity: 0.7;
+  transition: opacity 2.4s linear;
+  white-space: nowrap;
+}
+.walk-hint-out { opacity: 0; }
+
+/* The application, laid over the apartment's CRT while he sits at it
+   (src/director.js follows the screen's rectangle each frame). */
+#screen-layer {
+  position: absolute;
+  z-index: 6;
+  overflow: hidden;
+  background: #c0c0c0;
+  color: #1a1a1a;
+  font-family: 'Times New Roman', Times, serif;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
+}
+#screen-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px);
+}
+.application-form {
+  position: absolute;
+  inset: 0;
+}
+.application-dragfield {
+  position: absolute;
+  inset: 0;
+}
+.application-label {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-size: clamp(0.6rem, 1.4vw, 0.95rem);
+  letter-spacing: 0.04em;
+  color: #000080;
+}
+.application-slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  height: 3.4rem;
+  border: 2px dashed rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: rgba(0,0,0,0.45);
+}
+.application-slot-filled { border-style: solid; border-color: rgba(0,0,0,0.6); }
+.application-tile {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  /* the tiles sit at 28% / 72%: no wider than the gap, long answers wrap */
+  width: 40%;
+  padding: 0.6rem 0.9rem;
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #808080;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  text-align: center;
+  border-radius: 2px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  cursor: grab;
+  touch-action: none;
+  transition: left 200ms ease, top 200ms ease;
+}
+.application-tile-dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  transition: none;
+}
+.application-tile-landed { cursor: default; }
+/* The tile not chosen withdraws once the other one lands. */
+.application-tile-withdrawn { opacity: 0; pointer-events: none; transition: opacity 250ms; }
+
+.application-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.countdown-label {
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  color: #eee;
+}
+.countdown-bar-outer {
+  width: min(24rem, 70vw);
+  height: 0.9rem;
+  border: 1px solid #888;
+  padding: 2px;
+}
+.countdown-bar-inner {
+  height: 100%;
+  width: 0%;
+  background: #888;
+  transition: width 400ms linear;
+}
+
+/* Spoken lines and company text that land in the room (src/captions.js). */
+.scene-caption {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1.2rem;
+  background: rgba(0,0,0,0.55);
+  color: #e8e2d0;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  animation: caption-in 500ms ease-out;
+  transition: opacity 600ms linear;
+}
+.scene-caption-out { opacity: 0; }
+@keyframes caption-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translateX(-50%); } }
+
+#ending-card {
+  flex-direction: column;
+  gap: 1rem;
+  background: #000;
+  text-align: center;
+  padding: 3rem;
+}
+.ending-title, .ending-body, .ending-signoff {
+  margin: 0;
+  max-width: 40ch;
+}
+.ending-signoff { font-style: italic; opacity: 0.8; }
+.ending-harlowe-line { font-style: italic; opacity: 0.7; font-size: 0.85em; }
+
+/* Phase 6: Doc 4 §9/§14. The one persistent non-diegetic UI element --
+   deliberately styled as a fire exit sign, low-contrast, easy to ignore. */
+#bail-affordance {
+  position: fixed;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  background: #0a2e12;
+  color: #7ec98f;
+  border: 1px solid #1e5c2a;
+  font-family: 'Courier New', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.3rem 0.6rem;
+  opacity: 0.45;
+  cursor: pointer;
+}
+#bail-affordance:hover, #bail-affordance:focus-visible { opacity: 0.9; }
+#bail-affordance.bail-armed { opacity: 1; }
+
+#sound-toggle {
+  position: fixed;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: 'Courier New', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.3rem 0.6rem;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 150ms, background-color 150ms, color 150ms, border-color 150ms;
+}
+#sound-toggle:hover, #sound-toggle:focus-visible { opacity: 0.9; }
+.sound-toggle-glyph { font-size: 0.9em; line-height: 1; }
+
+/* On: matches EXIT's green (an active, "safe" control). Off: dimmed red --
+   readable as disabled/inert at a glance, not just by the text label. */
+#sound-toggle.sound-toggle-on {
+  background: #0a2e12;
+  color: #7ec98f;
+  border: 1px solid #1e5c2a;
+}
+#sound-toggle.sound-toggle-off {
+  background: #2e0a0a;
+  color: #c97e7e;
+  border: 1px solid #5c1e1e;
+}
+
+@keyframes sound-toggle-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.sound-toggle-pulse { animation: sound-toggle-pulse 220ms ease-out; }
+
+#boot-error {
+  color: #ff6b6b;
+  background: #1a0000;
+  padding: 2rem;
+  text-align: center;
+}
+
+.walk-joystick {
+  position: absolute;
+  left: 2rem; bottom: 6rem;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.walk-joystick .knob {
+  position: absolute;
+  left: 40px; top: 40px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+}

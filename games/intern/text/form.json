@@ -1,0 +1,9 @@
+{
+  "_comment": "Doc 1 §6.2's intake, replaced post-launch at the user's request. The old ten typed fields are gone, and with them MG-01's ghost-text mechanic (src/minigames/mg01-form.js, deleted -- it was already orphaned: scenes.json mounted it nowhere). Three fields remain, each a binary: one WILLING tile, one NOT WILLING tile, both pre-written by the building. Used only by the S0 application (src/application.js).",
+  "_nameNote": "Field 1 is a deliberate, documented reversal of the old 'THERE IS NO NAME FIELD' rule (which existed so S2-H's 'Shaun.' could be a name the company was never given). The name is now the first thing the candidate is asked to hand over -- or not. Give it (SHAUN) and S2-C takes it away: 'Ninety-nine.' Withhold it (99) and S2-H hands it back: 'Shaun.' Either way the reveal is the building answering the form. Two or more NOT WILLING answers seed the hostile render -- render only, never score (src/state.js seedRenderFromIntake). canon.text.js asserts this shape; C4 still holds, no field says 'you'.",
+  "fields": [
+    { "id": 1, "label": "NAME, FOR THE RECORD", "willing": "SHAUN", "notWilling": "99" },
+    { "id": 2, "label": "THE CANDIDATE WILL COMPLY WITH INSTRUCTIONS AS ISSUED", "willing": "WITHOUT EXCEPTION", "notWilling": "WITH EXCEPTIONS" },
+    { "id": 3, "label": "PREFERRED HOURS", "willing": "WHATEVER IS REQUIRED", "notWilling": "THE ONES AGREED IN WRITING" }
+  ]
+}
