@@ -7,6 +7,7 @@ COPY server/server.js server/
 COPY index.html ./
 COPY world world
 COPY monsters monsters
+COPY characters characters
 ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "server/server.js"]

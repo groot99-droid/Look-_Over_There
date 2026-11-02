@@ -19,6 +19,20 @@
   #lobby small{color:#7a7a6a}
   #l-err{color:#d46a5a;min-height:1.4em}
   #hud{position:fixed;left:12px;top:10px;color:#9a9a8a;font:12px/1.5 system-ui,sans-serif;letter-spacing:.06em;z-index:1;pointer-events:none;text-shadow:0 0 4px #000}
+  #toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.06em;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s;text-shadow:0 0 6px #000;text-align:center}
+  #scream{position:fixed;left:50%;top:50%;z-index:2;pointer-events:none;display:none;color:#e24a3c;font:700 13px/1 system-ui,sans-serif;text-shadow:0 0 6px #000;transform:translate(-50%,-50%);text-align:center;animation:pulse .7s infinite alternate}
+  #scream i{display:block;font-style:normal;font-size:30px;line-height:1}
+  @keyframes pulse{from{opacity:.55}to{opacity:1}}
+  #revive{position:fixed;left:50%;bottom:18%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.05em;z-index:3;pointer-events:none;display:none;text-align:center;text-shadow:0 0 6px #000}
+  #revive b{display:block;margin:6px auto 0;height:5px;width:160px;background:#2a2a24;border-radius:3px;overflow:hidden}
+  #revive b span{display:block;height:100%;width:0;background:#9ccc65}
+  #l-chars{display:flex;gap:6px;justify-content:space-between}
+  #l-chars .ch{flex:1;padding:4px 2px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;letter-spacing:0}
+  #l-chars .ch img{width:100%;max-width:56px;height:auto;border-radius:2px}
+  #l-chars .ch.on{border-color:#e0a040;background:#2b2a1c}
+  #l-wait{display:none;flex-direction:column;gap:12px;width:min(340px,86vw)}
+  #l-players div{padding:5px 0;border-bottom:1px solid #22221c}
+  #l-players span{float:right;color:#7a7a6a}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
@@ -28,15 +42,22 @@
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
 <div id="hud"></div>
+<div id="toast"></div>
+<div id="scream"><i>▲</i><span></span></div>
+<div id="revive"><span></span><b><span></span></b></div>
 <div id="lobby"><form id="l-form" autocomplete="off">
   <h1>LOOK OVER THERE</h1>
+  <div id="l-chars"></div>
   <input id="l-name" placeholder="Your name" maxlength="16">
   <input id="l-room" placeholder="Room code (share it with friends)" maxlength="8">
   <button class="go" id="l-join" type="submit">JOIN ROOM</button>
   <button id="l-solo" type="button">PLAY SOLO</button>
   <div id="l-err"></div>
-  <small>Everyone in a room shares the building and its monsters. Doors you open stay open for all.</small>
-</form></div>
+  <small>Everyone in a room shares the building and its monsters. Doors you open stay open until someone closes them.</small>
+</form>
+<div id="l-wait"><h1>WAITING ROOM</h1><div id="l-roomcode"></div><div id="l-players"></div>
+  <button class="go" id="l-ready" type="button">READY</button><div id="l-count"></div>
+  <small>The round starts a few seconds after everyone is ready. Anyone who joins later drops straight in.</small></div></div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -83,14 +104,28 @@ let pendingLink = null, loading = false;
 function openDoor(dr, byPlayer) {
   if (dr.target !== 0) return;
   if (dr.link && !byPlayer) return;                           // monsters do not use the stair doors
-  dr.target = 1; if (dr.link) pendingLink = dr; else if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name});
+  dr.target = 1; dr.at = performance.now(); if (dr.link) pendingLink = dr; else if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 1});
+}
+// X / E on an open door shuts it, unless someone is standing in the doorway. Monsters open doors (0.5 s each) but never shut them; the stair doors never shut.
+function doorBusy(dr) {
+  const inside = (x, y, z) => Math.abs(y - dr.cy) < 1.8 && Math.hypot(x - dr.cx, z - dr.cz) < 1.1;
+  if (!dead && inside(P.p.x, P.p.y, P.p.z)) return true;
+  for (const p of net.peers.values()) if (p.scene === S.id && inside(p.tx, p.ty, p.tz)) return true;
+  return monsters.some(m => inside(m.pos.x, m.fy, m.pos.z));
+}
+function closeDoor(dr) {
+  if (dr.target !== 1 || dr.link || doorBusy(dr)) return false;
+  dr.target = 0; dr.at = performance.now();
+  if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 0});
+  return true;
 }
 function updateDoors(dt) {
   for (const dr of doors) {
     if (dr.p === dr.target) continue;
-    dr.p = Math.min(dr.target, dr.p + dt * 2.8);
+    dr.p = dr.target > dr.p ? Math.min(dr.target, dr.p + dt * 2.8) : Math.max(dr.target, dr.p - dt * 2.8);
     if (dr.leaf) { const e = dr.p * dr.p * (3 - 2 * dr.p); dr.leaf.quaternion.slerpQuaternions(dr.qClosed, dr.qOpen, e); }
     dr.box.off = dr.p > 0.5;
+    if (dr.target === 0 && dr.p > 0 && dr.box.off && doorBusy(dr)) { dr.target = 1; dr.at = performance.now(); if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 1}); }   // somebody stepped into a closing doorway
   }
   if (pendingLink && pendingLink.p > 0.7 && !loading) { const l = pendingLink; pendingLink = null; goLink(l); }
 }
@@ -139,7 +174,9 @@ async function loadScene(id, arrival) {
     if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
   }
   if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
+  else if (net.on && id === "B1") { teleport(groupSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }       // a room starts the round together
   else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
+  S.arrive = [P.p.x, S.floor, P.p.z];
   armedFall = true; loading = false; net.t = 0;                 // tell the room which floor you are on right away
   fade.style.opacity = 0;
 }
@@ -401,6 +438,14 @@ function randomSpawn(level) {
   return [s[0], S.floor, s[1]];
 }
 
+function groupSpawn(level) {
+  const away = monsters.map(m => [m.pos.x, m.pos.z]);
+  const s0 = pickSpots(level, 1, rng32(4242), away)[0] || pickSpots(level, 1, rng32(4242))[0];       // the same spot on every client: seeded, and monsters spawn from a seed too
+  const ring = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]], o = ring[net.id % ring.length];
+  const x = s0[0] + o[0] * 0.9, z = s0[1] + o[1] * 0.9, c = cellOf(x, z);
+  return c >= 0 && S.nav[c] ? [x, S.floor, z] : [s0[0], S.floor, s0[1]];
+}
+
 // ---------------------------------------------------------------- the handheld device: security feeds for the floor you are on, and a map of it
 const devOn = {v: false}; let devMode = "cams", camIdx = 0, devSlide = 0;
 const rt = new THREE.WebGLRenderTarget(384, 240); rt.texture.colorSpace = THREE.SRGBColorSpace;
@@ -484,17 +529,17 @@ function useDoor() {
   const fwdx = -Math.sin(P.yaw), fwdz = -Math.cos(P.yaw);
   let best = null, bd = 1.9;
   for (const dr of doors) {
-    if (dr.target || Math.abs(dr.cy - P.p.y) > 1.5) continue;
+    if ((dr.link && dr.target) || Math.abs(dr.cy - P.p.y) > 1.5) continue;
     const dx = dr.cx - P.p.x, dz = dr.cz - P.p.z, d = Math.hypot(dx, dz);
     if (d < bd && (dx * fwdx + dz * fwdz) / (d || 1) > 0.25) { best = dr; bd = d; }
   }
-  if (best) openDoor(best, true);
+  if (best) { if (best.target === 0) openDoor(best, true); else closeDoor(best); }
 }
 addEventListener("keydown", e => {
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
   if (e.repeat || dead) return;
-  if (e.code === "KeyE" || e.code === "KeyX") useDoor();
+  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget()) useDoor();
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyQ") cycleCam(-1);
@@ -512,40 +557,63 @@ let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
   rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
-  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false};
+  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, use: false};
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
-    if (edge(2)) useDoor();                                   // X: open a door
+    if (edge(2) && !reviveTarget()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
     if (edge(5) || edge(15)) cycleCam(1);                     // RB / D-pad right: next camera
   }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), use: down(2), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
 }
 
 // ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
 // Everyone sees the same monsters because one client per scene (the host) simulates them and sends snapshots; the rest follow.
-const net = {on: false, ws: null, id: 0, room: "", hosts: {}, peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null,
+const DOWNED_S = 45, REVIVE_S = 4;
+const CHARS = [{id: "plaid", name: "Plaid"}, {id: "suit", name: "Suit"}, {id: "shorts", name: "Shorts"}, {id: "red", name: "Red Dress"}, {id: "white", name: "White Suit"}];
+const net = {on: false, ws: null, id: 0, room: "", phase: "lobby", hosts: {}, peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null, started: null, startRes: null, lobby: null, alert: null,
   host() { return !this.on || this.hosts[S.id] === this.id; },
   send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }};
+let toastT = 0;
+function toast(msg, ms = 3200) { const el = $("toast"); el.textContent = msg; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { el.style.opacity = 0; }, ms); }
 const r2 = v => Math.round(v * 100) / 100;
+// each player is one of the characters (characters/<id>.glb: Walking and Running clips). Until the model arrives, or if it fails, a capsule stands in.
+const charAssets = {};
+const loadChar = id => charAssets[id] ||= new Promise((res, rej) => loader.load(`characters/${id}.glb`, res, undefined, rej));
 function addPeer(info) {
   if (net.peers.has(info.id)) return;
   const col = new THREE.Color(info.color), mat = new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: .35, roughness: .7});
-  const obj = new THREE.Group(), pivot = new THREE.Group(); obj.add(pivot);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.24, .85, 4, 10), mat); body.position.y = .75; pivot.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.17, 12, 10), mat); head.position.y = 1.45; pivot.add(head);
-  const nose = new THREE.Mesh(new THREE.BoxGeometry(.08, .06, .16), new THREE.MeshBasicMaterial({color: 0xffffff})); nose.position.set(0, 1.47, -.2); pivot.add(nose);
+  const obj = new THREE.Group(), pivot = new THREE.Group(), stand = new THREE.Group(); obj.add(pivot); pivot.add(stand);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.24, .85, 4, 10), mat); body.position.y = .75; stand.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.17, 12, 10), mat); head.position.y = 1.45; stand.add(head);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(.08, .06, .16), new THREE.MeshBasicMaterial({color: 0xffffff})); nose.position.set(0, 1.47, -.2); stand.add(nose);
   const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64; const g = cv.getContext("2d");
   g.font = "700 34px system-ui,sans-serif"; g.textAlign = "center"; g.fillStyle = info.color; g.strokeStyle = "#000"; g.lineWidth = 5;
   g.strokeText(info.name, 128, 44); g.fillText(info.name, 128, 44);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true})); label.scale.set(1.2, .3, 1); label.position.y = 1.95; obj.add(label);
   obj.visible = false; scene.add(obj);
-  net.peers.set(info.id, {id: info.id, name: info.name, color: info.color, scene: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, tyaw: 0, crouch: false, moving: false, dead: false, fresh: true, obj, pivot});
+  const peer = {id: info.id, name: info.name, color: info.color, char: info.char, scene: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, tyaw: 0, crouch: false, moving: false, dead: false, imm: false, fresh: true,
+    obj, pivot, stand, mixer: null, acts: null, playing: null, lie: [.6, .25]};
+  net.peers.set(info.id, peer);
+  const c = CHARS[info.char];
+  if (c) loadChar(c.id).then(gl => {
+    if (!net.peers.has(peer.id)) return;
+    const m = SkeletonUtils.clone(gl.scene); m.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
+    const face = new THREE.Group(); face.rotation.y = Math.PI; face.add(m);                      // the models face +Z; the game's forward is -Z
+    stand.clear(); stand.add(face); peer.lie = [.85, .2];
+    peer.mixer = new THREE.AnimationMixer(m);
+    peer.acts = {walk: peer.mixer.clipAction(gl.animations.find(a => a.name === "Walking")), run: peer.mixer.clipAction(gl.animations.find(a => a.name === "Running"))};
+  }).catch(e => console.warn("character model missing, keeping the capsule:", c.id, e));
   hud();
+}
+function peerPlay(p, name, speed) {
+  const a = p.acts[name]; if (!a) return;
+  if (p.playing !== a) { a.reset().fadeIn(0.2).play(); if (p.playing) p.playing.fadeOut(0.2); p.playing = a; }
+  a.setEffectiveTimeScale(speed);
 }
 function removePeer(id) {
   const p = net.peers.get(id); if (!p) return;
@@ -557,31 +625,52 @@ function hud() {
 function onNet(m) {
   switch (m.t) {
     case "welcome":
-      net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true;
+      net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true; net.phase = m.phase;
       for (const p of m.players) if (p.id !== m.id) addPeer(p);
+      if (m.phase !== "lobby") net.startRes?.();
       hud(); net.ready?.(); net.ready = null; break;
     case "join": addPeer(m); break;
     case "leave": removePeer(m.id); break;
     case "hosts": net.hosts = m.hosts; break;
+    case "lobby": net.lobby = m; renderWait(); break;
+    case "start": net.phase = "playing"; clearInterval(net.cd); net.startRes?.(); break;
+    case "p": { const p = net.peers.get(m.id); if (p) { p.scene = m.scene; p.fresh = true; } break; }       // someone changed floor: you only learn which
     case "s": {
       const p = net.peers.get(m.id); if (!p) break;
-      const moved = p.scene !== m.scene;
-      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.dead = !!m.dead;
+      const moved = p.scene !== m.scene, wasDead = p.dead;
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.dead = !!m.dead; p.imm = !!m.imm;
       if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
+      if (!wasDead && p.dead && m.scene === S.id) { net.alert = {id: p.id, until: performance.now() + 8000}; toast(`${p.name} was caught`); }     // the scream: an arrow toward the body
       break;
     }
     case "m":
       if (m.scene !== S.id || net.host()) break;
       net.snap = m;
-      if (m.d) for (const dr of doors) if (!dr.link && dr.target === 0 && m.d.includes(dr.d.name)) dr.target = 1;
+      if (m.d) { const now = performance.now(); for (const dr of doors) if (!dr.link && now - (dr.at || 0) > 1500) dr.target = m.d.includes(dr.d.name) ? 1 : 0; }
       break;
     case "door": {
       if (m.scene !== S.id) break;
-      const dr = doors.find(x => x.d.name === m.name); if (dr && !dr.link && dr.target === 0) dr.target = 1;
+      const dr = doors.find(x => x.d.name === m.name); if (dr && !dr.link) { dr.target = m.open === 0 ? 0 : 1; dr.at = performance.now(); }
       break;
     }
-    case "caught": if (!dead && !loading) die(); break;
+    case "caught": if (!dead && !loading && !(P.imm > 0)) die(); break;
+    case "revived": revived(net.peers.get(m.by)); break;
   }
+}
+// the nearest downed teammate within reach on your floor
+function reviveTarget() {
+  if (!net.on || dead || loading) return null;
+  let best = null, bd = 1.7;
+  for (const p of net.peers.values()) if (p.scene === S.id && p.dead && Math.abs(p.ty - P.p.y) < 1.5) { const d = Math.hypot(p.tx - P.p.x, p.tz - P.p.z); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function drawAlert() {
+  const el = $("scream"), al = net.alert, p = al && net.peers.get(al.id);
+  if (!al || !p || !p.dead || p.scene !== S.id || performance.now() > al.until || dead || loading) { el.style.display = "none"; return; }
+  const dx = p.x - P.p.x, dz = p.z - P.p.z, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+  const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
+  el.style.display = "block"; el.style.left = 50 + Math.sin(a) * 42 + "%"; el.style.top = 50 - Math.cos(a) * 38 + "%";
+  el.firstChild.style.transform = `rotate(${a}rad)`; el.lastChild.textContent = p.name;
 }
 function updatePeers(dt) {
   const k = Math.min(1, dt * 14);
@@ -592,14 +681,21 @@ function updatePeers(dt) {
     let da = p.tyaw - p.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); p.yaw += da * k;
     p.obj.position.set(p.x, p.y, p.z); p.obj.rotation.y = p.yaw;
     p.pivot.scale.y += ((p.crouch ? .7 : 1) - p.pivot.scale.y) * k;
-    p.pivot.rotation.z = p.dead ? 1.45 : 0; p.pivot.position.set(p.dead ? .6 : 0, p.dead ? .25 : 0, 0);
+    p.pivot.rotation.z = p.dead ? 1.45 : 0; p.pivot.position.set(p.dead ? p.lie[0] : 0, p.dead ? p.lie[1] : 0, 0);
+    if (p.mixer) {
+      if (p.dead) peerPlay(p, "walk", 0);
+      else if (!p.moving) peerPlay(p, "walk", 0.04);                       // standing still: the walk, almost frozen (the models have no idle clip)
+      else if (p.crouch) peerPlay(p, "walk", 0.6);
+      else peerPlay(p, "run", 1);
+      p.mixer.update(dt);
+    }
   }
 }
 function netTick(dt) {
   if (!net.on) return;
   if ((net.t -= dt) <= 0) {
     net.t = 1 / 15;
-    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, dead: dead ? 1 : 0});
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0});
   }
   if (!loading && net.host() && (net.mt -= dt) <= 0) {
     net.mt = 0.1;
@@ -608,7 +704,7 @@ function netTick(dt) {
     net.send(msg);
   }
 }
-function connect(name, room) {
+function connect(name, room, char) {
   const q = new URLSearchParams(location.search);
   const url = q.get("server") || ((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
   return new Promise((resolve, reject) => {
@@ -616,7 +712,8 @@ function connect(name, room) {
     const fail = msg => { clearTimeout(timer); net.ready = null; try { ws.close(); } catch (e) {} reject(new Error(msg)); };
     const timer = setTimeout(() => fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."), 5000);
     net.ready = () => { clearTimeout(timer); resolve(); };
-    ws.onopen = () => ws.send(JSON.stringify({t: "join", room, name}));
+    net.started = new Promise(r => { net.startRes = r; });
+    ws.onopen = () => ws.send(JSON.stringify({t: "join", room, name, char}));
     ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === "full") fail("That room is full (8 players)."); else onNet(m); };
     ws.onerror = () => { if (!net.on) fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."); };
     ws.onclose = () => {
@@ -627,9 +724,34 @@ function connect(name, room) {
     net.ws = ws;
   });
 }
+// the waiting room: pick a character, then everyone readies and the round starts after a short countdown
+function renderWait() {
+  const m = net.lobby; if (!m || !$("l-wait")) return;
+  $("l-players").innerHTML = m.players.map(p => `<div><img src="characters/${CHARS[p.char]?.id}.jpg" width="20" height="30" style="vertical-align:middle;margin-right:8px"><span style="color:${p.ready ? "#9ccc65" : "#7a7a6a"}">${p.ready ? "READY" : "…"}</span>${p.name.replace(/[<>&]/g, "")}</div>`).join("");
+  const mine = m.players.find(p => p.id === net.id);
+  $("l-ready").textContent = mine && mine.ready ? "NOT READY" : "READY";
+  clearInterval(net.cd); const end = performance.now() + (m.countdownMs || 0);
+  const tick = () => { if (!$("l-count")) return clearInterval(net.cd); $("l-count").textContent = m.countdownMs ? `Starting in ${Math.max(0, Math.ceil((end - performance.now()) / 1000))}` : "Waiting for everyone to be ready"; };
+  tick(); if (m.countdownMs) net.cd = setInterval(tick, 200);
+  if (new URLSearchParams(location.search).get("ready") && mine && !mine.ready && !net.autoReady) { net.autoReady = true; net.send({t: "ready", ready: true}); }
+}
+function waitingRoom() {
+  if (net.phase !== "lobby") return net.started;                         // joined a round already under way: straight in
+  $("l-form").style.display = "none"; $("l-wait").style.display = "flex";
+  $("l-roomcode").textContent = `Room ${net.room}: share the code, or this page's address with ?room=${net.room}`;
+  $("l-ready").onclick = () => { const mine = net.lobby?.players.find(p => p.id === net.id); net.send({t: "ready", ready: !(mine && mine.ready)}); };
+  renderWait();
+  return net.started;
+}
 function lobby() {
   const q = new URLSearchParams(location.search), el = $("lobby");
   const store = {get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+  let char = Math.min(CHARS.length - 1, Math.max(0, parseInt(q.get("char") ?? store.get("lot-char") ?? "0", 10) || 0));
+  const box = $("l-chars");
+  box.innerHTML = CHARS.map((c, i) => `<button type="button" class="ch" data-i="${i}"><img src="characters/${c.id}.jpg" alt=""><span>${c.name}</span></button>`).join("");
+  const mark = () => box.querySelectorAll(".ch").forEach(b => b.classList.toggle("on", +b.dataset.i === char));
+  box.onclick = e => { const b = e.target.closest(".ch"); if (b) { char = +b.dataset.i; mark(); } };
+  mark();
   $("l-name").value = q.get("name") || store.get("lot-name");
   $("l-room").value = (q.get("room") || store.get("lot-room")).toUpperCase();
   el.style.display = "flex";
@@ -639,7 +761,7 @@ function lobby() {
       e.preventDefault();
       const name = $("l-name").value.trim() || "Player", room = $("l-room").value.trim().toUpperCase() || "MAIN";
       $("l-err").textContent = "Connecting…"; $("l-join").disabled = true;
-      try { await connect(name, room); store.set("lot-name", name); store.set("lot-room", room); el.remove(); resolve(); }
+      try { await connect(name, room, char); store.set("lot-name", name); store.set("lot-room", room); store.set("lot-char", String(char)); await waitingRoom(); el.remove(); resolve(); }
       catch (err) { $("l-err").textContent = err.message; $("l-join").disabled = false; }
     };
     if (q.get("room") && q.get("auto")) $("l-form").requestSubmit();
@@ -649,20 +771,27 @@ function lobby() {
 // ---------------------------------------------------------------- game loop
 let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
 function die() {
-  dead = true; deadT = 0; deathLevel = S.id; devOn.v = false;
+  dead = true; deadT = 0; deathLevel = S.id; devOn.v = false; P.reviveT = 0; $("revive").style.display = "none";
   $("death").style.opacity = 1; $("fear").style.opacity = 1;
+  if (net.on) { $("death").textContent = "DOWNED"; $("death").style.background = "rgba(0,0,0,.55)"; }       // in a room you can be lifted, so you may still look around
   rumble?.playEffect?.("dual-rumble", {duration: 700, strongMagnitude: 1, weakMagnitude: 1});
 }
+function standUp() { $("death").style.opacity = 0; $("fear").style.opacity = 0; $("death").textContent = "YOU DIED"; $("death").style.background = ""; }
+function revived(by) {
+  if (!dead) return;
+  dead = false; P.crouch = false; P.imm = 4; P.v.set(0, 0, 0); standUp();
+  toast(by ? `${by.name} lifted you` : "You got up");
+}
 function respawn() {
-  dead = false; teleport(randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;
+  dead = false; P.imm = net.on ? 4 : 0; teleport(net.on && S.arrive ? S.arrive : randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;   // in a room: back at the stairs you came up
   if (!net.on) for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }   // in a room the monsters belong to everyone, so they are not reset for you
-  $("death").style.opacity = 0; $("fear").style.opacity = 0;
+  standUp();
 }
 // the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
 function targetList() {
   const out = [];
-  if (!dead && !loading) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving});
-  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving});
+  if (!dead && !loading && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving});
   return out;
 }
 function simMonsters(dt) {
@@ -678,12 +807,24 @@ function simMonsters(dt) {
 function update(dt) {
   if (loading) return;
   updateDoors(dt);
-  if (dead) { deadT += dt; if (net.on) simMonsters(dt); if (deadT > 3.2) respawn(); return; }
+  if (dead) {
+    deadT += dt;
+    if (net.on) { simMonsters(dt); $("death").textContent = "DOWNED · " + Math.max(0, Math.ceil(DOWNED_S - deadT)); }
+    if (deadT > (net.on ? DOWNED_S : 3.2)) respawn();
+    return;
+  }
+  P.imm = Math.max(0, (P.imm || 0) - dt);
   const g = pad();
   P.yaw += (((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.9 - g.lx * 2.6) * dt;
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
-  const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
-  const side = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
+  const rv = reviveTarget(), reviving = !!(rv && (keys.KeyE || keys.KeyX || g.use));            // hold E / X beside a downed teammate for 4 s
+  P.reviveT = reviving ? (P.reviveT || 0) + dt : 0;
+  const rp = $("revive");
+  if (rv) { rp.style.display = "block"; rp.querySelector("span").textContent = reviving ? `Lifting ${rv.name}…` : `Hold E to lift ${rv.name}`; rp.querySelector("b span").style.width = Math.min(1, P.reviveT / REVIVE_S) * 100 + "%"; }
+  else rp.style.display = "none";
+  if (reviving && P.reviveT >= REVIVE_S) { net.send({t: "revive", to: rv.id}); rv.dead = false; P.reviveT = 0; }
+  const fwd = reviving ? 0 : (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
+  const side = reviving ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
   P.crouch = !!(keys.ShiftLeft || keys.ShiftRight || g.crouch);
   P.moving = Math.hypot(fwd, side) > 0.2;
   const sp = (P.crouch ? 2.2 : 5.6) * dt;
@@ -705,7 +846,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); updatePeers(dt); netTick(dt);
+  update(dt); updatePeers(dt); drawAlert(); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -731,7 +872,7 @@ await lobby();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {net, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

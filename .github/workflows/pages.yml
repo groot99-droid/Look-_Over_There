@@ -27,6 +27,7 @@ jobs:
           mkdir _site
           cp index.html _site/
           cp -r monsters _site/monsters
+          cp -r characters _site/characters
           cp -r world _site/world
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
