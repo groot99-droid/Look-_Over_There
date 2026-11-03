@@ -19,4 +19,5 @@ If a monster sees you it chases; if it catches you, you die and come back on the
 Monsters (config in `world/monsters.json`): Sinew of the Abyss on B1, The Pale Traveler on L1, a clawed creature on L2, the first creature in the showroom (L4).
 Models are in `monsters/`; the two Meshy exports that came with their own animations are used as-is (textures shrunk), and the rig-only ones got idle/walk/run/attack clips from `tools/make_monster_anims.py`.
 
-Every door that sends you to another scene (the stair doors and the two gates) opens into a short lit passage first; its far door leads on and its near door leads back.
+Opening a stair door shows a lit hallway behind it (drawn only through the doorway, so it never runs into the level around it); stepping through the doorway takes you to the other floor, where the same hallway is behind you. The two gates to the hidden games still open into a short walkable passage first.
+On B1, L1 and L2 there is one of each kind of prop; fire alarms, clocks and security cameras are the only things that repeat. `tools/blender/verify_world.py` checks the ceilings, the stair parts against everything around them, and the duplicates.

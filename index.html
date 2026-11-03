@@ -38,7 +38,7 @@ const SCENES = {
 };
 const $ = id => document.getElementById(id);
 
-const renderer = new THREE.WebGLRenderer({antialias: true});
+const renderer = new THREE.WebGLRenderer({antialias: true, stencil: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -69,7 +69,9 @@ let pendingLink = null, loading = false;
 function openDoor(dr, byPlayer) {
   if (dr.target !== 0) return;
   if (dr.link && !byPlayer) return;                           // monsters do not use the stair doors
-  dr.target = 1; if (dr.link) pendingLink = dr;
+  dr.target = 1;
+  if (dr.link && (dr.link.game || S.id === "T")) pendingLink = dr;              // the game gates still lead into a walkable passage
+  else if (dr.link) addPortal(dr, P.p.toArray());                              // a stair door opens onto its hallway
 }
 function updateDoors(dt) {
   for (const dr of doors) {
@@ -105,7 +107,7 @@ function buildPassage(p) {
   box(-hw - T, hw + T, H, H + 0.2, -L - T, T, ceilM);
   box(-hw - T, -hw, -0.3, H + 0.2, -L - T, T, wallM);
   box(hw, hw + T, -0.3, H + 0.2, -L - T, T, wallM);
-  for (const z of [0, -L]) {                                              // an end wall with a door opening, at each end
+  for (const z of p.visual ? [-L] : [0, -L]) {                            // an end wall with a door opening, at each end (seen through a door: the far one only)
     const z0 = z === 0 ? 0 : -L - T, z1 = z === 0 ? T : -L;
     box(-hw, -dw / 2, 0, H, z0, z1, wallM); box(dw / 2, hw, 0, H, z0, z1, wallM); box(-dw / 2, dw / 2, 2.16, H, z0, z1, wallM);
   }
@@ -116,13 +118,74 @@ function buildPassage(p) {
     const leaf = new THREE.Mesh(g, doorM); leaf.position.set(hx, 0, z); root.add(leaf);
     return {name, level: "T", hinge: [hx, 0, z], width: lw, height: lh, closed_yaw_deg: 0, swing_deg: swing, link, _leaf: leaf};
   };
+  if (p.visual) { mkDoor("T_far", -L - T / 2, 90, null); return {root}; }       // seen through a door only: no colliders, the far door stays shut
   const back = Object.assign({direct: true}, p.back), fwd = Object.assign({}, p.fwd, {direct: true});
   return {root, cols, doors: [mkDoor("T_entry", T / 2, -90, back), mkDoor("T_far", -L - T / 2, 90, fwd)]};
+}
+
+// ---------------------------------------------------------------- the hallway behind an open stair door: drawn only inside the doorway (stencil), never part of the
+// level, so it cannot run into the rooms or props around it. Stepping through the doorway loads the next floor; nobody walks down this hallway.
+const portalScene = new THREE.Scene();
+portalScene.add(new THREE.HemisphereLight(0xfff2d0, 0x30302a, 1.25));
+const portalTorch = new THREE.PointLight(0xfff0d0, 14, 16, 1.6); portalScene.add(portalTorch);
+const portals = [];
+const stencilEq = m => Object.assign(m, {stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc,
+                                         stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp});
+const maskMat = new THREE.MeshBasicMaterial({colorWrite: false, depthWrite: false, side: THREE.DoubleSide, stencilWrite: true, stencilRef: 1,
+                                             stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp});
+const farMat = stencilEq(new THREE.ShaderMaterial({vertexShader: "void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+                                                   fragmentShader: "void main(){ gl_FragColor = vec4(0.0); gl_FragDepth = 1.0; }",
+                                                   colorWrite: false, depthFunc: THREE.AlwaysDepth, side: THREE.DoubleSide}));
+function doorFrame(dr) {                                    // centre of the doorway and the two horizontal directions of the door plane
+  const d = dr.d, th = d.closed_yaw_deg * Math.PI / 180, dir = [Math.cos(th), -Math.sin(th)];
+  return {c: [d.hinge[0] + dir[0] * d.width / 2, d.hinge[2] + dir[1] * d.width / 2], dir, nrm: [-dir[1], dir[0]]};
+}
+function addPortal(dr, from) {                              // `from`: a point on the side the player stands on; the hallway goes the other way
+  if (portals.some(p => p.dr === dr)) return;
+  const f = doorFrame(dr), d = dr.d;
+  const side = (from[0] - f.c[0]) * f.nrm[0] + (from[2] - f.c[1]) * f.nrm[1] > 0 ? -1 : 1;
+  const n = [f.nrm[0] * side, f.nrm[1] * side];
+  dr.hallN = n; dr.hallC = f.c;
+  const tint = {scene: dr.link.scene};
+  const hall = buildPassage({visual: true, fwd: tint}).root;
+  const g = new THREE.Group(); g.add(hall);
+  g.position.set(f.c[0] + n[0] * 0.1, d.hinge[1], f.c[1] + n[1] * 0.1);   // entry flush with the far face of the wall
+  g.rotation.y = Math.atan2(-n[0], -n[1]);
+  hall.traverse(o => { if (o.isMesh) { o.material = stencilEq(o.material.clone()); } });
+  const ow = d.width + 0.06, oh = (d.height || 2.12) + 0.04;                 // the wall opening is a little larger than the leaf
+  const quad = new THREE.PlaneGeometry(ow, oh); quad.translate(0, oh / 2, 0);
+  const mask = new THREE.Mesh(quad, maskMat), far = new THREE.Mesh(quad, farMat);
+  for (const m of [mask, far]) { m.position.set(f.c[0] + n[0] * 0.1, d.hinge[1], f.c[1] + n[1] * 0.1); m.rotation.y = Math.atan2(n[0], n[1]); }
+  mask.renderOrder = -2; far.renderOrder = -1;
+  let leaf = null;
+  if (dr.leaf) { leaf = dr.leaf.clone(); leaf.material = stencilEq(dr.leaf.material.clone()); dr.leaf.updateWorldMatrix(true, false); leaf.matrixAutoUpdate = false; }
+  portalScene.add(mask, far, g); if (leaf) portalScene.add(leaf);
+  portals.push({dr, objs: [mask, far, g, leaf].filter(Boolean), leaf});
+}
+function clearPortals() {
+  for (const p of portals) for (const o of p.objs) { portalScene.remove(o); o.traverse(m => { if (m.isMesh && m.geometry !== undefined && m !== p.leaf) m.geometry.dispose(); if (m.isMesh && m.material !== maskMat && m.material !== farMat) m.material.dispose(); }); }
+  portals.length = 0;
+}
+function renderPortals() {
+  if (!portals.length) return;
+  for (const p of portals) if (p.leaf) p.leaf.matrix.copy(p.dr.leaf.matrixWorld);
+  torch.getWorldPosition(portalTorch.position);
+  renderer.autoClear = false; renderer.render(portalScene, camera); renderer.autoClear = true;
+}
+function crossPortals() {                                   // stepping into an open stair doorway takes you to the other floor
+  if (loading || S.id === "T") return;
+  for (const dr of doors) {
+    if (!dr.hallN || dr.p < 0.6 || !dr.link || dr.link.game) continue;
+    const dx = P.p.x - dr.hallC[0], dz = P.p.z - dr.hallC[1];
+    const into = dx * dr.hallN[0] + dz * dr.hallN[1], along = Math.abs(dx * dr.hallN[1] - dz * dr.hallN[0]);
+    if (into > 0.02 && into < 0.6 && along < dr.d.width / 2 + 0.1) { const l = dr.link; loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); return; }
+  }
 }
 
 async function loadScene(id, arrival) {
   loading = true; pendingLink = null; devOn.v = false;
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
+  clearPortals();
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
   monsters.forEach(m => m.dispose()); monsters.length = 0;
   const passage = arrival && arrival.passage ? buildPassage(arrival.passage) : null;
@@ -158,7 +221,10 @@ async function loadScene(id, arrival) {
   if (passage) arrival = {pos: [0, 0, -1.8], face: [0, -1], door: "T_entry"};
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
-    if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
+    if (dr) {
+      dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen);
+      if (dr.link && !dr.link.game && id !== "T" && arrival.pos) addPortal(dr, arrival.pos);   // the hallway you came out of is behind you
+    }
   }
   if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
   else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
@@ -167,7 +233,7 @@ async function loadScene(id, arrival) {
 }
 function goLink(dr) {
   const l = dr.link;
-  if (!l.direct && S.id !== "T") {                                       // every door pair is joined by a walkable passage
+  if (l.game && !l.direct && S.id !== "T") {                             // the game gates go through a walkable passage first
     const f = [-Math.sin(P.yaw), -Math.cos(P.yaw)];
     loadScene("T", {passage: {fwd: l, back: {scene: S.id, arrive: P.p.toArray(), face: [-f[0], -f[1]], door: dr.d.name}}}); return;
   }
@@ -602,6 +668,7 @@ function update(dt) {
   P.v.y -= 22 * dt;
   if ((keys.Space || g.jump) && P.ground && !P.crouch) { P.v.y = 6.2; P.ground = false; }
   move(wx, 0, wz); move(0, P.v.y * dt, 0);
+  crossPortals(); if (loading) return;
   checkFall();
   P.eye += ((P.crouch ? 0.95 : EYE) - P.eye) * Math.min(1, dt * 10);
   const noise = P.moving && !P.crouch ? [P.p.x, P.p.z] : null;           // moving about is loud, crouching is silent
@@ -637,13 +704,14 @@ function step(dtOverride) {
     }
   }
   renderer.render(scene, camera);
+  renderPortals();
 }
 function frame() { if (!inGame) step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, enterGame, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {step, P, monsters, doors, portals, addPortal, update, teleport, move, collide, boxes, S, loadScene, enterGame, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>
