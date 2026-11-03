@@ -90,7 +90,7 @@ function brain(idx) {
       const id = g.S.id; B.floors[id] ||= {in: g.FIN ? (t - g.FIN.t0) / 1000 : 0, out: null, downs: 0};
       for (const k in B.floors) if (k !== id && B.floors[k].out === null) B.floors[k].out = (t - g.FIN.t0) / 1000;
       if (B.floors[id].out !== null) B.floors[id].out = null;
-      if (g.dead && !B.was) { B.downs++; B.floors[id].downs++; } B.was = g.dead;
+      if (g.dead && !B.was) { B.downs++; B.floors[id].downs++; (B.deaths ||= []).push({at: +((t - g.FIN.t0) / 1000).toFixed(0), up: +((t - (B.upAt || g.FIN.t0)) / 1000).toFixed(1), x: +g.P.p.x.toFixed(1), z: +g.P.p.z.toFixed(1), run: g.P.running, crouch: g.P.crouch, mons: g.monsters.map(m => ({d: +Math.hypot(m.pos.x - g.P.p.x, m.pos.z - g.P.p.z).toFixed(1), s: m.state})).sort((p, q) => p.d - q.d).slice(0, 2)}); } if (!g.dead && B.was) B.upAt = t; B.was = g.dead;
       if (g.dead) stop(); else decide();
     }
     g.sim(dt, t / 1000);
@@ -100,7 +100,7 @@ function brain(idx) {
 const srv = await createServer({port: 0, countdownMs: 3000});
 const browser = await chromium.launch({args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]});
 const pages = [], room = "BOTS" + Math.floor(Math.random() * 1000);
-const report = () => Promise.all(pages.map(p => p.evaluate(() => { const g = window.__game, b = window.__bot; return {idx: b.idx, floor: g.S.id, downs: b.downs, revives: b.revives, stuck: b.stuck, fled: Math.round(b.fled || 0), floors: b.floors, out: g.FIN.out, alarm: g.FIN.alarmUntil ? Math.max(0, (g.FIN.alarmUntil - performance.now()) / 1000) : null, results: g.FIN.results, t: (performance.now() - g.FIN.t0) / 1000, dbg: {x: +g.P.p.x.toFixed(1), z: +g.P.p.z.toFixed(1), dead: g.dead, loading: g.loading, path: b.path.length, cur: b.cur, kw: !!g.keys.KeyW, carry: g.myCarry(), locked: g.upDoor() ? g.isLocked(g.upDoor()) : null, imm: g.P.imm}}; }).catch(() => null)));
+const report = () => Promise.all(pages.map(p => p.evaluate(() => { const g = window.__game, b = window.__bot; return {idx: b.idx, floor: g.S.id, downs: b.downs, revives: b.revives, stuck: b.stuck, fled: Math.round(b.fled || 0), deaths: (b.deaths || []).slice(0, 6), floors: b.floors, out: g.FIN.out, alarm: g.FIN.alarmUntil ? Math.max(0, (g.FIN.alarmUntil - performance.now()) / 1000) : null, results: g.FIN.results, t: (performance.now() - g.FIN.t0) / 1000, dbg: {x: +g.P.p.x.toFixed(1), z: +g.P.p.z.toFixed(1), dead: g.dead, loading: g.loading, path: b.path.length, cur: b.cur, kw: !!g.keys.KeyW, carry: g.myCarry(), locked: g.upDoor() ? g.isLocked(g.upDoor()) : null, imm: g.P.imm}}; }).catch(() => null)));
 let rows = [];
 try {
   for (let i = 0; i < N; i++) {
@@ -124,6 +124,7 @@ try {
   }
 } catch (e) { console.log("ERROR", e); }
 console.log("\nBOT REPORT");
+if (args.includes("--deaths")) for (const r of rows) console.log(`Bot${r.idx + 1} first downs:`, JSON.stringify(r.deaths));
 for (const r of rows) {
   const fl = Object.entries(r.floors).map(([k, f]) => `${k} ${f.in.toFixed(0)}s${f.downs ? " (" + f.downs + " down)" : ""}`).join(", ");
   console.log(`Bot${r.idx + 1}: ${r.out ? "OUT" : "stuck on " + r.floor}  downs ${r.downs}  revives ${r.revives}  stuck ${r.stuck}  fled ${r.fled}s  alarm left ${r.alarm === null ? "-" : r.alarm.toFixed(0) + "s"}  floors: ${fl}`);
