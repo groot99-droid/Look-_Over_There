@@ -175,7 +175,7 @@ async function loadScene(id, arrival) {
   loading = true; pendingLink = null; devOn.v = false; net.snap = null; closeKeypad();
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
-  monsters.forEach(m => m.dispose()); monsters.length = 0;
+  monsters.forEach(m => m.dispose()); monsters.length = 0; MAPSEEN.clear();
   const cfg = SCENES[id], doc = await (await fetch(`world/${id}.json`)).json();
   const root = new THREE.Group();
   const gl = await Promise.all(cfg.glbs.map(loadGlb));
@@ -520,6 +520,31 @@ const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.262), mapMat);
 screenMesh.position.z = 0.0125; device.add(screenMesh);
 device.visible = false; camera.add(device);
 
+// Monsters show on the handheld map only through the security cameras: every camera on the floor sweeps on its loop, and a monster inside a camera's
+// view (and not behind a wall) is marked; the mark stays at its last seen spot for MAP_FADE_MS. A floor with no cameras shows no monsters.
+const MAPSEEN = new Map(), MAP_FADE_MS = 3000, CAM_RANGE = 40, camFrustum = new THREE.Frustum(), camM = new THREE.Matrix4(), camV = new THREE.Vector3();
+function segClear(ax, ay, az, bx, by, bz, skip = 1.0) {                    // no wall box between the two points (same test the monsters use for sight)
+  const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 0.3);
+  for (let k = 1; k < steps; k++) {
+    const u = k / steps; if (u * d < skip) continue;
+    const x = ax + (bx - ax) * u, z = az + (bz - az) * u, y = ay + (by - ay) * u;
+    for (const id of near(x, z, 0.2)) { const q = boxes[id]; if (!q.off && x > q.n[0] && x < q.x[0] && z > q.n[2] && z < q.x[2] && y > q.n[1] && y < q.x[1] && q.x[1] - q.n[1] > 0.6) return false; }
+  }
+  return true;
+}
+function camSees(c, t, x, y, z) {                                           // the camera's current aim and lens (as the feed shows it) against a point
+  aimFeed(c, t); feedCam.updateMatrixWorld(true);
+  camM.multiplyMatrices(feedCam.projectionMatrix, camM.copy(feedCam.matrixWorld).invert()); camFrustum.setFromProjectionMatrix(camM);
+  const p = feedCam.position;
+  return Math.hypot(x - p.x, z - p.z) < CAM_RANGE && camFrustum.containsPoint(camV.set(x, y, z)) && segClear(p.x, p.y, p.z, x, y, z);
+}
+function updateSeen(t) {
+  const now = performance.now();
+  for (const m of monsters) {
+    if (!S.cams.some(c => camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z))) continue;
+    MAPSEEN.set(m, {at: now, x: m.pos.x, z: m.pos.z});
+  }
+}
 const mapXY = (x, z) => [256 + x * 5.6, 160 + (z - 2.5) * 5.6];
 function mapLayer(level) {
   if (S.mapLayer) return S.mapLayer;
@@ -540,11 +565,13 @@ function drawMap(t) {
   mctx.drawImage(mapLayer(level), 0, 0);
   mctx.strokeStyle = "#e0a040"; mctx.lineWidth = 2;
   for (const dr of doors) if (dr.level === level && dr.p < 0.5) { const [a, b] = mapXY(dr.cx, dr.cz); mctx.beginPath(); mctx.moveTo(a - 2, b); mctx.lineTo(a + 2, b); mctx.stroke(); }
-  for (const m of monsters) {                                               // monsters are pinged: pulsing rings
-    if (m.level !== level) continue;
-    const [a, b] = mapXY(m.pos.x, m.pos.z), ph = (((t * 0.9 + m.home[0]) % 1) + 1) % 1;
-    mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke();
-    mctx.fillStyle = "#ff4a3d"; mctx.beginPath(); mctx.arc(a, b, 3, 0, 7); mctx.fill();
+  const now = performance.now();
+  for (const m of monsters) {                                               // a monster is on the map only while a camera sees it, then fades over 3 s at the spot it was last seen
+    const sn = MAPSEEN.get(m); if (!sn || m.level !== level) continue;
+    const age = now - sn.at; if (age > MAP_FADE_MS) continue;
+    const fresh = age < 400, [a, b] = mapXY(sn.x, sn.z), ph = (((t * 0.9 + m.home[0]) % 1) + 1) % 1, fade = fresh ? 1 : 1 - age / MAP_FADE_MS;
+    if (fresh) { mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke(); }
+    mctx.fillStyle = `rgba(255,74,61,${0.25 + 0.75 * fade})`; mctx.beginPath(); mctx.arc(a, b, fresh ? 3 : 2.4, 0, 7); mctx.fill();
   }
   for (const p of net.peers.values()) {                                     // the others in the room, on this floor
     if (p.scene !== S.id || p.dead) continue;
@@ -1219,7 +1246,7 @@ function lobby() {
 }
 
 // ---------------------------------------------------------------- game loop
-let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
+let seenT = 0, dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
 function die() {
   closeKeypad();
   if (myCarry() >= 0) fuseAct({a: "drop", x: P.p.x, z: P.p.z});                      // it stays where you fell
@@ -1298,7 +1325,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); exitCheck(); updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -1325,7 +1352,7 @@ FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

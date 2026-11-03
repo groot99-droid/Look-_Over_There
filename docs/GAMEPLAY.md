@@ -71,17 +71,17 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - Rules: `shared/finish.js`; the server keeps the run and the alarm (`exit` is accepted only from L4 with the power on).
 - Not done: a siren sound (the game has no audio yet); the best record is per browser, not shared; the 60 s and the hunt are untuned.
 
-## Roles that emerge (planned)
+## Roles that emerge (built)
 
-No assigned classes. The camera watcher matters because monsters show on the handheld map only while a camera currently sees them (today they are pinged all the time). Scouts, carriers and revivers come from the fuse and revive rules.
+No assigned classes. **Monsters show on the handheld map only through the cameras** (built): every security camera on the floor sweeps on its loop, and a monster inside a camera's view (within 40 m, not behind a wall) is marked on everyone's map with pulsing rings; the mark stays at its last seen spot and fades over 3 s. A floor's blind spots are the places no camera reaches. Nobody has to hold a feed open, but the map is only as good as the sweep, so a player who watches the feeds can tell the team what the map cannot. Each client runs the cameras on its own clock, so two players' sweeps can be a few seconds out of step. Scouts, carriers and revivers come from the fuse and revive rules.
 
 ## Build order
 
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The finale and score (7) are built too. The next steps are monsters on the map only through cameras (5), server-side monsters (6) and bots (8).
-5. Monsters on the map only through cameras
+4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The finale and score (7) are built too. The next steps are server-side monsters (6) and bots (8).
+5. Monsters on the map only through cameras: **built**
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring: **built**
 8. Bot players to tune the numbers

@@ -14,7 +14,7 @@ async function solo(port) {
   const page = await (await browser.newContext({viewport: {width: 900, height: 700}})).newPage();
   page.on("pageerror", e => errors.push(e.message));
   await page.goto(`http://localhost:${port}/`); await page.click("#l-solo");
-  await page.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 120000});
+  await page.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000});
   return page;
 }
 const until = (name, page, fn, arg) => page.waitForFunction(fn, arg, {timeout: 60000, polling: 200}).then(() => check(name, true), () => check(name, false));
@@ -132,6 +132,31 @@ try {
   await r.evaluate(() => { const g = window.__game; g.P.p.set(0, g.S.floor + 0.02, g.EXIT_Z + 0.5); g.step(0.02); });
   check("walking out onto the lot ends a solo round with place 1 and a record", await r.evaluate(() => { const g = window.__game; return g.FIN.out && g.FIN.results && g.FIN.results[0].place === 1 && document.getElementById("results").style.display === "flex" && /RECORD|BEST/.test(document.getElementById("r-best").textContent); }));
 
+  // monsters show on the map only through the cameras
+  const cam = await r.evaluate(() => {
+    const g = window.__game, m = g.monsters[0]; g.MAPSEEN.clear();
+    m.pos.x = 500; m.pos.z = 500; g.updateSeen(5);
+    const far = !g.MAPSEEN.has(m);
+    let hit = null;
+    outer: for (const c of g.S.cams) for (let t = 0; t < 40; t += 2) for (const d of [4, 7, 11]) {
+      g.aimFeed(c, t); g.feedCam.updateMatrixWorld(true);
+      const dir = g.feedCam.getWorldDirection(new g.feedCam.position.constructor()), x = g.feedCam.position.x + dir.x * d, z = g.feedCam.position.z + dir.z * d;
+      if (g.camSees(c, t, x, m.fy + 1.3, z)) { hit = {t, x, z, bx: g.feedCam.position.x - dir.x * d, bz: g.feedCam.position.z - dir.z * d, c: g.S.cams.indexOf(c)}; break outer; }
+    }
+    if (!hit) return {far, hit: null};
+    m.pos.x = hit.x; m.pos.z = hit.z; g.updateSeen(hit.t);
+    const seen = g.MAPSEEN.has(m) && Math.abs(g.MAPSEEN.get(m).x - hit.x) < 1e-6;
+    g.MAPSEEN.clear(); m.pos.x = hit.bx; m.pos.z = hit.bz; g.updateSeen(hit.t);                         // the same distance behind the camera
+    const behind = !g.MAPSEEN.has(m) || g.S.cams.some(c2 => g.camSees(c2, hit.t, hit.bx, m.fy + 1.3, hit.bz));
+    g.MAPSEEN.clear(); const cams = g.S.cams; g.S.cams = []; m.pos.x = hit.x; m.pos.z = hit.z; g.updateSeen(hit.t); const none = !g.MAPSEEN.has(m); g.S.cams = cams;
+    return {far, hit, seen, behind, none};
+  });
+  check("a monster far from every camera is not on the map", cam.far);
+  check("a monster in a camera's view is marked", !!cam.hit && cam.seen, cam.hit ? `(camera ${cam.hit.c})` : "(no clear view found)");
+  check("one behind the camera is not marked unless another camera sees it", !!cam.hit && cam.behind);
+  check("a floor with no cameras marks nothing", !!cam.hit && cam.none);
+
+  await p.close().catch(() => {}); await r.close().catch(() => {});        // software rendering: free the CPU for the last page
   const q = await solo(withModel.port);
   await until("with models/fuse.glb the model replaces the placeholder", q, () => window.__game.FZ.vis.items.every(i => i.o.userData.model));
   check("the placeholder art is hidden behind it", await q.evaluate(() => window.__game.FZ.vis.items[0].o.userData.art.visible === false));
