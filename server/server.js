@@ -10,6 +10,7 @@ import {fileURLToPath} from "node:url";
 import {WebSocketServer} from "ws";
 import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
+import {POWER_SOURCES, newPower, throwPower} from "../shared/power.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,7 +86,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}, power: newPower()}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -93,7 +94,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         me = {id: ++room.seq, seq: room.seq, ws, scene: null, ready: false, char, name: String(m.name || "Player").replace(/[^\w .-]/g, "").slice(0, 16) || "Player",
               color: COLORS.find(c => !used.has(c)) || COLORS[0]};
         room.players.set(me.id, me);
-        send(me, {t: "welcome", id: me.id, room: code, phase: room.phase, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
+        send(me, {t: "welcome", id: me.id, room: code, phase: room.phase, power: room.power.on, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
         broadcast(room, {t: "join", id: me.id, name: me.name, color: me.color, char: me.char}, me.id);
         lobbyChanged(room);
         return;
@@ -124,6 +125,11 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
             if (r.st) { room.keypads[scene] = r.st; sendKeypad(room, scene); }
             else if (r.locked) send(me, keypadMsg(room, scene));       // tell them how long the lock has left
           }
+          break;
+        }
+        case "power": {                                               // throw the building's power from the L3 box or the L4 far switch; everyone in the room hears of it
+          const next = throwPower(room.power, me.scene);
+          if (next) { room.power = next; broadcast(room, {t: "power", on: true, by: next.by}); }
           break;
         }
         case "switch": {                                              // flip one switch on the floor you are on

@@ -94,8 +94,35 @@ try {
   await p.keyboard.type(code.join("")); await p.keyboard.press("Enter");                                              // the keyboard works while it is up
   await until("the right code opens the door", p, () => window.__game.KP.st.L2.solved);
   check("the keypad closes and the door is powered", await p.evaluate(() => { const g = window.__game; g.step(0.016); return !g.KPUI.open && !g.isLocked(g.upDoor()) && /DOOR POWERED/.test(document.getElementById("fusehud").textContent); }));
+  // L4: the store's glass doors are shut until the power is on; the far switch is the long way
+  await load("L4");
+  const l4 = await p.evaluate(() => { const g = window.__game, sp = g.farSwitchSpot(); return {shut: !!g.S.shutter && !g.S.shutter.off, blocked: !!g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}), glass: g.S.glass && g.S.glass.visible, spot: sp, power: g.POWER.on, hud: (g.step(0.016), document.getElementById("fusehud").textContent), navBefore: g.S.nav.reduce((n, v) => n + v, 0)}; });
+  check("L4: the glass doors are shut and block the opening", l4.shut && l4.blocked && l4.glass === true && l4.power === false && /POWER OFF/.test(l4.hud));
+  const far = Math.hypot(l4.spot[0] - 16, l4.spot[1] - 7.7);
+  check("the L4 switch is on the far side of the room", far >= 30, `(${far.toFixed(1)} m from the stairs, at ${l4.spot.map(v => v.toFixed(1))})`);
+  await p.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0]; m.pos.set(x + 10, m.fy, z); }, l4.spot);          // one monster within earshot
+  await go([l4.spot[0] + 1.2, l4.spot[1]]); await p.keyboard.press("KeyE");
+  await until("pressing E at the far switch turns the power on", p, () => window.__game.POWER.on && window.__game.POWER.by === "L4");
+  check("the L4 switch is loud: a monster goes to look", await p.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
+  check("the opening is clear, the glass is rolling up and monsters can use the way out", await p.evaluate(() => { const g = window.__game; for (let i = 0; i < 120; i++) g.step(0.02); return !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && g.S.nav.reduce((n, v) => n + v, 0) > 0 && g.monsters.every(m => m.walk === g.S.nav); }));
+  check("the way out opened more of the map to walk on", await p.evaluate(n => window.__game.S.nav.reduce((a, v) => a + v, 0) > n, l4.navBefore));
+  await go([0, 21]); await p.keyboard.press("KeyE");
+  check("the power cannot be thrown twice", await p.evaluate(() => window.__game.POWER.by === "L4"));
   await load("L1");
   check("coming back to L1 the switches are still on", await p.evaluate(() => window.__game.SW.st.L1.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor())));
+
+  // a fresh session: the quick way, the box on L3, then L4 is open on arrival and nothing was alarmed
+  const r = await solo(plain.port);
+  const rload = id => r.evaluate(i => window.__game.loadScene(i), id).then(() => r.waitForFunction(i => window.__game.S.id === i && !window.__game.loading, id, {timeout: 60000}));
+  await rload("L3");
+  check("L3: a power box, no monsters, power off", await r.evaluate(() => { const g = window.__game; g.step(0.016); return !!g.S.pw && g.monsters.length === 0 && !g.POWER.on && /POWER OFF/.test(document.getElementById("fusehud").textContent); }));
+  await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0], g.S.floor + 0.02, sp[1] + 1.4); g.P.v.set(0, 0, 0); g.P.yaw = 0; g.step(0.016); });
+  check("the prompt appears at the box", await r.evaluate(() => /Press E to switch on the power/.test(document.getElementById("prompt").textContent)));
+  await r.keyboard.press("KeyE");
+  await r.waitForFunction(() => window.__game.POWER.on, null, {timeout: 30000}).then(() => check("pressing E at the L3 box turns the power on", true), () => check("pressing E at the L3 box turns the power on", false));
+  await rload("L4");
+  check("arriving on L4 the doors are already open, and nothing was alarmed", await r.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && g.monsters.every(m => m.state === "patrol") && /POWER ON/.test((g.step(0.016), document.getElementById("fusehud").textContent)); }));
+  check("the far switch is not offered once the power is on", await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); return g.nearPower() === false; }));
 
   const q = await solo(withModel.port);
   await until("with models/fuse.glb the model replaces the placeholder", q, () => window.__game.FZ.vis.items.every(i => i.o.userData.model));

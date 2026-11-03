@@ -205,3 +205,29 @@ test("keypad: only on a keypad floor, and the right code solves it", async () =>
   assert.ok(!(await a.quiet(150)).some(m => m.t === "keypad"), "an open door takes no more notes");
   await srv.close();
 });
+
+test("power: thrown once from L3 or L4 and told to the whole room, including late joiners", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R13", "Ann"), b = await join(srv, "R13", "Bob");
+  assert.equal(a.welcome.power, false);
+  a.send({t: "s", scene: "L2"}); b.send({t: "s", scene: "B1"});
+  a.send({t: "power"}); b.send({t: "power"});                                      // neither is on a power floor
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "power"), "L2 and B1 have no power switch");
+  a.send({t: "s", scene: "L3"}); await a.quiet(60);
+  a.send({t: "power"});
+  const heard = await b.next(kind("power"));                                       // Bob is on B1 and still hears of it
+  assert.deepEqual([heard.on, heard.by], [true, "L3"]);
+  await a.next(kind("power"));
+  a.send({t: "s", scene: "L4"}); a.send({t: "power"});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "power"), "thrown once: a second throw is not announced");
+  const late = await join(srv, "R13", "Cy"); assert.equal(late.welcome.power, true, "a late joiner is told it is on");
+  await srv.close();
+});
+test("power: a room that nobody powers stays off, and rooms are separate", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R14", "Ann"), b = await join(srv, "R15", "Bob");
+  a.send({t: "s", scene: "L4"}); a.send({t: "power"}); await a.next(kind("power"));
+  assert.equal((await join(srv, "R15", "Di")).welcome.power, false, "R15 is still off");
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "power"));
+  await srv.close();
+});

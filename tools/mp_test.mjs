@@ -129,6 +129,21 @@ try {
   await until("the right code opens the door for both", guest, () => window.__game.KP.st.L2.solved && !window.__game.isLocked(window.__game.upDoor()));
   await until("and for the host", host, () => window.__game.KP.st.L2.solved);
 
+  // ---- power: the host throws the L3 box (the quick way); the guest, who comes to L4 afterwards, finds the doors open
+  const onFloor = id => Promise.all([a, b].map(pg => pg.evaluate(i => window.__game.loadScene(i), id).then(() => pg.waitForFunction(i => { const g = window.__game; return g.S.id === i && !g.loading && [...g.net.peers.values()].every(q => q.scene === i); }, id, {timeout: 60000}))));
+  await onFloor("L3");
+  A = await info(a); B = await info(b); [host, guest] = A.host ? [a, b] : [b, a];
+  check("the power starts off for both players", await a.evaluate(() => !window.__game.POWER.on) && await b.evaluate(() => !window.__game.POWER.on));
+  await host.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0], g.S.floor + 0.02, sp[1] + 1.4); g.P.v.set(0, 0, 0); });
+  await host.keyboard.press("KeyE");
+  await until("the host throws the L3 box: both hear of it", guest, () => window.__game.POWER.on && window.__game.POWER.by === "L3");
+  await until("and the host", host, () => window.__game.POWER.on);
+  check("the server holds it for the room", srv.rooms.get("TEST").power.on === true && srv.rooms.get("TEST").power.by === "L3");
+  await onFloor("L4");
+  check("on arrival both find the L4 doors open", await a.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible; }) && await b.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible; }));
+  await onFloor("L2");
+  A = await info(a); B = await info(b); [host, guest] = A.host ? [a, b] : [b, a];
+
   // doors: opened by the guest, open for the host; then shut by the guest, shut for the host
   const door = await guest.evaluate(() => { const g = window.__game, d = g.doors.find(x => !x.link && x.target === 0); if (!d) return null; g.openDoor(d, true); return d.d.name; });
   if (door) await until("door opened by one is open for the other", host, n => window.__game.doors.find(x => x.d.name === n).target === 1, door); else check("door opened by one is open for the other", false, "no door found");
@@ -172,6 +187,18 @@ try {
   // leaving hands the floor over
   await guest.close();
   await until("host alone: peer removed, still host", host, () => window.__game.net.peers.size === 0 && window.__game.net.host());
+
+  // ---- another room that never touches the L3 box: L4 is shut, the far switch opens it, and the first room was not affected
+  const solo2 = await (await browser.newContext({viewport: {width: 320, height: 200}})).newPage();
+  solo2.on("pageerror", e => console.log("[Cy pageerror]", e.message));
+  await solo2.goto(`http://localhost:${srv.port}/?room=OTHER&name=Cy&char=2&auto=1&ready=1`);
+  await inGame(solo2);
+  await solo2.evaluate(() => window.__game.loadScene("L4")); await solo2.waitForFunction(() => window.__game.S.id === "L4" && !window.__game.loading, null, {timeout: 60000});
+  check("a room that did not use the L3 box finds L4 shut", await solo2.evaluate(() => { const g = window.__game; return !g.POWER.on && !g.S.shutter.off && !!g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}); }));
+  await solo2.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); g.P.v.set(0, 0, 0); });
+  await solo2.keyboard.press("KeyE");
+  await until("the L4 far switch powers it through the server", solo2, () => window.__game.POWER.on && window.__game.POWER.by === "L4" && !window.__game.S.shutter.off === false);
+  check("the room's state is its own", srv.rooms.get("OTHER").power.by === "L4" && srv.rooms.get("TEST").power.by === "L3");
 } catch (e) { console.log("ERROR", e); failed++; }
 await browser.close(); await srv.close();
 console.log(failed ? `${failed} FAILED` : "ALL PASSED");

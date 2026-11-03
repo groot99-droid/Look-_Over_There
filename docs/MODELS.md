@@ -17,7 +17,7 @@ Meshy is a paid step in the studio: run the `asset-3d` pipeline on your own mach
 | `gate_panel` | "A wall-mounted electrical lock panel with three small indicator lamps in a row and a fuse slot, dirty 1990s industrial, game prop" | 0.40 m | the stair door's fuse panel (replaces the three code-made lamps) |
 | `switch` | "A waist-high industrial control pedestal with a heavy black lever switch on a grey steel plate and a small indicator lamp, worn paint, game prop" | 1.2 m | L1 switches (the loader already looks for `models/switch.glb`; the lever and lamp of the placeholder are what show on/off today) |
 | `keypad` | "A wall-mounted numeric keypad with a small green LCD, scuffed grey plastic, game prop" | 0.45 m | L2 door panel (not wired to the loader yet: the placeholder panel and the memo notes are drawn in code) |
-| `fuse_box` | "An open grey electrical fuse box on a wall with a big power lever, labelled breakers, grime, game prop" | 0.7 m | L3 break-floor box / L4 power switch |
+| `fuse_box` | "An open grey electrical fuse box on a wall with a big power lever, labelled breakers, grime, game prop" | 0.7 m | the L4 power switch only: L3's box already exists in the Blender file (the placeholder lever and lamp are drawn on it); not wired to the loader yet |
 
 ## Preparing a model for the game
 

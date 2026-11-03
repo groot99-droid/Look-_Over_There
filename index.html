@@ -82,6 +82,7 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
+import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
 const MON_URL = "world/monsters.json";
 // one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
@@ -181,6 +182,8 @@ async function loadScene(id, arrival) {
     if (leaf) { leaf.matrixAutoUpdate = true; leaf.quaternion.copy(dr.qClosed); leaf.updateMatrix(); }
     boxes.push(box); doors.push(dr);
   }
+  S.shutter = null;
+  if (id === "L4") { S.shutter = {n: [-2.7, 9.6, 27.0], x: [2.7, 13.0, 27.5], off: POWER.on}; boxes.push(S.shutter); }       // the store's glass doors: shut until the power is on (the opening has no collider in the model)
   boxes.forEach((b, i) => {
     for (let a = Math.floor(b.n[0] / CELL); a <= Math.floor(b.x[0] / CELL); a++)
       for (let k = Math.floor(b.n[2] / CELL); k <= Math.floor(b.x[2] / CELL); k++) {
@@ -194,6 +197,7 @@ async function loadScene(id, arrival) {
   if (!net.on && KEYPAD_FLOORS.includes(id)) { KP.local[id] ||= newKeypad(); setKeypad(id, kpView(KP.local[id], Date.now())); }
   if (net.on) { delete SW.st[id]; delete KP.st[id]; }                                              // in a room the server sends the floor's state on arrival; that first state is not news
   buildFuseVisuals();
+  buildPowerVisuals();
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
     if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
@@ -242,7 +246,7 @@ function buildNav(fy) {
     const x = NX0 + (i + .5) * NAV, z = NZ0 + (j + .5) * NAV;
     let ground = false, blocked = false;
     for (const id of near(x, z, 0.6)) {
-      const b = boxes[id]; if (b.door && !b.link) continue;
+      const b = boxes[id]; if ((b.door && !b.link) || b.off) continue;
       if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
       if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
     }
@@ -579,7 +583,7 @@ addEventListener("keydown", e => {
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
   if (e.repeat || dead) return;
-  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote()) useDoor();
+  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower()) useDoor();
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyQ") cycleCam(-1);
@@ -601,7 +605,7 @@ function pad() {
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
-    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
+    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
@@ -646,9 +650,9 @@ function doorLocked() {
 }
 // where the fuses lie: in the floor's main walkable area (the stair door itself sits a storey up, off this grid), spread out, away from where monsters start.
 // Seeded, so every client picks the same spots.
-function floorSpots(count, seedBase, tiers) {
-  const dr = upDoor(); if (!dr || !S.nav) return [];
+function mainRegion() {
   const walk = S.nav, seen = new Uint8Array(NW * NH); let cells = [];
+  if (!walk) return cells;
   for (let c0 = 0; c0 < NW * NH; c0++) {                                       // flood-fill each region in index order; keep the biggest
     if (!walk[c0] || seen[c0]) continue;
     const stack = [c0], reg = []; seen[c0] = 1;
@@ -664,7 +668,11 @@ function floorSpots(count, seedBase, tiers) {
     }
     if (reg.length > cells.length) cells = reg;
   }
-  if (!cells.length) return [];
+  return cells;
+}
+function floorSpots(count, seedBase, tiers) {
+  const dr = upDoor(); if (!dr || !S.nav) return [];
+  const cells = mainRegion(); if (!cells.length) return [];
   const rnd = rng32(seedBase + Object.keys(SCENES).indexOf(S.id) * 37), out = [];
   for (const [gap, fromDoor, fromMon] of tiers) {                                  // relax if the floor is too small for the first try
     out.length = 0;
@@ -712,16 +720,16 @@ function fuseMesh(halo = true) {
 }
 const carryMesh = fuseMesh(false); carryMesh.scale.setScalar(1.3); carryMesh.position.set(-0.28, -0.3, -0.55); carryMesh.rotation.z = 0.5; carryMesh.visible = false; camera.add(carryMesh);
 // a waist-high control post with a lever and a lamp (placeholder, drawn in code; models/switch.glb replaces it)
-function switchMesh(facing) {
+function switchMesh(facing, mount = false) {
   const o = new THREE.Group(), art = new THREE.Group(); o.add(art);
   const post = new THREE.Mesh(new THREE.BoxGeometry(.34, 1.0, .34), new THREE.MeshBasicMaterial({color: 0x555a60})); post.position.y = .5;
   const plate = new THREE.Mesh(new THREE.BoxGeometry(.3, .38, .06), new THREE.MeshBasicMaterial({color: 0x2c2f33})); plate.position.set(0, 1.08, .19);
   const lever = new THREE.Group(), stick = new THREE.Mesh(new THREE.BoxGeometry(.05, .24, .05), new THREE.MeshBasicMaterial({color: 0xe0e0e0})); stick.position.y = .12; lever.add(stick); lever.position.set(0, 1.0, .24); lever.rotation.x = -0.6;
   const lamp = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .05), new THREE.MeshBasicMaterial({color: 0xaa2020})); lamp.position.set(0, 1.2, .23);
-  art.add(post, plate, lever, lamp); o.rotation.y = facing; o.userData.art = art; o.userData.lever = lever; o.userData.lamp = lamp;
+  art.add(...(mount ? [plate, lever, lamp] : [post, plate, lever, lamp])); o.rotation.y = facing; o.userData.art = art; o.userData.lever = lever; o.userData.lamp = lamp;
   const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40c8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); sp.position.y = 1.1; o.add(sp); return sp; };
   o.userData.halo = mk(0.9, 0.9, 0.6); o.userData.beacon = mk(0.3, 2.4, 0.3);
-  useModel(o, "switch", 1.2);
+  if (!mount) useModel(o, "switch", 1.2);
   return o;
 }
 // a memo on a stand (placeholder drawn in code)
@@ -876,8 +884,64 @@ function updatePrompt() {
         msg = pz.kind === "CODE" ? "Press E to use the keypad" : pz.kind === "FUSES" ? (myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${pz.count} of ${pz.need} fuses`) : `The door has no power: ${pz.count} of ${pz.need} switches flipped`;
     }
   }
+  if (!pz && !dead && !loading && !reviveTarget() && nearPower()) msg = "Press E to switch on the power";
   el.textContent = msg; el.style.display = msg ? "block" : "none";
-  if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
+  if (!pz && POWER_SOURCES.includes(S.id)) { hud.style.display = "block"; hud.textContent = POWER.on ? "POWER ON" : "POWER OFF"; }
+  else if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
+}
+
+// ---------------------------------------------------------------- the building's power: one switch for the room (rules: shared/power.js)
+// Thrown from the box on L3 (a shortcut) or the far switch on L4. While it is off the L4 store's glass doors are shut; the L4 switch is loud.
+const POWER = newPower();
+const L4_ARRIVAL = [16, 7.7];                                              // where the stairs bring you into the store
+function farSwitchSpot() {                                                 // the walkable spot in the store furthest from the arrival: the far side of the room
+  let best = null, bd = -1;
+  for (const c of mainRegion()) { const [x, z] = cellXZ(c); if (Math.abs(x) > 24.5 || z < -21 || z > 25) continue; const d = Math.hypot(x - L4_ARRIVAL[0], z - L4_ARRIVAL[1]); if (d > bd) { bd = d; best = [x, z]; } }
+  return best;
+}
+function buildPowerVisuals() {
+  S.pw = null; S.glass = null; if (!POWER_SOURCES.includes(S.id) || !S.root) return;
+  const g = new THREE.Group(); let spot, o;
+  if (S.id === "L3") { spot = [0, -21.7]; o = switchMesh(0, true); o.position.set(0, S.floor - 0.33, -21.2); }           // a lever and lamp on the model's power box, which stands at the south wall
+  else { spot = farSwitchSpot(); if (spot) { o = switchMesh(Math.atan2(-spot[0], 3 - spot[1])); o.position.set(spot[0], S.floor, spot[1]); } }
+  if (o) g.add(o);
+  S.root.add(g); S.pw = spot ? {spot, o} : null;
+  if (S.id === "L4") {
+    S.glass = S.root.getObjectByName("Doors_L4_Store_glass");
+    if (S.glass) { S.glass.matrixAutoUpdate = true; S.glass.userData.y0 = S.glass.position.y; S.glass.userData.rise = POWER.on ? 1 : 0; S.glass.visible = !POWER.on; }
+  }
+}
+function animatePower(dt) {
+  const pw = S.pw;
+  if (pw && pw.o) {                                                         // lever and lamp show whether it is on; the glow fades as you come close
+    const u = pw.o.userData, on = POWER.on, d = Math.hypot(pw.spot[0] - P.p.x, pw.spot[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.lever.rotation.x = on ? 0.6 : -0.6; u.lamp.material.color.setHex(on ? 0x44dd55 : 0xaa2020);
+    u.halo.material.color.setHex(on ? 0x55ee66 : 0x40c8ff); u.beacon.material.color.setHex(on ? 0x55ee66 : 0x40c8ff);
+    u.halo.material.opacity = (on ? 0.25 : 0.6) * k; u.beacon.material.opacity = (on ? 0.1 : 0.3) * k;
+  }
+  const gl = S.glass;
+  if (gl) {                                                                 // the glass rolls up out of the opening
+    const target = POWER.on ? 1 : 0, r = gl.userData.rise;
+    gl.userData.rise = r + Math.sign(target - r) * Math.min(Math.abs(target - r), dt / 1.6);
+    gl.position.y = gl.userData.y0 + gl.userData.rise * 3.8; gl.visible = gl.userData.rise < 0.999;
+  }
+}
+function nearPower() {
+  const pw = S.pw; if (!pw || POWER.on || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return false;
+  return Math.hypot(pw.spot[0] - P.p.x, pw.spot[1] - P.p.z) < 1.8;
+}
+function powerAct() {
+  if (net.on) { net.send({t: "power"}); return; }                           // the server tells the whole room
+  const n = throwPower(POWER, S.id); if (n) setPower(true, n.by);
+}
+function tryPower() { if (!nearPower()) return false; powerAct(); return true; }
+function setPower(on, by, quiet) {
+  const was = POWER.on; POWER.on = on; if (!on || was) return;
+  POWER.by = by;
+  if (S.shutter) { S.shutter.off = true; S.nav = buildNav(S.floor); for (const m of monsters) m.walk = S.nav; }      // the opening is a way through now, for monsters too
+  if (quiet) return;
+  toast(S.id === "L4" ? "The doors hum open." : S.id === "L3" ? "Somewhere below, a generator starts." : "Far away, a generator starts.");
+  if (by === "L4" && S.id === "L4" && S.pw && net.host()) for (const m of monsters) if (Math.hypot(m.pos.x - S.pw.spot[0], m.pos.z - S.pw.spot[1]) < 40) m.alert(S.pw.spot[0], S.pw.spot[1]);      // the L4 switch is loud
 }
 
 // ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
@@ -940,6 +1004,7 @@ function onNet(m) {
       net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true; net.phase = m.phase;
       for (const p of m.players) if (p.id !== m.id) addPeer(p);
       if (m.phase !== "lobby") net.startRes?.();
+      if (m.power) setPower(true, null, true);
       hud(); net.ready?.(); net.ready = null; break;
     case "join": addPeer(m); break;
     case "leave": removePeer(m.id); break;
@@ -969,6 +1034,7 @@ function onNet(m) {
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
+    case "power": setPower(true, m.by); break;
     case "keypad": setKeypad(m.scene, {found: m.found, solved: m.solved, fails: m.fails, lockMs: m.lockMs}); break;
   }
 }
@@ -1164,7 +1230,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); updatePeers(dt); drawAlert(); animateFuses(t); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); updatePeers(dt); drawAlert(); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -1190,7 +1256,7 @@ await lobby();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

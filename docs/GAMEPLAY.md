@@ -33,8 +33,8 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 | B1 | **Fuses:** 3 lie around the floor; carry them one at a time to the stair door | **built** |
 | L1 | **Switches:** two far-apart switches, flipped one at a time in any order; each flip is loud and draws nearby monsters to look | **built** |
 | L2 | **Keypad:** a 4-digit code, each digit on a note found at a different place, shared by the team | **built** |
-| L3 | Break floor, no monsters. A **fuse box** here is an optional shortcut that powers L4's doors early | planned |
-| L4 | **The trick:** the doors are shut unless the L3 box was thrown; otherwise the power switch is on the far side of the room, with the monsters | planned |
+| L3 | Break floor, no monsters. A **fuse box** here is an optional shortcut that powers L4's doors early | **built** |
+| L4 | **The trick:** the store's glass doors are shut unless the power is on; the L3 box turns it on early, otherwise the power switch is on the far side of the room, with the monsters | **built** |
 
 ### Fuses (built)
 - Three fuses per gated floor, in the same places for everyone (seeded, in the floor's main walkable area, away from the door and from where monsters start). Press E / X within 1.5 m to pick one up; E / X at the door puts it in. One carried at a time. Three lamps above the door go from red to green.
@@ -57,6 +57,13 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - A late joiner sees which notes were already read. Rules: `shared/keypad.js`.
 - The notes and the door panel are drawn in code; `keypad` in `docs/MODELS.md` is not wired to a model yet.
 
+### Power: the L3 box and the L4 trick (built)
+- The room has one power flag (`shared/power.js`). It starts off and is thrown **once**, by anyone, and stays on. Two places can throw it: the **power box on L3** (the prop that is already in the Blender file, at the south wall, with a lever and lamp added) and a **power switch on L4** in the far north-west alcove of the store, about 49 m from where the stairs bring you in.
+- **Off:** the store's glass entrance is shut, and the model has no collider there, so a collider is added across the 5.4 m opening; monsters cannot pass either. **On:** the glass rolls up out of the opening, the collider goes, and the monsters' walkable map is rebuilt so they can use the way out too.
+- The L3 box is silent (no monsters on L3), so it is the quick, safe way. The L4 switch is loud: every monster within 40 m goes to look at it, the same as the L1 switches.
+- Everyone in the room hears of it wherever they are: a toast, `POWER ON` in the HUD, and the doors are already open when you arrive. A late joiner is told in the welcome message. L3 to L4 stairs are never locked.
+- The L4 switch is a placeholder in code (the L3 box is the real model). The finale/exit is still to build.
+
 - **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map. (planned)
 - **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down. (planned)
 
@@ -69,7 +76,7 @@ No assigned classes. The camera watcher matters because monsters show on the han
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses and the gated stair door: **built** (B1). Switches on L1 and the keypad on L2: **built**. Still to do: the L3 box / L4 power trick.
+4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The next steps are the finale and score (7), monsters on the map only through cameras (5), server-side monsters (6) and bots (8).
 5. Monsters on the map only through cameras
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring
