@@ -97,6 +97,42 @@ No assigned classes. **Monsters show on the handheld map only through the camera
 
 Five playable characters (`characters/<id>.glb`, picked in the lobby, shown to everyone else with name tags): `plaid`, `suit`, `shorts`, `red`, `white`. Duplicates are allowed. Each has Walking and Running clips; standing still plays the walk almost frozen (no idle clip), crouching walks slowly, being downed lies the model down. `tools/optimize_character.mjs` produced them from the Meshy exports (1024 px WebP texture, ~30–76k vertices, Draco; about 0.5–0.7 MB each).
 
+## Fighting back: the Error Deletion Ray (planned)
+
+The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is not in the game yet. These are the owner's decisions and the rules built from them; anything marked *assumed* is mine and open to change.
+
+**Decisions (owner).**
+- A hit **does not kill: it no-clips the monster to another place on the map** (the ray deletes it from where it stands and it reappears elsewhere).
+- Ammo is **scarce and found on every floor**.
+- **One gun per player, found on B1** (lockers in the opening).
+- A shot is **as quiet as running** (heard at 9 m, halved through a wall), not an alarm.
+
+**The shot.** Aim with the camera; fire with the left mouse button or `F` (*assumed*: the controller's right trigger is now run, so fire goes on a free button, probably the right bumper with the cameras moved to the D-pad). Hitscan: a ray from the camera, 25 m long, blocked by walls and shut doors (the same `segClear` test the monsters' sight uses), hitting a monster inside a 0.6 m radius, 2.2 m tall capsule. One shot every 0.6 s. No reload: the rounds you carry are your magazine. You cannot fire while carrying a fuse (your hands are full: drop it first), while crouching-and-reviving, or while downed.
+
+**What a hit does (assumed details).** The monster glitches for 0.5 s (a flicker and a cyan scanline), then is placed at a spot on its own floor that is at least 35 m away by path from every player, out of every player's sight and at least 15 m from any player; it forgets its chase, waits 4 s, and goes back to patrolling. It cannot be banished again for 8 s. The spot is random among those, so the ray can land a monster near an objective: it relieves a chase, it does not clear a floor. Other monsters are not affected; a monster that was chasing someone else keeps chasing.
+
+**Ammo (assumed numbers).** A gun starts with 3 rounds; an ammo pack holds 3; you carry at most 9. B1 has 8 lockers (one gun each, taken once by whoever opens it, a player holds one) plus 3 packs; L1, L2 and L4 have 3 packs each; L3 (no monsters) has 4, as the place to restock before the finale. Packs sit at seeded spots in the floor's main walkable area (like the fuses and notes), the same for everyone, and are taken once for the whole room. Rounds are never shared between players except by dropping: a downed player keeps their gun and rounds.
+
+**What it changes.**
+- *The game's premise:* monsters were unbeatable and the answer was hiding. Now there is a way out of a chase, but a scarce one: three rounds is about one escape per player per floor. Expect the 8 to 11 downs per bot on B1 to fall a lot; the bots (below) are how to check.
+- *Roles:* the bait stops being a sacrifice, since a hit sends the lure's monster away; the scout can clear the stairs; the runner can shoot a monster off a fuse.
+- *Noise:* a shot is not an alarm (it is a run), so shooting a monster that is watching you does not call the others, but two monsters near each other will still hear it at 9 m.
+- *Cameras and the map:* a banished monster only shows on the map if a camera sees where it lands.
+- *The finale:* the 60 s alarm sends every L4 monster to the doors; the rounds saved for L4 (3 packs and what is left from L3) decide whether the last run is a rush or a fight.
+- *Scoring:* worth adding later: shots fired and hit, and rounds left at the exit.
+- *Tuning to revisit once it exists:* the monsters' chase speed against the run speed, the 45 s down time, the sight range, how many monsters B1 needs.
+
+**How it is built (the architecture).**
+- `shared/loot.js` (pure, with tests): lockers and ammo packs per floor, taken once; the same rules in the server and in solo play, like `shared/fuses.js`.
+- Server: relays loot state to the floor (late joiners get it on arrival) and sends a `shot` message only to the host of the shooter's floor; the host resolves it, because the host already runs the monsters. A banish is a position jump in the host's snapshot (clients already snap a monster that moves more than 8 m) plus a `zap` message so every client plays the effect.
+- Client: the held gun (scaled to about 0.55 m, bottom right, a short recoil kick and a cyan flash from the tip), a small cross-hair, a round counter, lockers and packs drawn in code like the fuses, and the other players seen holding it.
+- Monster: a `banish(spot)` method and the placement rule above.
+- Bots: a bot with rounds fires at a chasing monster that is within 12 m, in sight, when its escape margin is under 2 s, and the bait uses it to pull a monster off the runner's way. Then rerun `tools/bots.mjs` and compare downs per floor with and without the gun: the first real test of the idea.
+
+**Build order.** 1. `shared/loot.js`, the server relay, lockers and packs. 2. The held gun, firing, hit and banish. 3. The bots' use of it and the comparison run. 4. Tuning, then scoring.
+
+**Open questions.** Does the owner want the banished monster to flicker out and in visibly (assumed yes) or vanish silently? Is "at least 35 m away and out of sight" the right idea of "another location", or should it be a fixed set of spots? Should a shot ever hurt another player (assumed no: no friendly fire)?
+
 ## Bots for tuning
 
 `node tools/bots.mjs [bots=3] [--timeout=600] [--deaths] [--trail] [--debug]` runs N real game clients (headless browsers, `?bot=1`, the game's own code, no drawing) in one room on a local server and prints a report: time on each floor, downs, revives, stuck moments, seconds fleeing and waiting, tick rate, and each bot's place, time and the alarm left when it got out. Run it locally; it is slow in software rendering. The bots' mind is `tools/bot_brain.mjs`.
