@@ -105,3 +105,40 @@ test("a door being shut is relayed as shut, not open", async () => {
   assert.equal((await b.next(kind("door"))).open, 1);
   await srv.close();
 });
+
+test("fuses: take and slot are relayed to the floor, a floor change or leaving puts a carried fuse back", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R7", "Ann"), b = await join(srv, "R7", "Bob");
+  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"});
+  const first = await a.next(kind("fuses"));                             // entering a gated floor sends its state
+  assert.equal(first.scene, "B1"); assert.ok(first.st.every(f => f.s === 0));
+  await b.next(kind("fuses"));
+  a.send({t: "fuse", a: "take", i: 1});
+  const took = await b.next(m => m.t === "fuses" && m.st[1].s === 1);
+  assert.equal(took.st[1].by, a.id, "Bob sees Ann carrying fuse 1");
+  b.send({t: "fuse", a: "take", i: 1});                                  // already taken
+  b.send({t: "fuse", a: "take", i: 0}); const bobs = await a.next(m => m.t === "fuses" && m.st[0].s === 1);
+  assert.equal(bobs.st[1].by, a.id, "Ann's fuse is still hers");
+  b.send({t: "fuse", a: "drop", x: 3.5, z: -1});
+  assert.deepEqual((await a.next(m => m.t === "fuses" && m.st[0].s === 3)).st[0], {s: 3, x: 3.5, z: -1});
+  a.send({t: "s", scene: "L3"});                                         // Ann walks off the floor carrying fuse 1
+  assert.equal((await b.next(m => m.t === "fuses" && m.st[1].s === 0)).st[1].s, 0, "the fuse went back");
+  a.send({t: "fuse", a: "take", i: 2});                                  // L3 is not gated
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "fuses" && m.st[2].s === 1));
+  await srv.close();
+});
+
+test("fuses: state is kept for the room; leaving releases; junk is ignored", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R8", "Ann"); a.send({t: "s", scene: "L1"}); await a.next(kind("fuses"));
+  a.send({t: "fuse", a: "take", i: 0}); await a.next(m => m.t === "fuses" && m.st[0].s === 1);
+  a.send({t: "fuse", a: "slot"}); await a.next(m => m.t === "fuses" && m.st[0].s === 2);
+  a.send({t: "fuse", a: "take", i: "x"}); a.send({t: "fuse", a: "evil", i: 1}); a.send({t: "fuse", a: "drop", x: NaN, z: 0});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "fuses"), "junk changed nothing");
+  const b = await join(srv, "R8", "Bob"); b.send({t: "s", scene: "L1"});
+  assert.equal((await b.next(kind("fuses"))).st[0].s, 2, "a later joiner sees the slotted fuse");
+  b.send({t: "fuse", a: "take", i: 1}); await a.next(m => m.t === "fuses" && m.st[1].s === 1);
+  b.ws.close(); const back = await a.next(m => m.t === "fuses" && m.st[1].s === 0);
+  assert.equal(back.st[1].s, 0, "Bob left holding a fuse, it went back");
+  await srv.close();
+});

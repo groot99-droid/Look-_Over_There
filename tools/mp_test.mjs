@@ -19,7 +19,7 @@ async function open(name, char) {                                  // joins the 
   return page;
 }
 // wait (up to 40 s: the headless browser renders in software and may run at a few frames a second) for a condition in the page, and record it as a check
-const until = (name, page, fn, arg) => page.waitForFunction(fn, arg, {timeout: 40000}).then(() => check(name, true), () => check(name, false));
+const until = (name, page, fn, arg) => page.waitForFunction(fn, arg, {timeout: 60000, polling: 200}).then(() => check(name, true), () => check(name, false));
 const inGame = p => p.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 180000});
 try {
   const a = await open("Ann", 0), b = await open("Bob", 3);
@@ -47,8 +47,42 @@ try {
   const maxd = Math.max(...A.mons.map((m, i) => Math.hypot(m[0] - B.mons[i][0], m[1] - B.mons[i][1])));
   check("monsters agree across clients", maxd < 1.5, `(max gap ${maxd.toFixed(2)} m)`);
 
-  // B1 only has the stair door, so move both to L1 (127 doors) for the rest
-  await Promise.all([a, b].map(p => p.evaluate(() => window.__game.loadScene("L1"))));
+  // ---- fuses on B1: the stair door stays shut until three fuses are in it
+  const spotsA = await a.evaluate(() => window.__game.FZ.vis.items.map(i => i.home)), spotsB = await b.evaluate(() => window.__game.FZ.vis.items.map(i => i.home));
+  check("three fuses, in the same places on both clients", spotsA.length === 3 && JSON.stringify(spotsA) === JSON.stringify(spotsB), JSON.stringify(spotsA));
+  const lockedAtStart = await a.evaluate(() => { const g = window.__game, d = g.upDoor(); g.openDoor(d, true); return {locked: g.isLocked(d), target: d.target}; });
+  check("the stair door is locked and stays shut without a fuse", lockedAtStart.locked && lockedAtStart.target === 0);
+  const fuseAt = (page, i) => page.evaluate(i => { const g = window.__game, f = g.FZ.st.B1[i], it = g.FZ.vis.items[i]; return f.s === 3 ? [f.x, f.z] : it.home; }, i);
+  const goTo = (page, xz) => page.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);
+  // Bob takes fuse 1 and goes down with it: it drops where he fell
+  await goTo(b, spotsB[1]); await b.keyboard.press("KeyE");
+  await until("Bob carries fuse 1 (and Ann sees the glow)", a, () => { const g = window.__game, f = g.FZ.st.B1[1]; return f.s === 1 && [...g.net.peers.values()][0].carry === true; });
+  await b.evaluate(() => window.__game.die());
+  await until("a downed carrier drops the fuse where he fell", a, () => { const f = window.__game.FZ.st.B1[1]; return f.s === 3 && Number.isFinite(f.x); });
+  await b.evaluate(() => window.__game.revived());
+  // Ann carries all three to the door, one at a time
+  for (let i = 0; i < 3; i++) {
+    await goTo(a, await fuseAt(a, i)); await a.keyboard.press("KeyE");
+    await until(`Ann picks up fuse ${i + 1}`, a, n => window.__game.FZ.st.B1[n].s === 1, i);
+    if (i === 0) { await until("a second client sees who carries it", b, () => window.__game.FZ.st.B1[0].s === 1);
+      check("a carrier cannot take a second fuse", await a.evaluate(() => { const g = window.__game; g.tryFuse(); return g.FZ.st.B1.filter(f => f.s === 1).length === 1; })); }
+    await a.evaluate(() => window.__game.openDoor(window.__game.upDoor(), true));
+    await until(`fuse ${i + 1} is in the door`, a, n => window.__game.FZ.st.B1.filter(f => f.s === 2).length === n + 1, i);
+    if (i < 2) check(`the door is still locked with ${i + 1} fuse(s)`, await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
+  }
+  await until("Bob sees the door powered", b, () => window.__game.FZ.st.B1.every(f => f.s === 2));
+  // a carrier is heard further off, even crouched (checked on whichever client runs the monsters)
+  const hostPage = A.host ? a : b;
+  const noise = await hostPage.evaluate(() => { const g = window.__game, m = g.monsters[0], c = m.cfg;
+    const behind = (d, carry) => ({id: 99, x: m.pos.x + Math.sin(m.yaw) * d, y: m.fy, z: m.pos.z + Math.cos(m.yaw) * d, crouch: true, moving: true, carry});      // behind it, so it cannot see them
+    const run = t => { m.state = "patrol"; m.path = []; m.update(0.01, [t]); return m.state; };
+    return {plain: run(behind(c.hear * 0.6, false)), carrier: run(behind(c.hear * 0.6, true)), farCarrier: run(behind(c.hear * 0.9, true))}; });
+  check("a crouching carrier is heard at 0.75x hearing; a crouching non-carrier is not", noise.plain === "patrol" && noise.carrier === "search" && noise.farCarrier === "patrol", JSON.stringify(noise));
+  // Ann takes the real stair door to L1; Bob is moved there
+  await a.evaluate(() => { const g = window.__game; g.openDoor(g.upDoor(), true); });
+  await a.evaluate(async () => { const g = window.__game; for (let i = 0; i < 40 && g.S.id === "B1"; i++) { g.update(0.05); await new Promise(r => setTimeout(r, 30)); } });
+  await Promise.all([a.waitForFunction(() => window.__game.S.id === "L1" && !window.__game.loading, null, {timeout: 60000}), b.evaluate(() => window.__game.loadScene("L1"))]);
+  check("the powered stair door took Ann to L1", await a.evaluate(() => window.__game.S.id === "L1"));
   await Promise.all([a, b].map(p => p.waitForFunction(() => { const g = window.__game; return g.S.id === "L1" && !g.loading && [...g.net.peers.values()].every(q => q.scene === "L1"); }, null, {timeout: 60000})));
   await sleep(500);
   A = await info(a); B = await info(b);
@@ -73,10 +107,14 @@ try {
   await until("guest sees DOWNED", guest, () => /DOWNED/.test(document.getElementById("death").textContent));
   await until("host sees the guest down", host, () => [...window.__game.net.peers.values()][0].dead === true);
   const body = await host.evaluate(() => { const p = [...window.__game.net.peers.values()][0]; return {dead: p.dead, x: p.tx, z: p.tz}; });
-  await host.evaluate(b => { const g = window.__game; g.P.p.set(b.x + 0.1, g.S.floor + 0.02, b.z); g.P.yaw = Math.PI / 2; }, body);
-  await until("host is offered the revive", host, () => !!window.__game.reviveTarget());
-  // hold E and advance the host's game clock by hand (software rendering is too slow to wait for 4 s of frames)
-  const steps = await host.evaluate(() => { const g = window.__game; g.keys.KeyE = true; let n = 0; while (g.reviveTarget() && n < 400) { g.update(0.05); n++; } g.keys.KeyE = false; return n; });
+  let steps = 0;
+  for (let attempt = 1; attempt <= 3 && steps < 78; attempt++) {
+    await host.evaluate(b => { const g = window.__game; g.P.p.set(b.x, g.S.floor + 0.02, b.z); g.P.v.set(0, 0, 0); g.P.yaw = Math.PI / 2; }, body);
+    await until("host is offered the revive", host, () => !!window.__game.reviveTarget());
+    // hold E and advance the host's game clock by hand (software rendering is too slow to wait for 4 s of frames)
+    steps = await host.evaluate(() => { const g = window.__game; g.keys.KeyE = true; let n = 0; while (g.reviveTarget() && n < 400) { g.update(0.05); n++; } g.keys.KeyE = false; return n; });
+    if (steps < 78) console.log(`WARN revive attempt ${attempt} ended after ${steps} steps`, JSON.stringify(await host.evaluate(() => { const g = window.__game; return {dead: g.dead, loading: g.loading, scene: g.S.id, me: [g.P.p.x, g.P.p.y, g.P.p.z], peers: [...g.net.peers.values()].map(q => [q.scene, q.dead, q.tx, q.ty, q.tz])}; })));
+  }
   check("lifting takes a 4 s hold, not a tap", steps >= 78 && steps <= 90, `(${steps} steps of 0.05 s)`);
   await until("the guest is lifted", guest, () => !window.__game.dead);
   check("the lifted player is briefly safe", await guest.evaluate(() => window.__game.P.imm > 1));
@@ -86,6 +124,8 @@ try {
   await sleep(300);
   const target = await host.evaluate(() => { const m = window.__game.monsters[0]; return [m.pos.x, m.pos.z]; });
   await guest.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); }, target);
+  await until("the host knows where the guest stands, and that it is no longer safe", host, t => { const p = [...window.__game.net.peers.values()][0]; return Math.hypot(p.tx - t[0], p.tz - t[1]) < 0.5 && !p.imm && !p.dead; }, target);
+  await host.evaluate(() => { for (let i = 0; i < 20; i++) window.__game.update(0.05); });        // run the host's monsters by hand rather than wait on its frame rate
   await until("host's monster caught the guest", guest, () => window.__game.dead);
   await until("host sees the guest down, with the scream arrow", host, () => { const g = window.__game; return [...g.net.peers.values()][0].dead === true && !!g.net.alert && document.getElementById("scream").style.display === "block"; });
 

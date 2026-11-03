@@ -24,11 +24,28 @@ The numbers are starting points, not tuned.
 - **Monster count scales** (planned): 3 per floor for 1–2 players, 4 for 3–5, 5 for 6–8.
 - **Floor reset** (planned): if everyone on a floor is down at once, its fuses reset and you restart at the stairs.
 
-## Progress (planned)
+## Progress: one puzzle per floor
 
-- **Fuses:** each stair door needs 3 fuses, found at random walkable spots. The carrier is louder (hearing radius ×1.5). Anyone can slot a fuse; the pool is shared.
-- **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map.
-- **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down.
+The stair door at the top of each floor stays locked until that floor's puzzle is solved. The order the owner chose:
+
+| Floor | Puzzle | Status |
+|---|---|---|
+| B1 | **Fuses:** 3 lie around the floor; carry them one at a time to the stair door | **built** |
+| L1 | **Switches:** two far-apart switches pressed together; the loud one draws the monsters off | planned (L1 uses fuses until this exists) |
+| L2 | **Keypad:** a 4-digit code, each digit found at a different place, shared by the team | planned (L2 uses fuses until this exists) |
+| L3 | Break floor, no monsters. A **fuse box** here is an optional shortcut that powers L4's doors early | planned |
+| L4 | **The trick:** the doors are shut unless the L3 box was thrown; otherwise the power switch is on the far side of the room, with the monsters | planned |
+
+### Fuses (built)
+- Three fuses per gated floor, in the same places for everyone (seeded, in the floor's main walkable area, away from the door and from where monsters start). Press E / X within 1.5 m to pick one up; E / X at the door puts it in. One carried at a time. Three lamps above the door go from red to green.
+- Priority of E / X: lift a downed teammate, then pick up a fuse, then the door.
+- A carrier is easier to find: monsters hear a carrier 1.5x as far, and a crouching carrier is no longer silent (heard at 0.75x) and is seen from 0.75x instead of 0.5x. Other players see a glow round a carrier.
+- A downed carrier drops the fuse where they fell. A carrier who leaves the floor or the room puts it back where it started. A powered door stays powered.
+- State is held by the server per room (`shared/fuses.js` is the one rule set, used by the server and by solo play); a late joiner sees the current state.
+- The art is drawn in code for now; an optional `models/fuse.glb` replaces it (`docs/MODELS.md` has the Meshy prompts and the budget).
+
+- **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map. (planned)
+- **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down. (planned)
 
 ## Roles that emerge (planned)
 
@@ -39,7 +56,7 @@ No assigned classes. The camera watcher matters because monsters show on the han
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses, gated stairs, fuse counter
+4. Fuses and the gated stair door: **built** (B1; L1 and L2 reuse it until their own puzzles exist). Then the switch puzzle (L1), the keypad (L2), and the L3 box / L4 power trick.
 5. Monsters on the map only through cameras
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring

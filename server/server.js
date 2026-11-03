@@ -8,9 +8,10 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {WebSocketServer} from "ws";
+import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SERVE = new Set(["index.html", "world", "monsters", "characters"]);            // nothing else in the repo is public
+const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript"};
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
 
@@ -34,6 +35,14 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
   const broadcast = (room, msg, except, scene) => {
     for (const p of room.players.values()) if (p.id !== except && (scene === undefined || p.scene === scene)) send(p, msg);
   };
+  // fuses: one state array per gated floor, kept for the life of the room. Rules are in shared/fuses.js; this only relays them to the floor's players.
+  const floorFuses = (room, scene) => room.fuses[scene] ||= newFloor();
+  const sendFuses = (room, scene) => broadcast(room, {t: "fuses", scene, st: floorFuses(room, scene)}, undefined, scene);
+  function releaseFuse(room, id, scene) {                              // a carrier who leaves a floor or the room puts the fuse back
+    if (!GATED.includes(scene)) return;
+    const next = fuseAct(floorFuses(room, scene), id, {a: "release"});
+    if (next) { room.fuses[scene] = next; sendFuses(room, scene); }
+  }
   // the waiting room: everyone readies, then a countdown, then the round starts for the whole room (a round runs until the room empties)
   const lobbyMsg = room => ({t: "lobby", phase: room.phase, countdownMs: room.timer ? countdownMs : null,
     players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char, ready: p.ready}))});
@@ -67,7 +76,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -88,7 +97,18 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
           const scene = typeof m.scene === "string" ? m.scene.slice(0, 8) : null;
           const was = me.scene; me.scene = scene;
           broadcast(room, {...m, id: me.id}, me.id, scene);
-          if (was !== scene) { broadcast(room, {t: "p", id: me.id, scene}, me.id); elect(room); }
+          if (was !== scene) {
+            broadcast(room, {t: "p", id: me.id, scene}, me.id); elect(room);
+            if (was) releaseFuse(room, me.id, was);
+            if (GATED.includes(scene)) send(me, {t: "fuses", scene, st: floorFuses(room, scene)});
+          }
+          break;
+        }
+        case "fuse": {                                                // take / slot / drop a fuse on the floor you are on
+          const scene = me.scene;
+          if (!GATED.includes(scene) || !["take", "slot", "drop"].includes(m.a)) break;
+          const next = fuseAct(floorFuses(room, scene), me.id, {a: m.a, i: m.i, x: m.x, z: m.z});
+          if (next) { room.fuses[scene] = next; sendFuses(room, scene); }
           break;
         }
         case "m":                                                     // monsters: only the scene's host may send them
@@ -111,6 +131,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
     });
     ws.on("close", () => {
       if (!room || !me) return;
+      releaseFuse(room, me.id, me.scene);
       room.players.delete(me.id);
       broadcast(room, {t: "leave", id: me.id});
       if (!room.players.size) { clearTimeout(room.timer); rooms.delete(room.code); } else { elect(room); lobbyChanged(room); }
