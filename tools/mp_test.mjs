@@ -87,7 +87,7 @@ try {
   await sleep(500);
   A = await info(a); B = await info(b);
   check("both on L1 with one host", A.scene === "L1" && B.scene === "L1" && A.host !== B.host && A.peers[0]?.scene === "L1" && B.peers[0]?.scene === "L1", JSON.stringify({A: [A.scene, A.host, A.peers[0]?.scene], B: [B.scene, B.host, B.peers[0]?.scene]}));
-  const [host, guest] = A.host ? [a, b] : [b, a];
+  let [host, guest] = A.host ? [a, b] : [b, a];
 
   // ---- L1 switches: flipped one at a time by different players, in any order; each flip draws the monsters
   const swSpots = await a.evaluate(() => window.__game.FZ.vis.sws.map(i => i.home)), swSpotsB = await b.evaluate(() => window.__game.FZ.vis.sws.map(i => i.home));
@@ -101,6 +101,33 @@ try {
   check("the host's monsters went to look at the clunk", await host.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
   await goSw(host, swSpots[0]); await host.keyboard.press("KeyE");
   await until("the host flips the other switch; the guest sees the door powered", guest, () => { const st = window.__game.SW.st.L1; return !!st && st.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor()); });
+
+  // ---- L2 keypad: notes read by different players are shared; the code stays on the server; a wrong code locks it for everyone
+  await Promise.all([a, b].map(pg => pg.evaluate(() => window.__game.loadScene("L2"))));
+  await Promise.all([a, b].map(pg => pg.waitForFunction(() => { const g = window.__game; return g.S.id === "L2" && !g.loading && [...g.net.peers.values()].every(q => q.scene === "L2") && !!g.KP.st.L2; }, null, {timeout: 60000})));
+  A = await info(a); B = await info(b); [host, guest] = A.host ? [a, b] : [b, a];
+  const noteSpotsA = await a.evaluate(() => window.__game.FZ.vis.notes.map(n => n.home)), noteSpotsB = await b.evaluate(() => window.__game.FZ.vis.notes.map(n => n.home));
+  check("four notes, in the same places on both clients", noteSpotsA.length === 4 && JSON.stringify(noteSpotsA) === JSON.stringify(noteSpotsB));
+  check("the L2 stair door starts locked", await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
+  const kpRoom = srv.rooms.get("TEST").keypads.L2, code = kpRoom.code;                  // the test peeks at the server; no client has the code
+  check("no client holds the code", await a.evaluate(() => !window.__game.KP.local.L2) && await b.evaluate(() => !window.__game.KP.local.L2));
+  await goSw(guest, noteSpotsA[0]); await guest.keyboard.press("KeyE");
+  await goSw(host, noteSpotsA[3]); await host.keyboard.press("KeyE");
+  await until("each player sees both notes that were read", host, c => { const f = window.__game.KP.st.L2.found; return f[0] === c[0] && f[3] === c[3] && f[1] === null && f[2] === null; }, code);
+  await until("the other player sees them too (and still not the rest)", guest, c => { const f = window.__game.KP.st.L2.found; return f[0] === c[0] && f[3] === c[3] && f[1] === null && f[2] === null; }, code);
+  const wrongCode = code.map(d => (d + 1) % 10).join("");
+  await host.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0], d = g.upDoor(); m.pos.set(d.cx + 8, m.fy, d.cz); }, [0, 0]);
+  await guest.evaluate(w => window.__game.kpAct({a: "try", code: w}), wrongCode);
+  await until("a wrong code locks the keypad for both", host, () => { const v = window.__game.KP.st.L2; return v.fails === 1 && v.lockMs > 7000; });
+  await until("the guest sees the lock too", guest, () => window.__game.KP.st.L2.fails === 1);
+  check("the wrong code sent the host's monster to the door", await host.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
+  await host.evaluate(c => window.__game.kpAct({a: "try", code: c}), code.join(""));
+  await new Promise(r => setTimeout(r, 600));
+  check("the right code does nothing while it is locked", !srv.rooms.get("TEST").keypads.L2.solved);
+  srv.rooms.get("TEST").keypads.L2.lockUntil = 0;                                       // skip the 8 s wait
+  await host.evaluate(c => window.__game.kpAct({a: "try", code: c}), code.join(""));
+  await until("the right code opens the door for both", guest, () => window.__game.KP.st.L2.solved && !window.__game.isLocked(window.__game.upDoor()));
+  await until("and for the host", host, () => window.__game.KP.st.L2.solved);
 
   // doors: opened by the guest, open for the host; then shut by the guest, shut for the host
   const door = await guest.evaluate(() => { const g = window.__game, d = g.doors.find(x => !x.link && x.target === 0); if (!d) return null; g.openDoor(d, true); return d.d.name; });

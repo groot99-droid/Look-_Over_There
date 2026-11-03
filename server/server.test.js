@@ -130,12 +130,12 @@ test("fuses: take and slot are relayed to the floor, a floor change or leaving p
 
 test("fuses: state is kept for the room; leaving releases; junk is ignored", async () => {
   const srv = await createServer();
-  const a = await join(srv, "R8", "Ann"); a.send({t: "s", scene: "L2"}); await a.next(kind("fuses"));
+  const a = await join(srv, "R8", "Ann"); a.send({t: "s", scene: "B1"}); await a.next(kind("fuses"));
   a.send({t: "fuse", a: "take", i: 0}); await a.next(m => m.t === "fuses" && m.st[0].s === 1);
   a.send({t: "fuse", a: "slot"}); await a.next(m => m.t === "fuses" && m.st[0].s === 2);
   a.send({t: "fuse", a: "take", i: "x"}); a.send({t: "fuse", a: "evil", i: 1}); a.send({t: "fuse", a: "drop", x: NaN, z: 0});
   assert.ok(!(await a.quiet(150)).some(m => m.t === "fuses"), "junk changed nothing");
-  const b = await join(srv, "R8", "Bob"); b.send({t: "s", scene: "L2"});
+  const b = await join(srv, "R8", "Bob"); b.send({t: "s", scene: "B1"});
   assert.equal((await b.next(kind("fuses"))).st[0].s, 2, "a later joiner sees the slotted fuse");
   b.send({t: "fuse", a: "take", i: 1}); await a.next(m => m.t === "fuses" && m.st[1].s === 1);
   b.ws.close(); const back = await a.next(m => m.t === "fuses" && m.st[1].s === 0);
@@ -157,5 +157,51 @@ test("switches: flipped one at a time on L1, kept for the room, refused elsewher
   b.send({t: "s", scene: "L1"}); assert.equal((await b.next(kind("switches"))).st[1].on, true, "Bob arrives and sees Ann's flip");
   b.send({t: "switch", i: 0}); const done = await a.next(m => m.t === "switches" && m.st[0].on);
   assert.ok(done.st.every(s => s.on), "both on: done");
+  await srv.close();
+});
+
+// a rng that makes the code 1 2 3 4
+const code1234 = (() => { let k = 0; return () => ((k++ % 4) + 1 + 0.5) / 10; })();
+test("keypad: digits are shown to the team as they are found, and the code never leaves the server", async () => {
+  const srv = await createServer({rng: code1234});
+  const a = await join(srv, "R10", "Ann"), b = await join(srv, "R10", "Bob");
+  a.send({t: "s", scene: "L2"}); b.send({t: "s", scene: "L2"});
+  const first = await a.next(kind("keypad")); assert.deepEqual(first.found, [null, null, null, null]); assert.equal(first.solved, false);
+  await b.next(kind("keypad"));                                                       // Bob's own arrival state
+  a.send({t: "keypad", a: "find", i: 2});
+  const seen = await b.next(m => m.t === "keypad" && m.found[2] !== null);
+  assert.deepEqual(seen.found, [null, null, 3, null], "Bob sees the digit Ann read");
+  a.send({t: "keypad", a: "find", i: 2}); a.send({t: "keypad", a: "find", i: 9});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "keypad"), "reading it again, or a note that does not exist, changes nothing");
+  const everything = JSON.stringify([...a.inbox, ...b.inbox, seen, first]);
+  assert.ok(!everything.includes('"code"'), "no message carries the code");
+  const late = await join(srv, "R10", "Cy"); late.send({t: "s", scene: "L2"});
+  assert.deepEqual((await late.next(kind("keypad"))).found, [null, null, 3, null], "a late joiner sees what was found");
+  await srv.close();
+});
+test("keypad: a wrong code locks it for everyone; the right one opens the door", async () => {
+  const srv = await createServer({rng: code1234});
+  const a = await join(srv, "R11", "Ann"), b = await join(srv, "R11", "Bob");
+  a.send({t: "s", scene: "L2"}); b.send({t: "s", scene: "L2"}); await a.next(kind("keypad")); await b.next(kind("keypad"));
+  a.send({t: "keypad", a: "try", code: "9999"});
+  const bad = await b.next(m => m.t === "keypad" && m.fails === 1);
+  assert.ok(bad.lockMs > 7000 && bad.lockMs <= 8000, "the lock runs for about 8 s");
+  b.send({t: "keypad", a: "try", code: "1234"});                                  // right code, but it is locked
+  const told = await b.next(kind("keypad")); assert.equal(told.solved, false); assert.ok(told.lockMs > 0, "Bob is told how long it has left");
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "keypad" && m.solved), "and it did not open for anyone");
+  b.send({t: "keypad", a: "try", code: "12"}); b.send({t: "keypad", a: "try", code: "abcd"});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "keypad" && m.fails > 1), "malformed input is not a fail");
+  await srv.close();
+});
+test("keypad: only on a keypad floor, and the right code solves it", async () => {
+  const srv = await createServer({rng: code1234});
+  const a = await join(srv, "R12", "Ann"); a.send({t: "s", scene: "B1"}); await a.next(kind("fuses"));
+  a.send({t: "keypad", a: "find", i: 0}); a.send({t: "keypad", a: "try", code: "1234"});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "keypad"), "B1 has no keypad");
+  a.send({t: "s", scene: "L2"}); await a.next(kind("keypad"));
+  a.send({t: "keypad", a: "try", code: "1234"});
+  const done = await a.next(m => m.t === "keypad" && m.solved); assert.equal(done.fails, 0);
+  a.send({t: "keypad", a: "find", i: 1});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "keypad"), "an open door takes no more notes");
   await srv.close();
 });

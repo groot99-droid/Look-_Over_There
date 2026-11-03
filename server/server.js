@@ -10,13 +10,14 @@ import {fileURLToPath} from "node:url";
 import {WebSocketServer} from "ws";
 import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
+import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript"};
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
 
-export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) {
+export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random} = {}) {
   const rooms = new Map();                                             // code -> {players, hosts: {scene: id}, seq, phase: "lobby" | "playing", timer}
   const httpServer = http.createServer((req, res) => {
     const url = new URL(req.url, "http://x");
@@ -47,6 +48,10 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
   // switches: the same idea for the floors that have them (state per floor, kept for the life of the room)
   const floorSwitches = (room, scene) => room.switches[scene] ||= newSwitches();
   const sendSwitches = (room, scene) => broadcast(room, {t: "switches", scene, st: floorSwitches(room, scene)}, undefined, scene);
+  // keypads: the code is made here and never leaves; players only get the digits that have been found
+  const floorKeypad = (room, scene) => room.keypads[scene] ||= newKeypad(rng);
+  const keypadMsg = (room, scene) => ({t: "keypad", scene, ...keypadView(floorKeypad(room, scene), Date.now())});
+  const sendKeypad = (room, scene) => broadcast(room, keypadMsg(room, scene), undefined, scene);
   // the waiting room: everyone readies, then a countdown, then the round starts for the whole room (a round runs until the room empties)
   const lobbyMsg = room => ({t: "lobby", phase: room.phase, countdownMs: room.timer ? countdownMs : null,
     players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char, ready: p.ready}))});
@@ -80,7 +85,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -106,6 +111,18 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
             if (was) releaseFuse(room, me.id, was);
             if (GATED.includes(scene)) send(me, {t: "fuses", scene, st: floorFuses(room, scene)});
             if (SWITCH_FLOORS.includes(scene)) send(me, {t: "switches", scene, st: floorSwitches(room, scene)});
+            if (KEYPAD_FLOORS.includes(scene)) send(me, keypadMsg(room, scene));
+          }
+          break;
+        }
+        case "keypad": {                                              // read a note ("find") or type the code ("try") on the floor you are on
+          const scene = me.scene;
+          if (!KEYPAD_FLOORS.includes(scene)) break;
+          if (m.a === "find") { const next = keypadFind(floorKeypad(room, scene), m.i); if (next) { room.keypads[scene] = next; sendKeypad(room, scene); } }
+          else if (m.a === "try") {
+            const r = tryCode(floorKeypad(room, scene), m.code, Date.now());
+            if (r.st) { room.keypads[scene] = r.st; sendKeypad(room, scene); }
+            else if (r.locked) send(me, keypadMsg(room, scene));       // tell them how long the lock has left
           }
           break;
         }

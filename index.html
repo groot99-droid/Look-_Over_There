@@ -19,6 +19,16 @@
   #lobby small{color:#7a7a6a}
   #l-err{color:#d46a5a;min-height:1.4em}
   #hud{position:fixed;left:12px;top:10px;color:#9a9a8a;font:12px/1.5 system-ui,sans-serif;letter-spacing:.06em;z-index:1;pointer-events:none;text-shadow:0 0 4px #000}
+  #kp{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:7;font-family:system-ui,sans-serif;color:#d8d8c4}
+  #kp-box{background:#15161a;border:1px solid #3a3a32;border-radius:6px;padding:18px 20px;width:min(300px,86vw);display:flex;flex-direction:column;gap:10px;text-align:center}
+  #kp-title{letter-spacing:.2em;font-weight:700;color:#e0a040}
+  #kp-code{font:700 30px/1.2 ui-monospace,monospace;letter-spacing:.25em;background:#0a1410;color:#7dff9a;border-radius:4px;padding:8px 0}
+  #kp-found{font-size:13px;color:#a8a898}
+  #kp-note{min-height:1.3em;color:#e0705a;font-weight:600}
+  #kp-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  #kp-pad button,#kp-close{font:700 18px system-ui,sans-serif;padding:12px 0;border:1px solid #3a3a32;background:#202127;color:#e6e6d6;border-radius:4px;cursor:pointer}
+  #kp-pad button:active{background:#2e3038}
+  #kp-close{font-size:13px;padding:8px 0;color:#9a9a8a}
   #prompt{position:fixed;left:50%;bottom:22%;transform:translateX(-50%);color:#e6e6d0;font:600 15px/1.4 system-ui,sans-serif;letter-spacing:.05em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;text-align:center}
   #fusehud{position:fixed;right:14px;top:10px;color:#e0c060;font:700 12px/1.5 system-ui,sans-serif;letter-spacing:.1em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 4px #000}
   #toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.06em;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s;text-shadow:0 0 6px #000;text-align:center}
@@ -46,6 +56,7 @@
 <div id="hud"></div>
 <div id="toast"></div>
 <div id="prompt"></div>
+<div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
 <div id="fusehud"></div>
 <div id="scream"><i>▲</i><span></span></div>
 <div id="revive"><span></span><b><span></span></b></div>
@@ -70,6 +81,7 @@ import {DRACOLoader} from "three/addons/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
+import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
 
 const MON_URL = "world/monsters.json";
 // one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
@@ -145,7 +157,7 @@ function disposeTree(root) {
 async function loadGlb(url) { return new Promise((res, rej) => loader.load(url, res, undefined, rej)); }
 async function loadScene(id, arrival) {
   if (!net.on && S.id && GATED.includes(S.id) && FZ.st[S.id]) { const n = fuseReduce(FZ.st[S.id], net.id, {a: "release"}); if (n) FZ.st[S.id] = n; }     // solo: a fuse you carry off the floor goes back (a room's server does this)
-  loading = true; pendingLink = null; devOn.v = false; net.snap = null;
+  loading = true; pendingLink = null; devOn.v = false; net.snap = null; closeKeypad();
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
   monsters.forEach(m => m.dispose()); monsters.length = 0;
@@ -179,7 +191,8 @@ async function loadScene(id, arrival) {
   spawnMonsters();
   if (!net.on && GATED.includes(id)) FZ.st[id] ||= newFloor();
   if (!net.on && SWITCH_FLOORS.includes(id)) SW.st[id] ||= newSwitches();
-  if (net.on) delete SW.st[id];                                              // in a room the server sends the floor's state on arrival; that first state is not news
+  if (!net.on && KEYPAD_FLOORS.includes(id)) { KP.local[id] ||= newKeypad(); setKeypad(id, kpView(KP.local[id], Date.now())); }
+  if (net.on) { delete SW.st[id]; delete KP.st[id]; }                                              // in a room the server sends the floor's state on arrival; that first state is not news
   buildFuseVisuals();
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
@@ -555,10 +568,18 @@ function useDoor() {
   if (best) { if (best.target === 0) openDoor(best, true); else closeDoor(best); }
 }
 addEventListener("keydown", e => {
+  if (KPUI.open) {                                                           // the keypad takes the keyboard while it is up
+    e.preventDefault();
+    if (/^(Digit|Numpad)\d$/.test(e.code)) kpPress(e.code.slice(-1));
+    else if (e.code === "Backspace") { KPUI.buf = KPUI.buf.slice(0, -1); renderKp(); }
+    else if (e.code === "Enter" || e.code === "NumpadEnter") kpPress("OK");
+    else if (e.code === "Escape" || e.code === "KeyE") closeKeypad();
+    return;
+  }
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
   if (e.repeat || dead) return;
-  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch()) useDoor();
+  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote()) useDoor();
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyQ") cycleCam(-1);
@@ -580,7 +601,7 @@ function pad() {
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
-    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
+    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
@@ -594,12 +615,16 @@ const FZ = {st: {}, vis: null};
 const fz = () => FZ.st[S.id] || (GATED.includes(S.id) ? newFloor() : null);
 const upDoor = () => doors.find(d => d.link && /_up$/.test(d.d.name));
 const SW = {st: {}};
+const KP = {st: {}, local: {}};                                           // st: what the floor shows (found digits, solved, fails, lock); local: the real code, solo only
+const KPUI = {open: false, buf: ""};
+const kp = () => KP.st[S.id] || (KEYPAD_FLOORS.includes(S.id) ? {found: Array(CODE_LEN).fill(null), solved: false, fails: 0, lockMs: 0, until: 0} : null);
 const sw = () => SW.st[S.id] || (SWITCH_FLOORS.includes(S.id) ? newSwitches() : null);
-const isLocked = dr => !!(dr.link && /_up$/.test(dr.d.name) && ((GATED.includes(S.id) && !unlocked(fz())) || (SWITCH_FLOORS.includes(S.id) && !swDone(sw()))));
+const isLocked = dr => !!(dr.link && /_up$/.test(dr.d.name) && ((GATED.includes(S.id) && !unlocked(fz())) || (SWITCH_FLOORS.includes(S.id) && !swDone(sw())) || (KEYPAD_FLOORS.includes(S.id) && !kp().solved)));
 // what this floor asks for, if anything: fuses or switches, how many are needed and how many are done
 function puzzle() {
   if (GATED.includes(S.id)) { const st = fz(); return {kind: "FUSES", need: NEED, count: slotted(st), done: unlocked(st)}; }
   if (SWITCH_FLOORS.includes(S.id)) { const st = sw(); return {kind: "SWITCHES", need: NEED_SW, count: swCount(st), done: swDone(st)}; }
+  if (KEYPAD_FLOORS.includes(S.id)) { const v = kp(); return {kind: "CODE", need: CODE_LEN, count: v.solved ? CODE_LEN : foundCount(v), done: v.solved, label: "CODE " + v.found.map(d => d === null ? "_" : d).join(" ")}; }
   return null;
 }
 const myCarry = () => { const st = fz(); return st ? carrying(st, net.id) : -1; };
@@ -614,6 +639,7 @@ function fuseAct(msg) {
   const n = fuseReduce(fz(), net.id, msg); if (n) setFuses(S.id, n);
 }
 function doorLocked() {
+  if (KEYPAD_FLOORS.includes(S.id)) { openKeypad(); return; }
   if (SWITCH_FLOORS.includes(S.id)) { toast(`The door has no power: ${swCount(sw())} of ${NEED_SW} switches flipped`); return; }
   if (myCarry() >= 0) fuseAct({a: "slot"});
   else toast(`The door has no power: ${slotted(fz())} of ${NEED} fuses`);
@@ -654,6 +680,7 @@ function floorSpots(count, seedBase, tiers) {
   return out;
 }
 const fuseSpots = () => floorSpots(NEED, 9100, [[12, 10, 5], [7, 5, 3], [3, 2, 0]]);
+const keypadSpots = () => floorSpots(CODE_LEN, 9700, [[14, 8, 5], [8, 5, 3], [4, 2, 0]]);
 const switchSpots = () => floorSpots(NEED_SW, 9500, [[25, 8, 6], [14, 5, 3], [6, 2, 0]]);            // far apart, so reaching both is a trip
 function glowTexture() {
   const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), r = g.createRadialGradient(32, 32, 2, 32, 32, 32);
@@ -697,16 +724,34 @@ function switchMesh(facing) {
   useModel(o, "switch", 1.2);
   return o;
 }
+// a memo on a stand (placeholder drawn in code)
+function noteMesh() {
+  const o = new THREE.Group(), art = new THREE.Group(); o.add(art);
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(.08, .7, .08), new THREE.MeshBasicMaterial({color: 0x4a4a46})); stand.position.y = .35;
+  const paper = new THREE.Mesh(new THREE.BoxGeometry(.3, .38, .02), new THREE.MeshBasicMaterial({color: 0xf2ecd8})); paper.position.y = .88; paper.rotation.x = -0.25;
+  const ink = new THREE.MeshBasicMaterial({color: 0x555048});
+  for (let k = 0; k < 4; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(.2 - (k % 2) * .05, .02, .005), ink); l.position.set(0, .95 - k * .07, .013); l.rotation.x = -0.25; art.add(l); }
+  art.add(stand, paper); o.userData.art = art; o.userData.paper = paper;
+  const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xcfe6ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); sp.position.y = .9; o.add(sp); return sp; };
+  o.userData.halo = mk(0.8, 0.8, 0.6); o.userData.beacon = mk(0.3, 2.2, 0.3);
+  return o;
+}
 function buildFuseVisuals() {
   FZ.vis = null; const pz = puzzle(); if (!pz || !S.root) return;
   const g = new THREE.Group(), dr = upDoor(), lamps = [];
   const items = GATED.includes(S.id) ? fuseSpots().map(home => { const o = fuseMesh(); g.add(o); return {home, o}; }) : [];
   const sws = SWITCH_FLOORS.includes(S.id) ? switchSpots().map(home => { const o = switchMesh(dr ? Math.atan2(dr.cx - home[0], dr.cz - home[1]) : 0); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; }) : [];
+  const notes = KEYPAD_FLOORS.includes(S.id) ? keypadSpots().map(home => { const o = noteMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; }) : [], pan = [];
+  if (dr && KEYPAD_FLOORS.includes(S.id)) for (const side of [1, -1]) {                  // a keypad panel on each face of the wall, beside the door
+    const body = new THREE.Mesh(new THREE.BoxGeometry(.3, .46, .06), new THREE.MeshBasicMaterial({color: 0x2c2f33})), lcd = new THREE.Mesh(new THREE.BoxGeometry(.2, .09, .07), new THREE.MeshBasicMaterial({color: 0xe0a030}));
+    for (const m of [body, lcd]) { m.position.set(dr.cx + dr.dir[0] * .95 - dr.dir[1] * side * .16, dr.cy + 1.25, dr.cz + dr.dir[1] * .95 + dr.dir[0] * side * .16); m.rotation.y = dr.th; g.add(m); }
+    lcd.position.y += .12; lcd.position.x -= dr.dir[1] * side * .01; lcd.position.z += dr.dir[0] * side * .01; pan.push(lcd);
+  }
   if (dr) for (let i = 0; i < pz.need; i++) for (const side of [1, -1]) {                     // on both faces of the door
-    const m = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, .08), new THREE.MeshBasicMaterial({color: 0xaa2020})), off = (i - 1) * .3;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, .08), new THREE.MeshBasicMaterial({color: 0xaa2020})), off = (i - (pz.need - 1) / 2) * .3;
     m.position.set(dr.cx + dr.dir[0] * off - dr.dir[1] * side * .2, dr.cy + 1.8, dr.cz + dr.dir[1] * off + dr.dir[0] * side * .2); m.rotation.y = dr.th; m.userData.lamp = i; g.add(m); lamps.push(m);
   }
-  S.root.add(g); FZ.vis = {items, lamps, sws};                                  // inside the scene's root, so it is disposed with the floor
+  S.root.add(g); FZ.vis = {items, lamps, sws, notes, pan};                                  // inside the scene's root, so it is disposed with the floor
 }
 function animateFuses(t) {
   const v = FZ.vis, st = fz(), pz = puzzle(); if (!v || !pz) { carryMesh.visible = false; return; }
@@ -716,6 +761,12 @@ function animateFuses(t) {
     u.halo.material.color.setHex(on ? 0x55ee66 : 0x40c8ff); u.beacon.material.color.setHex(on ? 0x55ee66 : 0x40c8ff);
     u.halo.material.opacity = (on ? 0.25 : 0.6) * k; u.beacon.material.opacity = (on ? 0.1 : 0.3) * k;
   });
+  const kv = kp();
+  v.notes.forEach((it, i) => {                                             // notes: dim once read, glow fades as you come close
+    const read = !!(kv && kv.found[i] !== null), u = it.o.userData, d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.paper.material.color.setHex(read ? 0x8a8678 : 0xf2ecd8); u.halo.material.opacity = (read ? 0 : 0.6) * k; u.beacon.material.opacity = (read ? 0 : 0.3) * k;
+  });
+  if (kv) v.pan.forEach(m => m.material.color.setHex(kv.solved ? 0x44dd55 : (kv.until > performance.now() ? 0xdd3030 : 0xe0a030)));
   if (st) v.items.forEach((it, i) => {
     const f = st[i], here = f && (f.s === 0 || f.s === 3); it.o.visible = !!here; if (!here) return;
     const [x, z] = f.s === 3 ? [f.x, f.z] : it.home;
@@ -756,20 +807,77 @@ function switchFlipped(k) {
   const it = FZ.vis && FZ.vis.sws[k]; if (!it || !net.host()) return;
   for (const m of monsters) if (Math.hypot(m.pos.x - it.home[0], m.pos.z - it.home[1]) < 40) m.alert(it.home[0], it.home[1]);
 }
+function nearNote() {
+  const v = FZ.vis, k = kp(); if (!v || !k || k.solved || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return -1;
+  let best = -1, bd = 1.5;
+  v.notes.forEach((it, i) => { if (k.found[i] !== null) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function kpAct(msg) {
+  if (!KEYPAD_FLOORS.includes(S.id)) return;
+  if (net.on) { net.send({t: "keypad", a: msg.a, i: msg.i, code: msg.code}); return; }       // the server answers with what the floor may see
+  const st = KP.local[S.id] ||= newKeypad(), now = Date.now();
+  if (msg.a === "find") { const n = kpFind(st, msg.i); if (n) { KP.local[S.id] = n; setKeypad(S.id, kpView(n, now)); } }
+  else if (msg.a === "try") { const r = tryCode(st, msg.code, now); if (r.st) { KP.local[S.id] = r.st; setKeypad(S.id, kpView(r.st, now)); } else if (r.locked) setKeypad(S.id, kpView(st, now)); }
+}
+function tryNote() { const i = nearNote(); if (i < 0) return false; kpAct({a: "find", i}); return true; }
+function setKeypad(scene, v) {
+  const old = KP.st[scene]; v.until = performance.now() + v.lockMs; KP.st[scene] = v;       // `until`: when the lock ends, by this page's clock
+  if (scene === S.id && old) {                                                              // the first state you get on arriving is not news
+    v.found.forEach((d, i) => { if (d !== null && old.found[i] === null) toast(`Note ${i + 1} of ${CODE_LEN} says: ${d}`); });
+    if (v.fails > old.fails) keypadFailed();
+    if (v.solved && !old.solved) { toast("The keypad beeps. The door unlocks."); closeKeypad(); }
+  }
+  if (scene === S.id) renderKp();
+}
+// a wrong code is loud: monsters near the door come to look (the floor's host runs them)
+function keypadFailed() {
+  toast("Wrong code. The keypad locks for a moment.");
+  const dr = upDoor(); if (!dr || !net.host()) return;
+  for (const m of monsters) if (Math.hypot(m.pos.x - dr.cx, m.pos.z - dr.cz) < 40) m.alert(dr.cx, dr.cz);
+}
+function openKeypad() {
+  if (!KEYPAD_FLOORS.includes(S.id) || KPUI.open || dead || loading || kp().solved) return;
+  KPUI.open = true; KPUI.buf = ""; for (const k in keys) keys[k] = false;
+  document.exitPointerLock?.(); $("kp").style.display = "flex"; renderKp();
+}
+function closeKeypad() { KPUI.open = false; $("kp").style.display = "none"; }
+function renderKp() {
+  if (!KPUI.open) return;
+  const v = kp(), lock = Math.max(0, Math.ceil((v.until - performance.now()) / 1000));
+  $("kp-found").textContent = "Notes found: " + v.found.map(d => d === null ? "_" : d).join(" ");
+  $("kp-code").textContent = Array.from({length: CODE_LEN}, (_, i) => KPUI.buf[i] ?? "•").join(" ");
+  $("kp-note").textContent = lock > 0 ? `Locked: ${lock} s` : "";
+}
+function kpPress(k) {
+  if (!KPUI.open) return;
+  if (k === "C") KPUI.buf = ""; else if (k === "OK") kpSubmit(); else if (KPUI.buf.length < CODE_LEN) KPUI.buf += k;
+  renderKp();
+}
+function kpSubmit() {
+  const v = kp();
+  if (KPUI.buf.length !== CODE_LEN) { toast(`The code has ${CODE_LEN} digits`); return; }
+  if (v.until > performance.now()) { toast("The keypad is still locked"); return; }
+  kpAct({a: "try", code: KPUI.buf}); KPUI.buf = "";
+}
+$("kp-pad").innerHTML = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "OK"].map(k => `<button type="button" data-k="${k}">${k}</button>`).join("");
+$("kp-pad").onclick = e => { const b = e.target.closest("button"); if (b) kpPress(b.dataset.k); };
+$("kp-close").onclick = closeKeypad;
 function tryFuse() { const i = nearFuse(); if (i < 0) return false; fuseAct({a: "take", i}); return true; }
 function updatePrompt() {
   const el = $("prompt"), hud = $("fusehud"), pz = puzzle(); let msg = "";
   if (pz && !dead && !loading && !reviveTarget()) {
     if (nearFuse() >= 0) msg = "Press E to pick up the fuse";
     else if (nearSwitch() >= 0) msg = "Press E to flip the switch";
+    else if (nearNote() >= 0) msg = "Press E to read the note";
     else {
       const dr = upDoor();
       if (dr && isLocked(dr) && Math.hypot(dr.cx - P.p.x, dr.cz - P.p.z) < 2.4)
-        msg = pz.kind === "FUSES" ? (myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${pz.count} of ${pz.need} fuses`) : `The door has no power: ${pz.count} of ${pz.need} switches flipped`;
+        msg = pz.kind === "CODE" ? "Press E to use the keypad" : pz.kind === "FUSES" ? (myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${pz.count} of ${pz.need} fuses`) : `The door has no power: ${pz.count} of ${pz.need} switches flipped`;
     }
   }
   el.textContent = msg; el.style.display = msg ? "block" : "none";
-  if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : `${pz.kind} ${pz.count}/${pz.need}` + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
+  if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
 }
 
 // ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
@@ -861,6 +969,7 @@ function onNet(m) {
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
+    case "keypad": setKeypad(m.scene, {found: m.found, solved: m.solved, fails: m.fails, lockMs: m.lockMs}); break;
   }
 }
 // the nearest downed teammate within reach on your floor
@@ -978,6 +1087,7 @@ function lobby() {
 // ---------------------------------------------------------------- game loop
 let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
 function die() {
+  closeKeypad();
   if (myCarry() >= 0) fuseAct({a: "drop", x: P.p.x, z: P.p.z});                      // it stays where you fell
   dead = true; deadT = 0; deathLevel = S.id; devOn.v = false; P.reviveT = 0; $("revive").style.display = "none";
   $("death").style.opacity = 1; $("fear").style.opacity = 1;
@@ -1031,8 +1141,8 @@ function update(dt) {
   if (rv) { rp.style.display = "block"; rp.querySelector("span").textContent = reviving ? `Lifting ${rv.name}…` : `Hold E to lift ${rv.name}`; rp.querySelector("b span").style.width = Math.min(1, P.reviveT / REVIVE_S) * 100 + "%"; }
   else rp.style.display = "none";
   if (reviving && P.reviveT >= REVIVE_S) { net.send({t: "revive", to: rv.id}); rv.dead = false; P.reviveT = 0; }
-  const fwd = reviving ? 0 : (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
-  const side = reviving ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
+  const fwd = (reviving || KPUI.open) ? 0 : (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
+  const side = (reviving || KPUI.open) ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
   P.crouch = !!(keys.ShiftLeft || keys.ShiftRight || g.crouch);
   P.moving = Math.hypot(fwd, side) > 0.2;
   const sp = (P.crouch ? 2.2 : 5.6) * dt;
@@ -1054,7 +1164,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); updatePeers(dt); drawAlert(); animateFuses(t); updatePrompt(); netTick(dt);
+  update(dt); updatePeers(dt); drawAlert(); animateFuses(t); updatePrompt(); renderKp(); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -1080,7 +1190,7 @@ await lobby();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

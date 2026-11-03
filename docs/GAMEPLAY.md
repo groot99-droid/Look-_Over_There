@@ -32,7 +32,7 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 |---|---|---|
 | B1 | **Fuses:** 3 lie around the floor; carry them one at a time to the stair door | **built** |
 | L1 | **Switches:** two far-apart switches, flipped one at a time in any order; each flip is loud and draws nearby monsters to look | **built** |
-| L2 | **Keypad:** a 4-digit code, each digit found at a different place, shared by the team | planned (L2 uses fuses until this exists) |
+| L2 | **Keypad:** a 4-digit code, each digit on a note found at a different place, shared by the team | **built** |
 | L3 | Break floor, no monsters. A **fuse box** here is an optional shortcut that powers L4's doors early | planned |
 | L4 | **The trick:** the doors are shut unless the L3 box was thrown; otherwise the power switch is on the far side of the room, with the monsters | planned |
 
@@ -50,6 +50,13 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - A player arriving on the floor later sees which switches are already on. State is held by the server per room (`shared/switches.js` is the one rule set).
 - Placeholder art in code; an optional `models/switch.glb` replaces it (see `docs/MODELS.md`).
 
+### Keypad (built)
+- Four notes stand at least 8 m apart (usually 15+), in the same places for everyone. Note *i* holds digit *i* of the code. Press E / X within 1.5 m to read one: that digit is shown to the whole team (a toast, the `CODE _ 2 _ 3` line in the HUD, and the "Notes found" line on the keypad). A note is read once.
+- Press E / X at the locked door to open the keypad: type the digits with the number keys, Backspace, Enter (or click the buttons); Esc or E closes it. You cannot move while it is open. The code is made by the server when the room first reaches the floor and never leaves it: clients only ever receive the digits that were found. Solo play keeps the code in the game.
+- A wrong code is loud and locks the keypad for 8 s for everyone: every monster within 40 m of the door goes to look. Typing during the lock does nothing. Malformed input (not 4 digits) is ignored, not counted.
+- A late joiner sees which notes were already read. Rules: `shared/keypad.js`.
+- The notes and the door panel are drawn in code; `keypad` in `docs/MODELS.md` is not wired to a model yet.
+
 - **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map. (planned)
 - **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down. (planned)
 
@@ -62,7 +69,7 @@ No assigned classes. The camera watcher matters because monsters show on the han
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses and the gated stair door: **built** (B1, and L2 until its keypad exists). Switches on L1: **built**. Still to do: the keypad (L2) and the L3 box / L4 power trick.
+4. Fuses and the gated stair door: **built** (B1). Switches on L1 and the keypad on L2: **built**. Still to do: the L3 box / L4 power trick.
 5. Monsters on the map only through cameras
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring
