@@ -45,6 +45,17 @@
   #l-wait{display:none;flex-direction:column;gap:12px;width:min(340px,86vw)}
   #l-players div{padding:5px 0;border-bottom:1px solid #22221c}
   #l-players span{float:right;color:#7a7a6a}
+  #alarm{position:fixed;left:50%;top:44px;transform:translateX(-50%);font:700 15px/1 system-ui,sans-serif;letter-spacing:.2em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;color:#ff5040}
+  #alarm.out{color:#9ccc65}
+  #redpulse{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;box-shadow:inset 0 0 120px 30px rgba(220,30,20,.75)}
+  #results{position:fixed;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);color:#d8d8c4;font:14px/1.5 system-ui,sans-serif}
+  #results div.card{width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
+  #results h1{margin:0;font:700 22px/1 Georgia,serif;letter-spacing:.2em;text-align:center}
+  #results table{width:100%;border-collapse:collapse}
+  #results td{padding:6px 4px;border-bottom:1px solid #22221c}
+  #results td:last-child{text-align:right}
+  #results tr.me td{color:#e0a040;font-weight:700}
+  #results #r-best{text-align:center;color:#9ccc65;letter-spacing:.08em}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
@@ -54,6 +65,8 @@
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
 <div id="hud"></div>
+<div id="alarm"></div><div id="redpulse"></div>
+<div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
 <div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
@@ -82,6 +95,7 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
+import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
 const MON_URL = "world/monsters.json";
@@ -250,7 +264,7 @@ function buildNav(fy) {
       if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
       if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
     }
-    walk[j * NW + i] = ground && !blocked ? 1 : 0;
+    walk[j * NW + i] = ground && !blocked && !(S.id === "L4" && z > 27.6) ? 1 : 0;       // the parking lot is safe: monsters do not leave the store
   }
   return walk;
 }
@@ -944,6 +958,54 @@ function setPower(on, by, quiet) {
   if (by === "L4" && S.id === "L4" && S.pw && net.host()) for (const m of monsters) if (Math.hypot(m.pos.x - S.pw.spot[0], m.pos.z - S.pw.spot[1]) < 40) m.alert(S.pw.spot[0], S.pw.spot[1]);      // the L4 switch is loud
 }
 
+// ---------------------------------------------------------------- the finale: the alarm, the way out, the results
+// The alarm starts once the doors are open and someone is in the store (the server says when in a room). Walking out onto the parking lot is the finish
+// for you; the lot is safe and is the lobby. The round is over when everyone in the room is out, then everyone sees places, times and their best.
+const FIN = {t0: performance.now(), alarmUntil: 0, out: false, exited: new Map(), results: null, hunt: 0};
+const EXIT_Z = 28.8, EXIT_HALF_X = 5;                                      // the store's glass opening is at z 27.0-27.5; past this line you are on the lot
+function startAlarm(ms) { if (FIN.alarmUntil) return; FIN.alarmUntil = performance.now() + ms; if (S.id === "L4") toast("The alarm goes off. They are coming for the doors."); }
+const alarmLeft = () => Math.max(0, FIN.alarmUntil - performance.now());
+function exitCheck() {
+  if (FIN.out || dead || loading || S.id !== "L4" || !POWER.on) return;
+  if (P.p.z > EXIT_Z && Math.abs(P.p.x) < EXIT_HALF_X && Math.abs(S.floor - P.p.y) < 2) goOut();
+}
+function goOut() {
+  FIN.out = true; closeKeypad();
+  if (net.on) net.send({t: "exit"});
+  else { const ms = performance.now() - FIN.t0; FIN.exited.set(0, {id: 0, name: "You", place: 1, ms}); showResults([{id: 0, name: "You", place: 1, ms}]); }
+}
+function animateAlarm(dt) {
+  const el = $("alarm"), pulse = $("redpulse"), left = alarmLeft();
+  if (FIN.results) { el.style.display = "none"; pulse.style.opacity = 0; return; }
+  if (FIN.out) {
+    const total = net.on ? net.peers.size + 1 : 1;
+    el.className = "out"; el.style.display = "block"; el.textContent = `YOU'RE OUT · ${FIN.exited.size}/${total} out`; pulse.style.opacity = 0; return;
+  }
+  if (left > 0 && S.id === "L4") {
+    el.className = ""; el.style.display = "block"; el.textContent = `ALARM ${fmtTime(left)}`;
+    pulse.style.opacity = (0.35 + 0.35 * Math.sin(performance.now() / 180)) * Math.min(1, left / 4000 + 0.4);
+    if (net.host() && (FIN.hunt -= dt) <= 0) { FIN.hunt = 2; for (const m of monsters) m.alert(0, 24.5); }          // every monster on the floor heads for the doors
+  } else { el.style.display = "none"; pulse.style.opacity = 0; }
+  if (!net.on && POWER.on && S.id === "L4" && !FIN.alarmUntil && !loading) startAlarm(ALARM_MS);
+}
+function bestTime(ms) {                                                    // best (lowest) time on this browser
+  let best = 0;
+  try { best = parseInt(localStorage.getItem("lot-best") || "0", 10) || 0; } catch (e) {}
+  const isNew = !best || ms < best;
+  if (isNew) { best = ms; try { localStorage.setItem("lot-best", String(ms)); } catch (e) {} }
+  return {best, isNew};
+}
+function showResults(rows) {
+  if (FIN.results) return;
+  FIN.results = rows; document.exitPointerLock?.();
+  const me = rows.find(r => r.id === (net.on ? net.id : 0));
+  $("r-rows").innerHTML = rows.map(r => `<tr class="${r === me ? "me" : ""}"><td>${r.place}</td><td>${String(r.name).replace(/[<>&]/g, "")}</td><td>${fmtTime(r.ms)}</td></tr>`).join("");
+  const b = me ? bestTime(me.ms) : null;
+  $("r-best").textContent = b ? (b.isNew ? `NEW RECORD ${fmtTime(b.best)}` : `BEST ${fmtTime(b.best)}`) : "";
+  $("r-again").onclick = () => location.reload();
+  $("results").style.display = "flex";
+}
+
 // ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
 // Everyone sees the same monsters because one client per scene (the host) simulates them and sends snapshots; the rest follow.
 const DOWNED_S = 45, REVIVE_S = 4;
@@ -1005,6 +1067,9 @@ function onNet(m) {
       for (const p of m.players) if (p.id !== m.id) addPeer(p);
       if (m.phase !== "lobby") net.startRes?.();
       if (m.power) setPower(true, null, true);
+      for (const e of m.exited || []) FIN.exited.set(e.id, e);
+      if (m.alarmMs > 0) startAlarm(m.alarmMs);
+      if (m.results) showResults(m.results);
       hud(); net.ready?.(); net.ready = null; break;
     case "join": addPeer(m); break;
     case "leave": removePeer(m.id); break;
@@ -1035,6 +1100,9 @@ function onNet(m) {
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
     case "power": setPower(true, m.by); break;
+    case "alarm": startAlarm(m.ms); break;
+    case "exited": FIN.exited.set(m.id, m); if (m.id !== net.id) toast(`${m.name} is out (place ${m.place})`); break;
+    case "results": showResults(m.rows); break;
     case "keypad": setKeypad(m.scene, {found: m.found, solved: m.solved, fails: m.fails, lockMs: m.lockMs}); break;
   }
 }
@@ -1174,8 +1242,8 @@ function respawn() {
 // the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
 function targetList() {
   const out = [];
-  if (!dead && !loading && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving, carry: myCarry() >= 0});
-  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving, carry: !!p.carry});
+  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving, carry: myCarry() >= 0});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving, carry: !!p.carry});
   return out;
 }
 function simMonsters(dt) {
@@ -1230,7 +1298,7 @@ function update(dt) {
 }
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); updatePeers(dt); drawAlert(); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); exitCheck(); updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -1253,10 +1321,11 @@ function step(dtOverride) {
 function frame() { step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
 await lobby();
+FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

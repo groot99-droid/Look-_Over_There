@@ -121,8 +121,16 @@ try {
   await r.keyboard.press("KeyE");
   await r.waitForFunction(() => window.__game.POWER.on, null, {timeout: 30000}).then(() => check("pressing E at the L3 box turns the power on", true), () => check("pressing E at the L3 box turns the power on", false));
   await rload("L4");
-  check("arriving on L4 the doors are already open, and nothing was alarmed", await r.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && g.monsters.every(m => m.state === "patrol") && /POWER ON/.test((g.step(0.016), document.getElementById("fusehud").textContent)); }));
+  check("arriving on L4 the doors are already open", await r.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && /POWER ON/.test((g.step(0.016), document.getElementById("fusehud").textContent)); }));
   check("the far switch is not offered once the power is on", await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); return g.nearPower() === false; }));
+
+  // the finale: the alarm starts on arrival, the monsters hunt toward the doors, the lot is safe, and walking out ends the round
+  check("the alarm starts when you are in the store with the doors open", await r.evaluate(() => { const g = window.__game; g.step(0.05); return g.FIN.alarmUntil > 0 && /ALARM \d:\d\d/.test(document.getElementById("alarm").textContent); }));
+  check("the monsters head for the doors", await r.evaluate(() => { const g = window.__game; g.P.p.set(16, g.S.floor + 0.02, 7.7); g.P.imm = 99; for (let i = 0; i < 4; i++) g.step(0.05); return g.monsters.length > 0 && g.monsters.every(m => m.state === "search" || m.state === "chase"); }));
+  check("the parking lot is off the monsters' map", await r.evaluate(() => { const g = window.__game; let bad = 0; g.S.nav.forEach((v, c) => { if (v && g.cellXZ(c)[1] > 27.6) bad++; }); return bad === 0; }));
+  check("not out yet inside the store", await r.evaluate(() => { const g = window.__game; g.P.p.set(0, g.S.floor + 0.02, 26); g.exitCheck(); return !g.FIN.out && !g.FIN.results; }));
+  await r.evaluate(() => { const g = window.__game; g.P.p.set(0, g.S.floor + 0.02, g.EXIT_Z + 0.5); g.step(0.02); });
+  check("walking out onto the lot ends a solo round with place 1 and a record", await r.evaluate(() => { const g = window.__game; return g.FIN.out && g.FIN.results && g.FIN.results[0].place === 1 && document.getElementById("results").style.display === "flex" && /RECORD|BEST/.test(document.getElementById("r-best").textContent); }));
 
   const q = await solo(withModel.port);
   await until("with models/fuse.glb the model replaces the placeholder", q, () => window.__game.FZ.vis.items.every(i => i.o.userData.model));

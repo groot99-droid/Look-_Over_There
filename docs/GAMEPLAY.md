@@ -62,10 +62,14 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - **Off:** the store's glass entrance is shut, and the model has no collider there, so a collider is added across the 5.4 m opening; monsters cannot pass either. **On:** the glass rolls up out of the opening, the collider goes, and the monsters' walkable map is rebuilt so they can use the way out too.
 - The L3 box is silent (no monsters on L3), so it is the quick, safe way. The L4 switch is loud: every monster within 40 m goes to look at it, the same as the L1 switches.
 - Everyone in the room hears of it wherever they are: a toast, `POWER ON` in the HUD, and the doors are already open when you arrive. A late joiner is told in the welcome message. L3 to L4 stairs are never locked.
-- The L4 switch is a placeholder in code (the L3 box is the real model). The finale/exit is still to build.
+- The L4 switch is a placeholder in code (the L3 box is the real model). The finale is below.
 
-- **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map. (planned)
-- **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down. (planned)
+### Finale: the alarm, the way out, the parking lot (built)
+- **The alarm** goes off once the L4 doors are open and someone is in the store: if the L4 switch is thrown, at once; if the quiet L3 box was used, when the first player arrives. It lasts 60 s (`ALARM 0:41` in the HUD, a red pulse at the screen edge). While it runs, every L4 monster heads for the doors every 2 s, unless it is already chasing someone. A late joiner is told how much of it is left.
+- **The way out:** walking out of the store onto the parking lot (past z 28.8 between the doors) is your finish. The lot is safe: it is off the monsters' map, and a player who is out is not a target. You can walk back in to help a teammate; your place stays.
+- **The round ends when everyone still in the room is out.** Someone who leaves the room does not hold it up. Then everyone sees the results: place (the order they left), time (from the start of the round), and the best time on this browser (`BEST` or `NEW RECORD`). Solo ends the moment you walk out.
+- Rules: `shared/finish.js`; the server keeps the run and the alarm (`exit` is accepted only from L4 with the power on).
+- Not done: a siren sound (the game has no audio yet); the best record is per browser, not shared; the 60 s and the hunt are untuned.
 
 ## Roles that emerge (planned)
 
@@ -76,10 +80,10 @@ No assigned classes. The camera watcher matters because monsters show on the han
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The next steps are the finale and score (7), monsters on the map only through cameras (5), server-side monsters (6) and bots (8).
+4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The finale and score (7) are built too. The next steps are monsters on the map only through cameras (5), server-side monsters (6) and bots (8).
 5. Monsters on the map only through cameras
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
-7. Finale alarm and scoring
+7. Finale alarm and scoring: **built**
 8. Bot players to tune the numbers
 
 ## Characters

@@ -11,6 +11,7 @@ import {WebSocketServer} from "ws";
 import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
 import {POWER_SOURCES, newPower, throwPower} from "../shared/power.js";
+import {ALARM_MS, newRun, exitPlayer, done as runDone, finish, results as runResults} from "../shared/finish.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,6 +54,17 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
   const floorKeypad = (room, scene) => room.keypads[scene] ||= newKeypad(rng);
   const keypadMsg = (room, scene) => ({t: "keypad", scene, ...keypadView(floorKeypad(room, scene), Date.now())});
   const sendKeypad = (room, scene) => broadcast(room, keypadMsg(room, scene), undefined, scene);
+  // the finale: the alarm goes off once the doors are open and someone is in the store; everyone leaving through them ends the round
+  const alarmMs = room => room.alarmAt ? Math.max(0, ALARM_MS - (Date.now() - room.alarmAt)) : 0;
+  function maybeAlarm(room) {
+    if (room.alarmAt || !room.power.on || ![...room.players.values()].some(p => p.scene === "L4")) return;
+    room.alarmAt = Date.now(); broadcast(room, {t: "alarm", ms: ALARM_MS});
+  }
+  const resultsMsg = room => ({t: "results", rows: runResults(room.run)});
+  function checkDone(room) {
+    if (!runDone(room.run, [...room.players.keys()])) return;
+    room.run = finish(room.run); broadcast(room, resultsMsg(room));
+  }
   // the waiting room: everyone readies, then a countdown, then the round starts for the whole room (a round runs until the room empties)
   const lobbyMsg = room => ({t: "lobby", phase: room.phase, countdownMs: room.timer ? countdownMs : null,
     players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char, ready: p.ready}))});
@@ -61,7 +73,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
     clearTimeout(room.timer); room.timer = null;
     const all = [...room.players.values()];
     if (all.length && all.every(p => p.ready)) {
-      room.timer = setTimeout(() => { room.timer = null; room.phase = "playing"; broadcast(room, {t: "start"}); }, countdownMs);
+      room.timer = setTimeout(() => { room.timer = null; room.phase = "playing"; room.run = newRun(Date.now()); broadcast(room, {t: "start"}); }, countdownMs);
     }
     broadcast(room, lobbyMsg(room));
   }
@@ -86,7 +98,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}, power: newPower()}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}, power: newPower(), run: null, alarmAt: 0}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -94,7 +106,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         me = {id: ++room.seq, seq: room.seq, ws, scene: null, ready: false, char, name: String(m.name || "Player").replace(/[^\w .-]/g, "").slice(0, 16) || "Player",
               color: COLORS.find(c => !used.has(c)) || COLORS[0]};
         room.players.set(me.id, me);
-        send(me, {t: "welcome", id: me.id, room: code, phase: room.phase, power: room.power.on, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
+        send(me, {t: "welcome", id: me.id, room: code, phase: room.phase, power: room.power.on, alarmMs: alarmMs(room), exited: room.run ? room.run.exits : [], results: room.run?.ended ? runResults(room.run) : null, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
         broadcast(room, {t: "join", id: me.id, name: me.name, color: me.color, char: me.char}, me.id);
         lobbyChanged(room);
         return;
@@ -113,6 +125,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
             if (GATED.includes(scene)) send(me, {t: "fuses", scene, st: floorFuses(room, scene)});
             if (SWITCH_FLOORS.includes(scene)) send(me, {t: "switches", scene, st: floorSwitches(room, scene)});
             if (KEYPAD_FLOORS.includes(scene)) send(me, keypadMsg(room, scene));
+            maybeAlarm(room);
           }
           break;
         }
@@ -129,7 +142,13 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         }
         case "power": {                                               // throw the building's power from the L3 box or the L4 far switch; everyone in the room hears of it
           const next = throwPower(room.power, me.scene);
-          if (next) { room.power = next; broadcast(room, {t: "power", on: true, by: next.by}); }
+          if (next) { room.power = next; broadcast(room, {t: "power", on: true, by: next.by}); maybeAlarm(room); }
+          break;
+        }
+        case "exit": {                                                // walked out of the store onto the parking lot
+          if (me.scene !== "L4" || !room.power.on || !room.run) break;
+          const r = exitPlayer(room.run, me.id, Date.now(), me.name);
+          if (r) { room.run = r.run; broadcast(room, {t: "exited", ...r.entry}); checkDone(room); }
           break;
         }
         case "switch": {                                              // flip one switch on the floor you are on
@@ -169,7 +188,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
       releaseFuse(room, me.id, me.scene);
       room.players.delete(me.id);
       broadcast(room, {t: "leave", id: me.id});
-      if (!room.players.size) { clearTimeout(room.timer); rooms.delete(room.code); } else { elect(room); lobbyChanged(room); }
+      if (!room.players.size) { clearTimeout(room.timer); rooms.delete(room.code); } else { elect(room); lobbyChanged(room); checkDone(room); }
     });
   });
   return new Promise(resolve => httpServer.listen(port, () => resolve({httpServer, wss, port: httpServer.address().port, rooms,

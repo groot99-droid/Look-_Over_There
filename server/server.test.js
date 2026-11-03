@@ -231,3 +231,52 @@ test("power: a room that nobody powers stays off, and rooms are separate", async
   assert.ok(!(await b.quiet(150)).some(m => m.t === "power"));
   await srv.close();
 });
+
+// a started round with these players in it
+async function round(srv, room, names) {
+  const cs = []; for (const n of names) cs.push(await join(srv, room, n));
+  for (const c of cs) c.send({t: "ready", ready: true});
+  for (const c of cs) await c.next(kind("start"));
+  return cs;
+}
+test("finale: the alarm goes off once, when the doors are open and someone is in the store", async () => {
+  const srv = await createServer({countdownMs: 100});
+  const [a, b] = await round(srv, "R16", ["Ann", "Bob"]);
+  a.send({t: "s", scene: "L3"}); b.send({t: "s", scene: "L2"});
+  a.send({t: "power"}); await b.next(kind("power"));
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "alarm"), "power on but nobody on L4 yet: quiet");
+  a.send({t: "s", scene: "L4"});
+  const al = await b.next(kind("alarm")); assert.equal(al.ms, 60000);
+  b.send({t: "s", scene: "L4"});
+  assert.ok(!(await a.quiet(150)).filter(m => m.t === "alarm").slice(1).length, "once only");
+  const late = await join(srv, "R16", "Cy"); assert.ok(late.welcome.alarmMs > 0 && late.welcome.alarmMs <= 60000);
+  await srv.close();
+});
+test("finale: exits only from L4 with the power on; places in order; results when the last one is out", async () => {
+  const srv = await createServer({countdownMs: 100});
+  const [a, b] = await round(srv, "R17", ["Ann", "Bob"]);
+  a.send({t: "s", scene: "L4"}); b.send({t: "s", scene: "L4"});
+  a.send({t: "exit"});                                                             // the doors are shut: nobody is out
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "exited"));
+  a.send({t: "power"}); await b.next(kind("power"));
+  b.send({t: "s", scene: "L3"}); b.send({t: "exit"});                              // wrong floor
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "exited"));
+  b.send({t: "s", scene: "L4"}); await a.quiet(60);
+  a.send({t: "exit"}); const e1 = await b.next(kind("exited")); assert.deepEqual([e1.id, e1.place, e1.name], [a.id, 1, "Ann"]);
+  a.send({t: "exit"}); assert.ok(!(await b.quiet(120)).some(m => m.t === "exited"), "leaving twice changes nothing");
+  assert.ok(!(await a.quiet(10)).some(m => m.t === "results"), "Bob is still inside");
+  b.send({t: "exit"});
+  const r = await a.next(kind("results")); assert.deepEqual(r.rows.map(x => [x.place, x.name]), [[1, "Ann"], [2, "Bob"]]);
+  await b.next(kind("results"));
+  const late = await join(srv, "R17", "Cy"); assert.equal(late.welcome.results.length, 2, "a late joiner sees the finished round");
+  await srv.close();
+});
+test("finale: someone who leaves the room does not hold the round up", async () => {
+  const srv = await createServer({countdownMs: 100});
+  const [a, b] = await round(srv, "R18", ["Ann", "Bob"]);
+  a.send({t: "s", scene: "L4"}); b.send({t: "s", scene: "L4"}); a.send({t: "power"}); await a.next(kind("power"));
+  a.send({t: "exit"}); await a.next(kind("exited"));
+  b.ws.close();
+  const r = await a.next(kind("results")); assert.deepEqual(r.rows.map(x => x.name), ["Ann"]);
+  await srv.close();
+});

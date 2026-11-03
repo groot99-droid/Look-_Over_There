@@ -199,6 +199,29 @@ try {
   await solo2.keyboard.press("KeyE");
   await until("the L4 far switch powers it through the server", solo2, () => window.__game.POWER.on && window.__game.POWER.by === "L4" && !window.__game.S.shutter.off === false);
   check("the room's state is its own", srv.rooms.get("OTHER").power.by === "L4" && srv.rooms.get("TEST").power.by === "L3");
+
+  // ---- the finale in a third room: the alarm for both, the first out is place 1, the results come when the second is out
+  for (const pg of [a, b, solo2]) await pg.close().catch(() => {});             // software rendering: free the CPU for the last room
+  const mk = async (name, char) => { const pg = await (await browser.newContext({viewport: {width: 320, height: 200}})).newPage(); pg.on("pageerror", e => console.log(`[${name} pageerror]`, e.message)); await pg.goto(`http://localhost:${srv.port}/?room=FIN&name=${name}&char=${char}&auto=1&ready=1`); await inGame(pg); return pg; };
+  const x = await mk("Xia", 1), y = await mk("Yul", 4);
+  const toL4 = pg => pg.evaluate(() => window.__game.loadScene("L4")).then(() => pg.waitForFunction(() => window.__game.S.id === "L4" && !window.__game.loading, null, {timeout: 170000}));
+  await toL4(x); await toL4(y);
+  await x.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.imm = 99; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); g.P.v.set(0, 0, 0); });
+  await x.keyboard.press("KeyE");
+  await until("the L4 switch sets off the alarm for both players", y, () => window.__game.POWER.on && window.__game.FIN.alarmUntil > 0);
+  await until("and for the one who threw it", x, () => window.__game.FIN.alarmUntil > 0);
+  await y.evaluate(() => { const g = window.__game; g.P.imm = 99; g.step(0.05); });
+  check("the alarm shows a countdown", await y.evaluate(() => /ALARM \d:\d\d/.test(document.getElementById("alarm").textContent)));
+  await x.evaluate(() => { const g = window.__game; g.P.p.set(0, g.S.floor + 0.02, g.EXIT_Z + 0.5); g.step(0.02); });
+  await until("the first one out is place 1, and the other hears of it", y, () => { const e = window.__game.FIN.exited.get([...window.__game.net.peers.keys()][0]); return e && e.place === 1; });
+  await y.evaluate(() => window.__game.step(0.05));
+  check("nobody gets results while one is still inside", !(await x.evaluate(() => !!window.__game.FIN.results)) && !(await y.evaluate(() => !!window.__game.FIN.results)));
+  check("the one who is out sees how many are out", await x.evaluate(() => { window.__game.step(0.05); return /OUT · 1\/2/.test(document.getElementById("alarm").textContent); }));
+  await y.evaluate(() => { const g = window.__game; g.P.p.set(1, g.S.floor + 0.02, g.EXIT_Z + 0.5); g.step(0.02); });
+  await until("when the second is out both see the results", x, () => !!window.__game.FIN.results);
+  await until("and the other one", y, () => !!window.__game.FIN.results);
+  check("places are 1 and 2, in the order they left", await x.evaluate(() => window.__game.FIN.results.map(r => r.place + r.name).join()) === "1Xia,2Yul");
+  check("the results screen shows", await y.evaluate(() => getComputedStyle(document.getElementById("results")).display === "flex" && document.querySelectorAll("#r-rows tr").length === 2));
 } catch (e) { console.log("ERROR", e); failed++; }
 await browser.close(); await srv.close();
 console.log(failed ? `${failed} FAILED` : "ALL PASSED");
