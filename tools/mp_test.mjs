@@ -47,6 +47,24 @@ try {
   const maxd = Math.max(...A.mons.map((m, i) => Math.hypot(m[0] - B.mons[i][0], m[1] - B.mons[i][1])));
   check("monsters agree across clients", maxd < 1.5, `(max gap ${maxd.toFixed(2)} m)`);
 
+  // ---- guns: one gun each from the B1 lockers, shared state, and a leaver's locker opens again
+  const standBy = (pg, k, i) => pg.evaluate(([k, i]) => { const g = window.__game, it = g.LT.vis[k][i]; g.P.p.set(it.home[0] + 0.5, g.S.floor + 0.02, it.home[1]); g.P.v.set(0, 0, 0); g.step(0.016); g.tryLoot(); }, [k, i]);
+  await until("the floor's lockers reach both players", a, () => window.__game.LT.vis.lockers.length === 8 && window.__game.LT.st.B1 && window.__game.LT.st.B1.lockers.length === 8);
+  await until("and the other", b, () => window.__game.LT.st.B1 && window.__game.LT.st.B1.lockers.length === 8);
+  await standBy(a, "lockers", 0);
+  await until("Ann opens a locker and has the gun with 3 rounds", a, () => window.__game.LT.gun && window.__game.LT.rounds === 3);
+  await until("Bob sees that locker taken by Ann", b, id => window.__game.LT.st.B1.lockers[0] === id, A.id);
+  check("Bob has no gun yet", await b.evaluate(() => !window.__game.LT.gun));
+  await standBy(b, "lockers", 0); await sleep(500);
+  check("a locker that is already open gives Bob nothing", await b.evaluate(() => !window.__game.LT.gun));
+  await standBy(b, "lockers", 3);
+  await until("Bob opens another locker", b, () => window.__game.LT.gun && window.__game.LT.rounds === 3);
+  await until("Ann sees Bob's locker taken", a, id => window.__game.LT.st.B1.lockers[3] === id, B.id);
+  await standBy(a, "lockers", 5); await sleep(500);
+  check("Ann cannot take a second gun", await a.evaluate(() => window.__game.LT.st.B1.lockers[5] === 0) && srv.rooms.get("TEST").loot.B1.lockers[5] === 0);
+  await standBy(a, "packs", 0);
+  await until("a pack gives Ann 3 more rounds", a, () => window.__game.LT.rounds === 6);
+  await until("Bob sees the pack gone", b, () => window.__game.LT.st.B1.packs[0] !== 0);
   // ---- fuses on B1: the stair door stays shut until three fuses are in it
   const spotsA = await a.evaluate(() => window.__game.FZ.vis.items.map(i => i.home)), spotsB = await b.evaluate(() => window.__game.FZ.vis.items.map(i => i.home));
   check("three fuses, in the same places on both clients", spotsA.length === 3 && JSON.stringify(spotsA) === JSON.stringify(spotsB), JSON.stringify(spotsA));
@@ -191,7 +209,11 @@ try {
   await until("host sees the guest down, with the scream arrow", host, () => { const g = window.__game; return [...g.net.peers.values()][0].dead === true && !!g.net.alert && document.getElementById("scream").style.display === "block"; });
 
   // leaving hands the floor over
+  const leaverId = await guest.evaluate(() => window.__game.net.id);
+  check("before leaving, the guest holds a locker", srv.rooms.get("TEST").loot.B1.lockers.includes(leaverId));
   await guest.close();
+  await sleep(500);
+  check("a player who leaves puts their locker back", !srv.rooms.get("TEST").loot.B1.lockers.includes(leaverId));
   await until("host alone: peer removed, still host", host, () => window.__game.net.peers.size === 0 && window.__game.net.host());
 
   // ---- another room that never touches the L3 box: L4 is shut, the far switch opens it, and the first room was not affected

@@ -280,3 +280,43 @@ test("finale: someone who leaves the room does not hold the round up", async () 
   const r = await a.next(kind("results")); assert.deepEqual(r.rows.map(x => x.name), ["Ann"]);
   await srv.close();
 });
+
+test("loot: the floor's state arrives with you; a pack is taken once and told to the floor only", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R20", "Ann"), b = await join(srv, "R20", "Bob"), c = await join(srv, "R20", "Cy");
+  a.send({t: "s", scene: "L2"}); b.send({t: "s", scene: "L2"}); c.send({t: "s", scene: "L1"});
+  const first = await a.next(kind("loot")); assert.equal(first.scene, "L2"); assert.deepEqual(first.st, {lockers: [], packs: [0, 0, 0]});
+  a.send({t: "loot", k: "pack", i: 1, rounds: 3});
+  const got = await b.next(m => m.t === "loot" && m.by === a.id); assert.deepEqual([got.st.packs[1], got.by, got.k], [a.id, a.id, "pack"]);
+  b.send({t: "loot", k: "pack", i: 1, rounds: 0});
+  assert.ok(!(await a.quiet(200)).some(m => m.t === "loot" && m.by === b.id), "a pack that is gone cannot be taken again");
+  assert.ok(!(await c.quiet(10)).some(m => m.t === "loot" && m.st.packs && m.st.packs[1] !== 0 && m.scene === "L2"), "Cy is on another floor");
+  const late = await join(srv, "R20", "Di"); late.send({t: "s", scene: "L2"});
+  assert.equal((await late.next(kind("loot"))).st.packs[1], a.id, "a late joiner sees what is taken");
+  await srv.close();
+});
+test("loot: a pack is refused when the player is full, and nothing happens off the loot floors", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R21", "Ann"); a.send({t: "s", scene: "L3"}); await a.next(kind("loot"));
+  a.send({t: "loot", k: "pack", i: 0, rounds: 9}); a.send({t: "loot", k: "weird", i: 0}); a.send({t: "loot", k: "pack", i: 99, rounds: 0});
+  assert.ok(!(await a.quiet(200)).some(m => m.t === "loot"), "full, bad kind and bad index all do nothing");
+  a.send({t: "loot", k: "pack", i: 0, rounds: 8}); assert.equal((await a.next(kind("loot"))).st.packs[0], a.id);
+  a.send({t: "s", scene: null}); a.send({t: "loot", k: "pack", i: 1, rounds: 0});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "loot"), "not on a floor");
+  await srv.close();
+});
+test("loot: one gun each from the B1 lockers, and leaving puts the locker back", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R22", "Ann"), b = await join(srv, "R22", "Bob");
+  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); await a.next(kind("loot")); await b.next(kind("loot"));
+  a.send({t: "loot", k: "locker", i: 0}); const l1 = await b.next(kind("loot")); assert.deepEqual([l1.st.lockers[0], l1.k], [a.id, "locker"]);
+  a.send({t: "loot", k: "locker", i: 1}); assert.ok(!(await b.quiet(200)).some(m => m.t === "loot"), "Ann already has a gun");
+  b.send({t: "loot", k: "locker", i: 0}); assert.ok(!(await a.quiet(200)).some(m => m.t === "loot" && m.by === b.id), "that locker is open already");
+  b.send({t: "loot", k: "locker", i: 5}); assert.equal((await a.next(kind("loot"))).st.lockers[5], b.id);
+  a.ws.close();                                                                      // Ann leaves with her gun: her locker is usable again
+  const back = await b.next(m => m.t === "loot" && m.st.lockers[0] === 0); assert.equal(back.scene, "B1");
+  assert.equal(back.st.lockers[5], b.id, "Bob keeps his");
+  const c = await join(srv, "R22", "Cy"); c.send({t: "s", scene: "B1"}); await c.next(kind("loot"));
+  c.send({t: "loot", k: "locker", i: 0}); assert.ok(await b.next(m => m.t === "loot" && m.st.lockers[0] === c.id), "a newcomer can use it");
+  await srv.close();
+});

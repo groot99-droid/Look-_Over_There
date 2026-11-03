@@ -12,6 +12,7 @@ import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
 import {POWER_SOURCES, newPower, throwPower} from "../shared/power.js";
 import {ALARM_MS, newRun, exitPlayer, done as runDone, finish, results as runResults} from "../shared/finish.js";
+import {LOOT_FLOORS, MAX_ROUNDS, newLoot, takeLocker, takePack, putBack} from "../shared/loot.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,6 +55,13 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
   const floorKeypad = (room, scene) => room.keypads[scene] ||= newKeypad(rng);
   const keypadMsg = (room, scene) => ({t: "keypad", scene, ...keypadView(floorKeypad(room, scene), Date.now())});
   const sendKeypad = (room, scene) => broadcast(room, keypadMsg(room, scene), undefined, scene);
+  // guns and ammo: one state per floor, kept for the life of the room; a player may carry one gun, and leaving puts their locker back
+  const floorLoot = (room, scene) => room.loot[scene] ||= newLoot(scene);
+  const sendLoot = (room, scene, extra = {}) => broadcast(room, {t: "loot", scene, st: floorLoot(room, scene), ...extra}, undefined, scene);
+  function putBackLocker(room, id) {
+    const held = room.armed.get(id); room.armed.delete(id); if (!held) return;
+    const next = putBack(floorLoot(room, held), id); if (next) { room.loot[held] = next; sendLoot(room, held); }
+  }
   // the finale: the alarm goes off once the doors are open and someone is in the store; everyone leaving through them ends the round
   const alarmMs = room => room.alarmAt ? Math.max(0, ALARM_MS - (Date.now() - room.alarmAt)) : 0;
   function maybeAlarm(room) {
@@ -98,7 +106,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}, power: newPower(), run: null, alarmAt: 0}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}, keypads: {}, power: newPower(), run: null, alarmAt: 0, loot: {}, armed: new Map()}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -125,6 +133,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
             if (GATED.includes(scene)) send(me, {t: "fuses", scene, st: floorFuses(room, scene)});
             if (SWITCH_FLOORS.includes(scene)) send(me, {t: "switches", scene, st: floorSwitches(room, scene)});
             if (KEYPAD_FLOORS.includes(scene)) send(me, keypadMsg(room, scene));
+            if (LOOT_FLOORS.includes(scene)) send(me, {t: "loot", scene, st: floorLoot(room, scene)});
             maybeAlarm(room);
           }
           break;
@@ -143,6 +152,18 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         case "power": {                                               // throw the building's power from the L3 box or the L4 far switch; everyone in the room hears of it
           const next = throwPower(room.power, me.scene);
           if (next) { room.power = next; broadcast(room, {t: "power", on: true, by: next.by}); maybeAlarm(room); }
+          break;
+        }
+        case "loot": {                                                // open a locker (a gun) or take an ammo pack on the floor you are on
+          const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack")) break;
+          const st = floorLoot(room, scene);
+          if (m.k === "locker") {
+            const next = takeLocker(st, m.i, me.id, room.armed.has(me.id));
+            if (next) { room.loot[scene] = next; room.armed.set(me.id, scene); sendLoot(room, scene, {by: me.id, k: "locker"}); }
+          } else {
+            const next = takePack(st, m.i, me.id, Number.isInteger(m.rounds) ? Math.min(Math.max(m.rounds, 0), MAX_ROUNDS) : MAX_ROUNDS);
+            if (next) { room.loot[scene] = next; sendLoot(room, scene, {by: me.id, k: "pack"}); }
+          }
           break;
         }
         case "exit": {                                                // walked out of the store onto the parking lot
@@ -186,6 +207,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
     ws.on("close", () => {
       if (!room || !me) return;
       releaseFuse(room, me.id, me.scene);
+      putBackLocker(room, me.id);
       room.players.delete(me.id);
       broadcast(room, {t: "leave", id: me.id});
       if (!room.players.size) { clearTimeout(room.timer); rooms.delete(room.code); } else { elect(room); lobbyChanged(room); checkDone(room); }

@@ -45,6 +45,7 @@
   #l-wait{display:none;flex-direction:column;gap:12px;width:min(340px,86vw)}
   #l-players div{padding:5px 0;border-bottom:1px solid #22221c}
   #l-players span{float:right;color:#7a7a6a}
+  #ammo{position:fixed;right:16px;bottom:18px;color:#6fe0ff;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 5px #000}
   #stam{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:120px;height:4px;background:rgba(0,0,0,.45);z-index:1;pointer-events:none;opacity:0;transition:opacity .3s}
   #stam i{display:block;height:100%;width:100%;background:#cdb}
   #alarm{position:fixed;left:50%;top:44px;transform:translateX(-50%);font:700 15px/1 system-ui,sans-serif;letter-spacing:.2em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;color:#ff5040}
@@ -72,7 +73,7 @@
 <div id="toast"></div>
 <div id="prompt"></div>
 <div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
-<div id="fusehud"></div>
+<div id="fusehud"></div><div id="ammo"></div>
 <div id="scream"><i>▲</i><span></span></div>
 <div id="revive"><span></span><b><span></span></b></div>
 <div id="lobby"><form id="l-form" autocomplete="off">
@@ -97,6 +98,7 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
+import {LOOT, MAX_ROUNDS, GUN_ROUNDS, newLoot, takeLocker, takePack, roundsAfterPack} from "./shared/loot.js";
 import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
@@ -212,8 +214,10 @@ async function loadScene(id, arrival) {
   if (!net.on && SWITCH_FLOORS.includes(id)) SW.st[id] ||= newSwitches();
   if (!net.on && KEYPAD_FLOORS.includes(id)) { KP.local[id] ||= newKeypad(); setKeypad(id, kpView(KP.local[id], Date.now())); }
   if (net.on) { delete SW.st[id]; delete KP.st[id]; }                                              // in a room the server sends the floor's state on arrival; that first state is not news
+  if (!net.on) LT.st[id] ||= newLoot(id);
   buildFuseVisuals();
   buildPowerVisuals();
+  buildLootVisuals();
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
     if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
@@ -633,7 +637,7 @@ addEventListener("keydown", e => {
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
   if (e.repeat || dead) return;
-  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower()) useDoor();
+  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor();
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyQ") cycleCam(-1);
@@ -655,7 +659,7 @@ function pad() {
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
-    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
+    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
@@ -721,14 +725,14 @@ function mainRegion() {
   return cells;
 }
 function floorSpots(count, seedBase, tiers) {
-  const dr = upDoor(); if (!dr || !S.nav) return [];
+  const dr = upDoor(); if (!S.nav) return [];                                      // the top floor has no stair door to keep clear
   const cells = mainRegion(); if (!cells.length) return [];
   const rnd = rng32(seedBase + Object.keys(SCENES).indexOf(S.id) * 37), out = [];
   for (const [gap, fromDoor, fromMon] of tiers) {                                  // relax if the floor is too small for the first try
     out.length = 0;
     for (let tries = 0; tries < 6000 && out.length < count; tries++) {
       const [x, z] = cellXZ(cells[Math.floor(rnd() * cells.length)]);
-      if (Math.hypot(x - dr.cx, z - dr.cz) < fromDoor) continue;
+      if (dr && Math.hypot(x - dr.cx, z - dr.cz) < fromDoor) continue;
       if (monsters.some(m => Math.hypot(x - m.home[0], z - m.home[1]) < fromMon)) continue;
       if (out.some(o => Math.hypot(x - o[0], z - o[1]) < gap)) continue;
       out.push([x, z]);
@@ -740,6 +744,74 @@ function floorSpots(count, seedBase, tiers) {
 const fuseSpots = () => floorSpots(NEED, 9100, [[12, 10, 5], [7, 5, 3], [3, 2, 0]]);
 const keypadSpots = () => floorSpots(CODE_LEN, 9700, [[14, 8, 5], [8, 5, 3], [4, 2, 0]]);
 const switchSpots = () => floorSpots(NEED_SW, 9500, [[25, 8, 6], [14, 5, 3], [6, 2, 0]]);            // far apart, so reaching both is a trip
+
+// ---------------------------------------------------------------- guns and ammo: lockers on B1 (one gun each), ammo packs on every floor (rules in shared/loot.js)
+const LT = {st: {}, vis: null, gun: false, rounds: 0};
+const lt = () => LT.st[S.id] || newLoot(S.id);
+const myId = () => net.on ? net.id : 1;                                       // solo: the one player is 1
+const lockerSpots = () => LOOT[S.id] && LOOT[S.id].lockers ? floorSpots(LOOT[S.id].lockers, 9900, [[6, 4, 5], [3, 2, 3], [1.5, 1, 0]]) : [];
+const packSpots = () => LOOT[S.id] ? floorSpots(LOOT[S.id].packs, 9950, [[10, 6, 6], [6, 3, 3], [3, 1, 0]]) : [];
+const cyanGlow = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40d8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); return sp; };
+function lockerMesh() {
+  const o = new THREE.Group(), body = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.8, .45), new THREE.MeshBasicMaterial({color: 0x4b5a55}));
+  body.position.y = .9; o.add(body);
+  const door = new THREE.Group(); door.position.set(-.25, 0, .23); o.add(door);                       // hinged on its left edge; swings open when emptied
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(.46, 1.7, .03), new THREE.MeshBasicMaterial({color: 0x5d6e68})); leaf.position.set(.23, .92, 0); door.add(leaf);
+  for (let k = 0; k < 4; k++) { const v = new THREE.Mesh(new THREE.BoxGeometry(.3, .018, .01), new THREE.MeshBasicMaterial({color: 0x222a28})); v.position.set(.23, 1.5 - k * .07, .02); door.add(v); }
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, .03), new THREE.MeshBasicMaterial({color: 0x40d8ff})); lamp.position.set(.4, 1.55, .025); door.add(lamp);
+  const halo = cyanGlow(.9, .9, .6), beacon = cyanGlow(.3, 2.4, .3); halo.position.y = 1.0; beacon.position.y = 1.0; o.add(halo, beacon);
+  Object.assign(o.userData, {door, lamp, halo, beacon}); return o;
+}
+function packMesh() {
+  const o = new THREE.Group(), box = new THREE.Mesh(new THREE.BoxGeometry(.3, .15, .2), new THREE.MeshBasicMaterial({color: 0x5a5e3c}));
+  box.position.y = .08; const stripe = new THREE.Mesh(new THREE.BoxGeometry(.31, .04, .21), new THREE.MeshBasicMaterial({color: 0x40d8ff})); stripe.position.y = .09;
+  const halo = cyanGlow(.7, .7, .6), beacon = cyanGlow(.25, 1.8, .3); halo.position.y = .3; beacon.position.y = .9; o.add(box, stripe, halo, beacon);
+  Object.assign(o.userData, {halo, beacon}); return o;
+}
+function buildLootVisuals() {
+  LT.vis = null; if (!S.root || !LOOT[S.id]) return;
+  const g = new THREE.Group();
+  const lockers = lockerSpots().map((home, i) => { const o = lockerMesh(); o.position.set(home[0], S.floor, home[1]); o.rotation.y = (i * 2.1) % 6.28; g.add(o); return {home, o}; });
+  const packs = packSpots().map(home => { const o = packMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; });
+  S.root.add(g); LT.vis = {lockers, packs};
+}
+function animateLoot() {
+  const v = LT.vis, st = lt();
+  if (v) {
+    const fade = it => Math.min(1, Math.max(0, (Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z) - 0.5) / 1.5));
+    v.lockers.forEach((it, i) => { const taken = st.lockers[i] !== 0, u = it.o.userData, k = fade(it);
+      u.door.rotation.y += ((taken ? -1.7 : 0) - u.door.rotation.y) * 0.25; u.lamp.material.color.setHex(taken ? 0x2a3a3a : 0x40d8ff);
+      u.halo.material.opacity = (taken ? 0 : 0.6) * k; u.beacon.material.opacity = (taken ? 0 : 0.3) * k; });
+    v.packs.forEach((it, i) => { const gone = st.packs[i] !== 0; it.o.visible = !gone; if (gone) return; const k = fade(it); it.o.userData.halo.material.opacity = 0.6 * k; it.o.userData.beacon.material.opacity = 0.3 * k; });
+  }
+  const el = $("ammo"); el.style.display = LT.gun ? "block" : "none"; if (LT.gun) el.textContent = `RAY  ${"● ".repeat(LT.rounds)}${"○ ".repeat(Math.max(0, 3 - LT.rounds))}${LT.rounds}/${MAX_ROUNDS}`;
+}
+// what is within reach: {k: "locker" | "pack", i} or null
+function nearLoot() {
+  const v = LT.vis; if (!v || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return null;
+  const st = lt(); let best = null, bd = 1.5;
+  const look = (items, k, list) => items.forEach((it, i) => { if (list[i] !== 0) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = {k, i}; } });
+  look(v.lockers, "locker", st.lockers); look(v.packs, "pack", st.packs);
+  return best;
+}
+function lootAct(k, i) {
+  if (net.on) { net.send({t: "loot", k, i, rounds: LT.rounds}); return; }                  // the server answers with the floor's new state
+  const st = lt(), next = k === "locker" ? takeLocker(st, i, myId(), LT.gun) : takePack(st, i, myId(), LT.rounds);
+  if (next) setLoot(S.id, next, myId(), k);
+}
+function tryLoot() {
+  const n = nearLoot(); if (!n) return false;
+  if (n.k === "locker" && LT.gun) { toast("You already carry a gun"); return true; }
+  if (n.k === "pack" && LT.rounds >= MAX_ROUNDS) { toast(`You cannot carry more than ${MAX_ROUNDS} rounds`); return true; }
+  lootAct(n.k, n.i); return true;
+}
+function setLoot(scene, st, by, k) {
+  LT.st[scene] = st;
+  if (by !== undefined && by === myId()) {
+    if (k === "locker") { LT.gun = true; LT.rounds = GUN_ROUNDS; toast(`You take the Error Deletion Ray: ${GUN_ROUNDS} rounds`); }
+    else if (k === "pack") { LT.rounds = roundsAfterPack(LT.rounds); toast(`Ammo: ${LT.rounds} rounds`); }
+  }
+}
 function glowTexture() {
   const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), r = g.createRadialGradient(32, 32, 2, 32, 32, 32);
   r.addColorStop(0, "rgba(255,230,140,1)"); r.addColorStop(.35, "rgba(255,190,60,.45)"); r.addColorStop(1, "rgba(255,160,0,0)");
@@ -935,6 +1007,7 @@ function updatePrompt() {
     }
   }
   if (!pz && !dead && !loading && !reviveTarget() && nearPower()) msg = "Press E to switch on the power";
+  if (!msg && !dead && !loading && !reviveTarget()) { const n = nearLoot(); if (n) msg = n.k === "locker" ? (LT.gun ? "You already carry a gun" : "Press E to open the locker") : (LT.rounds >= MAX_ROUNDS ? "You cannot carry more ammo" : "Press E to take the ammo pack (+3)"); }
   el.textContent = msg; el.style.display = msg ? "block" : "none";
   if (!pz && POWER_SOURCES.includes(S.id)) { hud.style.display = "block"; hud.textContent = POWER.on ? "POWER ON" : "POWER OFF"; }
   else if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
@@ -1136,6 +1209,7 @@ function onNet(m) {
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
     case "power": setPower(true, m.by); break;
+    case "loot": setLoot(m.scene, m.st, m.by, m.k); break;
     case "alarm": startAlarm(m.ms); break;
     case "exited": FIN.exited.set(m.id, m); if (m.id !== net.id) toast(`${m.name} is out (place ${m.place})`); break;
     case "results": showResults(m.rows); break;
@@ -1341,7 +1415,7 @@ function update(dt) {
 }
 // everything a frame does except drawing, so a bot (tools/bots.mjs, ?bot=1) can run the game without rendering it
 function sim(dt, t) {
-  update(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
 }
 const BOT = new URLSearchParams(location.search).has("bot");
 function step(dtOverride) {
@@ -1373,7 +1447,7 @@ FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

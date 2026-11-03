@@ -54,6 +54,23 @@ try {
   const load = id => p.evaluate(i => window.__game.loadScene(i), id).then(() => p.waitForFunction(i => window.__game.S.id === i && !window.__game.loading, id, {timeout: 60000}));
   const at = i => p.evaluate(i => { const g = window.__game, f = g.FZ.st.B1[i]; return f.s === 3 ? [f.x, f.z] : g.FZ.vis.items[i].home; }, i);
   const go = xz => p.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);
+  // guns and ammo: 8 lockers (one gun each) and 3 packs on B1; 3 rounds from a gun, +3 a pack, 9 at most
+  const loot = await p.evaluate(() => {
+    const g = window.__game, v = g.LT.vis, pts = [...v.lockers, ...v.packs].map(i => i.home); let min = 99;
+    for (let a = 0; a < pts.length; a++) for (let b = a + 1; b < pts.length; b++) min = Math.min(min, Math.hypot(pts[a][0] - pts[b][0], pts[a][1] - pts[b][1]));
+    return {lockers: v.lockers.length, packs: v.packs.length, min: +min.toFixed(1), gun: g.LT.gun};
+  });
+  check("B1 has 8 lockers and 3 ammo packs, none on top of another", loot.lockers === 8 && loot.packs === 3 && loot.min >= 1.4 && !loot.gun, JSON.stringify(loot));
+  const stand = (kind, i) => p.evaluate(([k, i]) => { const g = window.__game, it = g.LT.vis[k][i]; g.P.p.set(it.home[0] + 0.5, g.S.floor + 0.02, it.home[1]); g.P.v.set(0, 0, 0); g.step(0.016); return document.getElementById("prompt").textContent; }, [kind, i]);
+  check("beside a locker the prompt offers it", /open the locker/.test(await stand("lockers", 0)));
+  await p.evaluate(() => window.__game.tryLoot());
+  check("opening a locker gives the gun with 3 rounds", await p.evaluate(() => { const g = window.__game; g.step(0.016); return g.LT.gun && g.LT.rounds === 3 && g.LT.st.B1.lockers[0] === 1 && /RAY.*3\/9/.test(document.getElementById("ammo").textContent); }));
+  await stand("lockers", 1); await p.evaluate(() => window.__game.tryLoot());
+  check("a second locker is refused: one gun each", await p.evaluate(() => { const g = window.__game; return g.LT.rounds === 3 && g.LT.st.B1.lockers[1] === 0; }));
+  const picked = [];
+  for (const i of [0, 1, 2]) { await stand("packs", i); await p.evaluate(() => window.__game.tryLoot()); picked.push(await p.evaluate(() => window.__game.LT.rounds)); }
+  check("each pack adds 3 rounds, and nobody carries more than 9", picked.join() === "6,9,9", picked.join());
+  check("a pack you cannot carry stays on the floor", await p.evaluate(() => window.__game.LT.st.B1.packs.filter(v => v === 0).length === 1));
   await go(await at(0)); await p.keyboard.press("KeyE");
   await until("pressing E picks up the fuse", p, () => window.__game.myCarry() === 0);
   await p.evaluate(() => window.__game.step(0.016));
@@ -138,6 +155,7 @@ try {
   const rload = id => r.evaluate(i => window.__game.loadScene(i), id).then(() => r.waitForFunction(i => window.__game.S.id === i && !window.__game.loading, id, {timeout: 60000}));
   await rload("L3");
   check("L3: a power box, no monsters, power off", await r.evaluate(() => { const g = window.__game; g.step(0.016); return !!g.S.pw && g.monsters.length === 0 && !g.POWER.on && /POWER OFF/.test(document.getElementById("fusehud").textContent); }));
+  check("L3 (no monsters) has 4 ammo packs to restock from", await r.evaluate(() => window.__game.packSpots().length === 4 && window.__game.LT.vis.packs.length === 4));
   await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0], g.S.floor + 0.02, sp[1] + 1.4); g.P.v.set(0, 0, 0); g.P.yaw = 0; g.step(0.016); });
   check("the prompt appears at the box", await r.evaluate(() => /Press E to switch on the power/.test(document.getElementById("prompt").textContent)));
   await r.keyboard.press("KeyE");
@@ -145,6 +163,7 @@ try {
   await rload("L4");
   check("arriving on L4 the doors are already open", await r.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && /POWER ON/.test((g.step(0.016), document.getElementById("fusehud").textContent)); }));
   check("the far switch is not offered once the power is on", await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); return g.nearPower() === false; }));
+  check("L4, which has no stair door, still has its 3 ammo packs", await r.evaluate(() => window.__game.packSpots().length === 3 && window.__game.LT.vis.packs.length === 3));
 
   // the finale: the alarm starts on arrival, the monsters hunt toward the doors, the lot is safe, and walking out ends the round
   check("the alarm starts when you are in the store with the doors open", await r.evaluate(() => { const g = window.__game; g.step(0.05); return g.FIN.alarmUntil > 0 && /ALARM \d:\d\d/.test(document.getElementById("alarm").textContent); }));

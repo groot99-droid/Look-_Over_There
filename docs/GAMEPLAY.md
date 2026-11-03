@@ -129,9 +129,11 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - Monster: a `banish(spot)` method and the placement rule above.
 - Bots: a bot with rounds fires at a chasing monster that is within 12 m, in sight, when its escape margin is under 2 s, and the bait uses it to pull a monster off the runner's way. Then rerun `tools/bots.mjs` and compare downs per floor with and without the gun: the first real test of the idea.
 
-**Build order.** 1. `shared/loot.js`, the server relay, lockers and packs. 2. The held gun, firing, hit and banish. 3. The bots' use of it and the comparison run. 4. Tuning, then scoring.
+**Build order.** 1. `shared/loot.js`, the server relay, lockers and packs: **built** (below). 2. The held gun, firing, hit and banish. 3. The bots' use of it and the comparison run. 4. Tuning, then scoring.
 
 **Settled (owner).** "Another location" means far away and out of sight (at least 35 m by path from every player, out of every player's view, at least 15 m from any player), as written above, not a fixed set of spots. The banished monster visibly flickers out and in (a 0.5 s glitch and cyan scanline). *Still open:* friendly fire is assumed off.
+
+**Step 1, built: lockers and ammo packs.** B1 has 8 lockers and 3 packs; L1, L2 and L4 have 3 packs each and L3 has 4 (the numbers above). They stand at seeded spots in the floor's main walkable area, the same for everyone (lockers at least 6 m apart where the floor allows, packs 10 m). Press E (or X on the controller) within 1.5 m: a locker gives you the gun with 3 rounds (once per player: a second locker is refused while you carry one), a pack adds 3 rounds (refused at 9). A locker or pack is taken once for the whole room, and a late joiner sees what is gone; a player who leaves puts their locker back, so a room can always arm everyone. The rounds show bottom right as `RAY ● ● ● 3/9`. Rules: `shared/loot.js`; the server keeps the state per floor and checks every pickup. The gun itself cannot be fired or seen yet (step 2). Solo play uses the same rules locally.
 
 ## Bots for tuning
 
