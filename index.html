@@ -1323,9 +1323,14 @@ function update(dt) {
   if (rumble && closest < 8 && (rumbleT -= dt) <= 0) { rumble.playEffect?.("dual-rumble", {duration: 120, strongMagnitude: .5 * fear, weakMagnitude: .7 * fear}); rumbleT = 0.15; }
   if (caught) die();
 }
+// everything a frame does except drawing, so a bot (tools/bots.mjs, ?bot=1) can run the game without rendering it
+function sim(dt, t) {
+  update(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+}
+const BOT = new URLSearchParams(location.search).has("bot");
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  sim(dt, t);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -1345,14 +1350,14 @@ function step(dtOverride) {
   }
   renderer.render(scene, camera);
 }
-function frame() { step(); requestAnimationFrame(frame); }
+function frame() { if (!BOT) step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
 await lobby();
 FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

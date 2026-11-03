@@ -84,8 +84,14 @@ No assigned classes. **Monsters show on the handheld map only through the camera
 5. Monsters on the map only through cameras: **built**
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring: **built**
-8. Bot players to tune the numbers
+8. Bot players to tune the numbers: **first version built** (`tools/bots.mjs`, see below)
 
 ## Characters
 
 Five playable characters (`characters/<id>.glb`, picked in the lobby, shown to everyone else with name tags): `plaid`, `suit`, `shorts`, `red`, `white`. Duplicates are allowed. Each has Walking and Running clips; standing still plays the walk almost frozen (no idle clip), crouching walks slowly, being downed lies the model down. `tools/optimize_character.mjs` produced them from the Meshy exports (1024 px WebP texture, ~30–76k vertices, Draco; about 0.5–0.7 MB each).
+
+## Bots for tuning (first version)
+
+`node tools/bots.mjs [bots=4] [--timeout=900] [--debug]` runs N real game clients (headless browsers, `?bot=1`, the game's own code, no drawing) in one room on a local server and prints a report: time on each floor, downs, revives, stuck moments, seconds spent fleeing, and each bot's place, time and the alarm left when it got out. A bot walks the game's walkable grid to what its floor needs (fuses, switches, notes and the code, the L3 box, the L4 doors), crouches when a monster is near, runs from one that is chasing, and lifts downed teammates. Run it locally; it is slow in software rendering.
+
+**What the first runs showed (3 bots, B1, about 500 s):** nobody got off B1. Each bot was downed 6 to 10 times, about once per respawn. The monsters chase at 5.4 to 5.7 m/s and the player runs at 5.6, so once a monster has locked on you can hardly shake it; crouching and fleeing made little difference (8 to 9 downs instead of 9 to 10). The bots are not clever (no hiding, no use of doors), so this is a worst case, but it points at three numbers to look at first: the monsters' chase speed against the player's run speed, the 16 m sight with a 110 degree view, and where a downed player wakes up (the stairs, which may be where the monster was).
