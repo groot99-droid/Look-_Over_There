@@ -131,7 +131,7 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 
 **Build order.** 1. `shared/loot.js`, the server relay, lockers and packs. 2. The held gun, firing, hit and banish. 3. The bots' use of it and the comparison run. 4. Tuning, then scoring.
 
-**Open questions.** Does the owner want the banished monster to flicker out and in visibly (assumed yes) or vanish silently? Is "at least 35 m away and out of sight" the right idea of "another location", or should it be a fixed set of spots? Should a shot ever hurt another player (assumed no: no friendly fire)?
+**Settled (owner).** "Another location" means far away and out of sight (at least 35 m by path from every player, out of every player's view, at least 15 m from any player), as written above, not a fixed set of spots. The banished monster visibly flickers out and in (a 0.5 s glitch and cyan scanline). *Still open:* friendly fire is assumed off.
 
 ## Bots for tuning
 
