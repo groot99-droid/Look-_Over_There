@@ -45,6 +45,8 @@
   #l-wait{display:none;flex-direction:column;gap:12px;width:min(340px,86vw)}
   #l-players div{padding:5px 0;border-bottom:1px solid #22221c}
   #l-players span{float:right;color:#7a7a6a}
+  #stam{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:120px;height:4px;background:rgba(0,0,0,.45);z-index:1;pointer-events:none;opacity:0;transition:opacity .3s}
+  #stam i{display:block;height:100%;width:100%;background:#cdb}
   #alarm{position:fixed;left:50%;top:44px;transform:translateX(-50%);font:700 15px/1 system-ui,sans-serif;letter-spacing:.2em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;color:#ff5040}
   #alarm.out{color:#9ccc65}
   #redpulse{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;box-shadow:inset 0 0 120px 30px rgba(220,30,20,.75)}
@@ -65,7 +67,7 @@
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
 <div id="hud"></div>
-<div id="alarm"></div><div id="redpulse"></div>
+<div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
 <div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
@@ -228,7 +230,8 @@ const levelOfY = () => S.id;
 
 // ---------------------------------------------------------------- player
 const R = 0.28, H = 1.7, EYE = 1.55, STEP = 0.46;
-const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false};
+const WALK_SPEED = 4.0, RUN_SPEED = 7.5, CROUCH_SPEED = 2.2, RUN_S = 4, RECOVER_S = 6, RUN_RESUME = 0.3;       // m/s; run for RUN_S seconds, then a recovery: you can run again once the bar is back to RUN_RESUME
+const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false, running: false, stam: 1, tired: false};
 const overlap = (b, p) => !b.off && p.x + R > b.n[0] && p.x - R < b.x[0] && p.z + R > b.n[2] && p.z - R < b.x[2] && p.y + H > b.n[1] && p.y < b.x[1];
 function collide(p) { for (const id of near(p.x, p.z, 1.5)) if (overlap(boxes[id], p)) return boxes[id]; return null; }
 function move(dx, dy, dz) {
@@ -336,6 +339,7 @@ function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
   return out;
 }
 const MON_STATES = ["patrol", "chase", "search"];
+const NOISE_WALK = 0.5, NOISE_CARRY_CROUCH = 0.4, NOISE_WALL = 0.5, CHASE_LOSE_S = 2.5, SEARCH_S = 6;       // how loud walking is (of the full range), a crouching carrier, how much a wall takes off, how long it chases unseen, how long it searches
 class Monster {
   constructor(cfg, level, x, z) {
     this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
@@ -404,21 +408,26 @@ class Monster {
     const c = this.cfg;
     let seenT = null, sd = 1e9;
     for (const t of targets) if (this.sees(t)) { const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z); if (d < sd) { sd = d; seenT = t; } }
-    let noiseAt = null, nd = 1e9;                                                   // moving about is loud, crouching is silent; a fuse in your hands is heard 1.5x as far, and even crouched
-    for (const t of targets) if (t.moving && (!t.crouch || t.carry) && this.onFloorY(t.y)) {
-      const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z), rad = c.hear * (t.carry ? (t.crouch ? 0.75 : 1.5) : 1);
+    let noiseAt = null, nd = 1e9;                                                   // running is loud (the full hearing range), walking is half of it, crouching is silent; walls halve what gets through
+    for (const t of targets) if (t.moving && this.onFloorY(t.y)) {
+      const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z), tier = t.crouch ? (t.carry ? NOISE_CARRY_CROUCH : 0) : t.run ? 1 : NOISE_WALK;     // a fuse in your hands is heard 1.5x as far, and even crouched
+      if (!tier || d > c.hear * 1.5 * tier) continue;
+      const rad = c.hear * tier * (t.carry && !t.crouch ? 1.5 : 1) * (d < 2 || this.los(t) ? 1 : NOISE_WALL);
       if (d < rad && d < nd) { nd = d; noiseAt = [t.x, t.z]; }
     }
     const ct = seenT || targets.find(t => t.id === this.tgt) || null;               // whoever it is chasing
     if (seenT) { this.state = "chase"; this.lost = 0; this.tgt = seenT.id; this.last = [seenT.x, seenT.z]; }
-    else if (this.state === "chase") { this.last = this.last || [this.pos.x, this.pos.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
-    else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
+    else if (this.state === "chase") {                                               // it lost sight: it runs to where it last saw you, and gives up if it gets there or CHASE_LOSE_S passes
+      this.last = this.last || [this.pos.x, this.pos.z]; this.lost += dt;
+      if (this.lost > CHASE_LOSE_S || Math.hypot(this.last[0] - this.pos.x, this.last[1] - this.pos.z) < 1.2) { this.state = "search"; this.lost = 0; this.goTo(...this.last); }
+    }
+    else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > SEARCH_S) { this.state = "patrol"; this.target = null; } }
     if (noiseAt && this.state !== "chase") { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
     this.repath -= dt;
     let speed = c.patrol;
     if (this.state === "chase") {
       speed = c.chase;
-      if (this.repath <= 0) { const g = ct ? [ct.x, ct.z] : this.last; if (g) this.goTo(...g); this.repath = 0.35; }
+      if (this.repath <= 0) { const g = seenT ? [seenT.x, seenT.z] : this.last; if (g) this.goTo(...g); this.repath = 0.35; }          // only what it can see, never where you are now
     } else if (this.state === "search") speed = c.alert;
     else {
       if (this.wait > 0) { this.wait -= dt; speed = 0; }
@@ -443,8 +452,8 @@ class Monster {
           this.pos.x += (dx / dd) * step; this.pos.z += (dz / dd) * step; this.speed = speed;
         }
       }
-    } else if (this.state === "chase" && ct && Math.hypot(ct.x - this.pos.x, ct.z - this.pos.z) > 0.1) {
-      const want = Math.atan2(-(ct.x - this.pos.x), -(ct.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+    } else if (this.state === "chase" && seenT && Math.hypot(seenT.x - this.pos.x, seenT.z - this.pos.z) > 0.1) {
+      const want = Math.atan2(-(seenT.x - this.pos.x), -(seenT.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
       this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
     }
     this.visual(dt);
@@ -642,7 +651,7 @@ let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
   rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
-  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, use: false};
+  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, use: false, run: false};
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
@@ -652,7 +661,7 @@ function pad() {
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
     if (edge(5) || edge(15)) cycleCam(1);                     // RB / D-pad right: next camera
   }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), use: down(2), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), use: down(2), run: down(7) || (b[7] && b[7].value > 0.5), crouch: down(1) || down(10) || down(6) || (b[6] && b[6].value > 0.5)};   // LT (like Shift) / B / L-stick click
 }
 
 // ---------------------------------------------------------------- fuses: the stair door at the top of B1, L1 and L2 needs NEED of them (rules: shared/fuses.js; in a room the server holds the state)
@@ -1107,7 +1116,7 @@ function onNet(m) {
     case "s": {
       const p = net.peers.get(m.id); if (!p) break;
       const moved = p.scene !== m.scene, wasDead = p.dead;
-      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry;
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry;
       if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
       if (!wasDead && p.dead && m.scene === S.id) { net.alert = {id: p.id, until: performance.now() + 8000}; toast(`${p.name} was caught`); }     // the scream: an arrow toward the body
       break;
@@ -1163,7 +1172,8 @@ function updatePeers(dt) {
       if (p.dead) peerPlay(p, "walk", 0);
       else if (!p.moving) peerPlay(p, "walk", 0.04);                       // standing still: the walk, almost frozen (the models have no idle clip)
       else if (p.crouch) peerPlay(p, "walk", 0.6);
-      else peerPlay(p, "run", 1);
+      else if (p.run) peerPlay(p, "run", 1);
+      else peerPlay(p, "walk", 1.15);
       p.mixer.update(dt);
     }
   }
@@ -1172,7 +1182,7 @@ function netTick(dt) {
   if (!net.on) return;
   if ((net.t -= dt) <= 0) {
     net.t = 1 / 15;
-    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0});
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0});
   }
   if (!loading && net.host() && (net.mt -= dt) <= 0) {
     net.mt = 0.1;
@@ -1269,8 +1279,8 @@ function respawn() {
 // the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
 function targetList() {
   const out = [];
-  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving, carry: myCarry() >= 0});
-  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving, carry: !!p.carry});
+  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch, moving: P.moving, run: P.running, carry: myCarry() >= 0});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch, moving: !!p.moving, run: !!p.run, carry: !!p.carry});
   return out;
 }
 function simMonsters(dt) {
@@ -1306,7 +1316,13 @@ function update(dt) {
   const side = (reviving || KPUI.open) ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
   P.crouch = !!(keys.ShiftLeft || keys.ShiftRight || g.crouch);
   P.moving = Math.hypot(fwd, side) > 0.2;
-  const sp = (P.crouch ? 2.2 : 5.6) * dt;
+  const runKey = !P.crouch && !reviving && !KPUI.open && (keys.KeyR || g.run);                // hold R (or RT) to run: faster than any monster, and loud
+  if (P.tired && P.stam >= RUN_RESUME) P.tired = false;
+  P.running = !!(runKey && P.moving && !P.tired && P.stam > 0);
+  P.stam = Math.max(0, Math.min(1, P.stam + (P.running ? -dt / RUN_S : dt / RECOVER_S)));
+  if (P.running && P.stam <= 0) { P.tired = true; P.running = false; }
+  $("stam").style.opacity = P.stam < 0.999 ? 1 : 0; $("stam").firstElementChild.style.width = P.stam * 100 + "%"; $("stam").firstElementChild.style.background = P.tired ? "#a55" : "#cdb";
+  const sp = (P.crouch ? CROUCH_SPEED : P.running ? RUN_SPEED : WALK_SPEED) * dt;
   let wx = -Math.sin(P.yaw) * fwd + Math.cos(P.yaw) * side, wz = -Math.cos(P.yaw) * fwd - Math.sin(P.yaw) * side;
   const mag = Math.min(1, Math.hypot(wx, wz)), l = Math.hypot(wx, wz) || 1;
   wx = wx / l * mag * sp; wz = wz / l * mag * sp;

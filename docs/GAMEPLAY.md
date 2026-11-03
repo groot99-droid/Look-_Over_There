@@ -39,7 +39,7 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 ### Fuses (built)
 - Three fuses per gated floor, in the same places for everyone (seeded, in the floor's main walkable area, away from the door and from where monsters start). Press E / X within 1.5 m to pick one up; E / X at the door puts it in. One carried at a time. Three lamps above the door go from red to green.
 - Priority of E / X: lift a downed teammate, then pick up a fuse, then the door.
-- A carrier is easier to find: monsters hear a carrier 1.5x as far, and a crouching carrier is no longer silent (heard at 0.75x) and is seen from 0.75x instead of 0.5x. Other players see a glow round a carrier.
+- A carrier is easier to find: monsters hear a carrier walking or running 1.5x as far, and a crouching carrier is no longer silent (heard at 0.4x the hearing range) and is seen from 0.75x instead of 0.5x. Other players see a glow round a carrier.
 - A downed carrier drops the fuse where they fell. A carrier who leaves the floor or the room puts it back where it started. A powered door stays powered.
 - State is held by the server per room (`shared/fuses.js` is the one rule set, used by the server and by solo play); a late joiner sees the current state.
 - The art is drawn in code for now; an optional `models/fuse.glb` replaces it (`docs/MODELS.md` has the Meshy prompts and the budget).
@@ -71,6 +71,13 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - Rules: `shared/finish.js`; the server keeps the run and the alarm (`exit` is accepted only from L4 with the power on).
 - Not done: a siren sound (the game has no audio yet); the best record is per browser, not shared; the 60 s and the hunt are untuned.
 
+## Movement, sight and hearing
+
+- **You:** walk 4 m/s (quiet), hold R (right trigger on a controller) to run at 7.5 m/s (loud) for about 4 s, then a short recovery (the bar under the screen, back to 30% before you can run again), crouch (Shift) at 2.2 m/s (silent). A monster chases at 5.4 to 5.7 m/s, so running pulls away from one and walking does not.
+- **They see** up to 16 m in a 110 degree view and need a clear line (8 m if you crouch). A monster that has seen you runs to the spot where it last saw you, not to where you are now, and gives up 2.5 s after losing sight (or on arriving), then searches that spot for 6 s.
+- **They hear** by what you are doing: running at the full range (9 m), walking at half (4.5 m), crouching not at all (a crouching carrier at 0.4x). A wall between you halves it. Hearing sends a monster to look, at its searching pace, never straight into a chase; only seeing you starts a chase.
+- The numbers are `NOISE_WALK`, `NOISE_CARRY_CROUCH`, `NOISE_WALL`, `CHASE_LOSE_S`, `SEARCH_S` above `class Monster`, and `WALK_SPEED`, `RUN_SPEED`, `RUN_S`, `RECOVER_S` by the player, in `index.html`. All untuned until the bots and real players have used them.
+
 ## Roles that emerge (built)
 
 No assigned classes. **Monsters show on the handheld map only through the cameras** (built): every security camera on the floor sweeps on its loop, and a monster inside a camera's view (within 40 m, not behind a wall) is marked on everyone's map with pulsing rings; the mark stays at its last seen spot and fades over 3 s. A floor's blind spots are the places no camera reaches. Nobody has to hold a feed open, but the map is only as good as the sweep, so a player who watches the feeds can tell the team what the map cannot. Each client runs the cameras on its own clock, so two players' sweeps can be a few seconds out of step. Scouts, carriers and revivers come from the fuse and revive rules.
@@ -94,4 +101,4 @@ Five playable characters (`characters/<id>.glb`, picked in the lobby, shown to e
 
 `node tools/bots.mjs [bots=4] [--timeout=900] [--debug]` runs N real game clients (headless browsers, `?bot=1`, the game's own code, no drawing) in one room on a local server and prints a report: time on each floor, downs, revives, stuck moments, seconds spent fleeing, and each bot's place, time and the alarm left when it got out. A bot walks the game's walkable grid to what its floor needs (fuses, switches, notes and the code, the L3 box, the L4 doors), crouches when a monster is near, runs from one that is chasing, and lifts downed teammates. Run it locally; it is slow in software rendering.
 
-**What the first runs showed (3 bots, B1, about 500 s):** nobody got off B1. Each bot was downed 6 to 10 times, about once per respawn. The monsters chase at 5.4 to 5.7 m/s and the player runs at 5.6, so once a monster has locked on you can hardly shake it; crouching and fleeing made little difference (8 to 9 downs instead of 9 to 10). The bots are not clever (no hiding, no use of doors), so this is a worst case, but it points at three numbers to look at first: the monsters' chase speed against the player's run speed, the 16 m sight with a 110 degree view, and where a downed player wakes up (the stairs, which may be where the monster was).
+**What the first runs showed, before the movement and hearing change above (3 bots, B1, about 500 s):** nobody got off B1. Each bot was downed 6 to 10 times, about once per respawn. The monsters chase at 5.4 to 5.7 m/s and the player runs at 5.6, so once a monster has locked on you can hardly shake it; crouching and fleeing made little difference (8 to 9 downs instead of 9 to 10). The bots are not clever (no hiding, no use of doors), so this is a worst case, but it points at three numbers to look at first: the monsters' chase speed against the player's run speed, the 16 m sight with a 110 degree view, and where a downed player wakes up (the stairs, which may be where the monster was).

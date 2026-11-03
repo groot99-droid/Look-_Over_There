@@ -29,6 +29,28 @@ try {
   check("solo: no room, you are the host", await p.evaluate(() => !window.__game.net.on && window.__game.net.host()));
   check("solo: three fuses and a locked stair door on B1", await p.evaluate(() => { const g = window.__game; return g.FZ.vis.items.length === 3 && g.isLocked(g.upDoor()); }));
   check("without models/fuse.glb the placeholder stays", await p.evaluate(() => !window.__game.FZ.vis.items[0].o.userData.model));
+  // a monster that loses sight runs to where it last saw you (not to where you are now) and gives up soon; running tires you
+  const chase = await p.evaluate(() => {
+    const g = window.__game, m = g.monsters[0]; m.los = () => true; m.state = "patrol"; m.path = [];
+    const f = d => ({id: 99, x: m.pos.x - Math.sin(m.yaw) * d, y: m.fy, z: m.pos.z - Math.cos(m.yaw) * d, crouch: false, moving: false});
+    const seen = f(6); m.update(0.01, [seen]); const started = m.state;
+    const gone = {id: 99, x: m.pos.x + 40, y: m.fy, z: m.pos.z + 40, crouch: false, moving: false};            // far outside its sight
+    m.update(0.4, [gone]); const stillChasing = m.state === "chase", lastOk = Math.hypot(m.last[0] - seen.x, m.last[1] - seen.z) < 0.01;
+    for (let i = 0; i < 30; i++) m.update(0.1, [gone]);
+    const gaveUp = m.state !== "chase"; delete m.los; return {started, stillChasing, lastOk, gaveUp};
+  });
+  check("a monster chases what it saw, to the spot it last saw it", chase.started === "chase" && chase.stillChasing && chase.lastOk, JSON.stringify(chase));
+  check("and gives up within a few seconds of losing sight", chase.gaveUp);
+  const stam = await p.evaluate(() => {
+    const g = window.__game; g.P.imm = 99; g.keys.KeyW = true; g.keys.KeyR = true; let n = 0;
+    while (g.P.stam > 0 && n++ < 200) g.update(0.05);
+    const tired = g.P.tired && !g.P.running, secs = n * 0.05;
+    g.keys.KeyR = false; for (let i = 0; i < 20; i++) g.update(0.05); const stillTired = g.P.tired;           // 1 s of recovery: not yet back to the resume level
+    for (let i = 0; i < 20; i++) g.update(0.05); const back = !g.P.tired;                                       // 2 s in: running is allowed again
+    g.keys.KeyW = false; return {tired, secs, stillTired, back};
+  });
+  check("running lasts about 4 s, then you are tired", stam.tired && Math.abs(stam.secs - 4) < 0.3, JSON.stringify(stam));
+  check("you can run again after a short recovery", stam.stillTired && stam.back);
   const load = id => p.evaluate(i => window.__game.loadScene(i), id).then(() => p.waitForFunction(i => window.__game.S.id === i && !window.__game.loading, id, {timeout: 60000}));
   const at = i => p.evaluate(i => { const g = window.__game, f = g.FZ.st.B1[i]; return f.s === 3 ? [f.x, f.z] : g.FZ.vis.items[i].home; }, i);
   const go = xz => p.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);

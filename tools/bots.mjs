@@ -2,7 +2,9 @@
 // and the run prints a report: time per floor, downs, revives, stuck moments, and each bot's place, time and the alarm left when it got out.
 //   node tools/bots.mjs [bots=4] [--timeout=900] [--json=file]
 // A bot walks the game's own walkable grid (A*) to what its floor needs: fuses on B1, switches on L1, notes and the code on L2, the power box on L3,
-// the doors on L4. It lifts downed teammates. It does not hide or avoid monsters, so "downs" is the raw danger of a floor.
+// the doors on L4. It lifts downed teammates, walks by default, runs only when no monster is within 20 m, crouches when one is within 10 m that has not
+// noticed it, and runs straight away from one that is chasing. It knows where every monster, fuse, switch and door is (it reads the game's state), but it
+// does not hide, use doors to shake a chaser, or plan a route around a patrol, so "downs" is a rough worst case for a floor.
 // Needs Playwright + Chromium and internet for three.js from unpkg. Run locally; it is slow in software rendering.
 import {createRequire} from "node:module";
 import fs from "node:fs";
@@ -19,7 +21,7 @@ function brain(idx) {
   const now = () => performance.now() / 1000;
   const face = (x, z) => { g.P.yaw = Math.atan2(-(x - g.P.p.x), -(z - g.P.p.z)); };
   const dist = (x, z) => Math.hypot(x - g.P.p.x, z - g.P.p.z);
-  const stop = () => { g.keys.KeyW = false; g.keys.KeyE = false; };
+  const stop = () => { g.keys.KeyW = false; g.keys.KeyE = false; g.keys.KeyR = false; };
   function walkTo(x, z, close) {                                          // follow an A* path to (x, z); the last stretch is a straight walk (a door can sit off the grid)
     const key = x.toFixed(1) + "," + z.toFixed(1) + g.S.id;
     if (B.cur !== key || now() - B.pathAt > 2) {
@@ -30,7 +32,7 @@ function brain(idx) {
     while (B.path.length && dist(B.path[0][0], B.path[0][1]) < 0.7) B.path.shift();
     const [wx, wz] = B.path.length ? B.path[Math.min(1, B.path.length - 1)] : [x, z];
     if (dist(x, z) <= close) { stop(); return true; }
-    face(wx, wz); g.keys.KeyW = true; g.P.crouch = !!B.sneak;
+    face(wx, wz); g.keys.KeyW = true; g.P.crouch = !!B.sneak; g.keys.KeyR = !!B.runOk && !B.sneak;
     if (!B.prev || now() - B.prevAt > 3) {                                // stuck: hardly moved in 3 s, so hop to the next waypoint
       if (B.prev && Math.hypot(B.prev[0] - g.P.p.x, B.prev[1] - g.P.p.z) < 0.3) { B.stuck++; if (B.path.length) { const [sx, sz] = B.path[0]; g.P.p.set(sx, g.P.p.y + 0.05, sz); } }
       B.prev = [g.P.p.x, g.P.p.z]; B.prevAt = now();
@@ -54,8 +56,9 @@ function brain(idx) {
     // some sense: crouch (quiet, slow) when a monster is near and has not noticed us; run straight away from one that is chasing
     let near = 99, chaser = null;
     for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d < near) near = d; if (m.state === "chase" && d < 14 && (!chaser || d < dist(chaser.pos.x, chaser.pos.z))) chaser = m; }
-    B.sneak = near < 16 && !chaser;
-    if (chaser) { const fx = g.P.p.x - chaser.pos.x, fz = g.P.p.z - chaser.pos.z, L = Math.hypot(fx, fz) || 1; face(g.P.p.x + fx / L * 5, g.P.p.z + fz / L * 5); g.keys.KeyW = true; g.P.crouch = false; B.fled = (B.fled || 0) + 0.05; return; }
+    B.sneak = near < 10 && !chaser;                                   // sight is 16 m (8 m crouched) and walking is heard at half the 9 m hearing range
+    B.runOk = near > 20 && g.P.stam > 0.5;                           // run (loud) only when nothing is near; running is for open ground or an escape
+    if (chaser) { const fx = g.P.p.x - chaser.pos.x, fz = g.P.p.z - chaser.pos.z, L = Math.hypot(fx, fz) || 1; face(g.P.p.x + fx / L * 5, g.P.p.z + fz / L * 5); g.keys.KeyW = true; g.keys.KeyR = g.P.stam > 0.02; g.P.crouch = false; B.fled = (B.fled || 0) + 0.05; return; }
     if (id === "B1") {
       const door = upDoor(), v = g.FZ.vis, fs = st.B1 || [];
       if (door && g.isLocked(door)) {

@@ -71,13 +71,18 @@ try {
     if (i < 2) check(`the door is still locked with ${i + 1} fuse(s)`, await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
   }
   await until("Bob sees the door powered", b, () => window.__game.FZ.st.B1.every(f => f.s === 2));
-  // a carrier is heard further off, even crouched (checked on whichever client runs the monsters)
+  // hearing: running is the full range, walking half, crouching silent (a carrier still heard), walls halve it (checked on whichever client runs the monsters)
   const hostPage = A.host ? a : b;
   const noise = await hostPage.evaluate(() => { const g = window.__game, m = g.monsters[0], c = m.cfg;
-    const behind = (d, carry) => ({id: 99, x: m.pos.x + Math.sin(m.yaw) * d, y: m.fy, z: m.pos.z + Math.cos(m.yaw) * d, crouch: true, moving: true, carry});      // behind it, so it cannot see them
-    const run = t => { m.state = "patrol"; m.path = []; m.update(0.01, [t]); return m.state; };
-    return {plain: run(behind(c.hear * 0.6, false)), carrier: run(behind(c.hear * 0.6, true)), farCarrier: run(behind(c.hear * 0.9, true))}; });
-  check("a crouching carrier is heard at 0.75x hearing; a crouching non-carrier is not", noise.plain === "patrol" && noise.carrier === "search" && noise.farCarrier === "patrol", JSON.stringify(noise));
+    const at = (d, o) => ({id: 99, x: m.pos.x + Math.sin(m.yaw) * d, y: m.fy, z: m.pos.z + Math.cos(m.yaw) * d, crouch: false, moving: true, carry: false, ...o});      // behind it, so it cannot see them
+    const run = (t, clear) => { m.los = () => clear; m.state = "patrol"; m.path = []; m.update(0.01, [t]); return m.state; };
+    const out = {runFar: run(at(c.hear * 0.8, {run: true}), true), walkFar: run(at(c.hear * 0.8, {}), true), walkNear: run(at(c.hear * 0.4, {}), true),
+      crouchQuiet: run(at(c.hear * 0.5, {crouch: true}), true), carryCrouchNear: run(at(c.hear * 0.3, {crouch: true, carry: true}), true), carryCrouchFar: run(at(c.hear * 0.6, {crouch: true, carry: true}), true),
+      runThroughWall: run(at(c.hear * 0.8, {run: true}), false), runNearWall: run(at(c.hear * 0.4, {run: true}), false)};
+    delete m.los; return out; });
+  check("running is heard at the full range, walking at half", noise.runFar === "search" && noise.walkFar === "patrol" && noise.walkNear === "search", JSON.stringify(noise));
+  check("crouching is silent, but a crouching carrier is heard up close", noise.crouchQuiet === "patrol" && noise.carryCrouchNear === "search" && noise.carryCrouchFar === "patrol");
+  check("a wall halves what is heard", noise.runThroughWall === "patrol" && noise.runNearWall === "search");
   // Ann takes the real stair door to L1; Bob is moved there
   await a.evaluate(() => { const g = window.__game; g.openDoor(g.upDoor(), true); });
   await a.evaluate(async () => { const g = window.__game; for (let i = 0; i < 40 && g.S.id === "B1"; i++) { g.update(0.05); await new Promise(r => setTimeout(r, 30)); } });
@@ -121,6 +126,7 @@ try {
   await until("a wrong code locks the keypad for both", host, () => { const v = window.__game.KP.st.L2; return v.fails === 1 && v.lockMs > 7000; });
   await until("the guest sees the lock too", guest, () => window.__game.KP.st.L2.fails === 1);
   check("the wrong code sent the host's monster to the door", await host.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
+  srv.rooms.get("TEST").keypads.L2.lockUntil = Date.now() + 60000;                         // hold the lock open: this slow browser can take more than its 8 s to get here
   await host.evaluate(c => window.__game.kpAct({a: "try", code: c}), code.join(""));
   await new Promise(r => setTimeout(r, 600));
   check("the right code does nothing while it is locked", !srv.rooms.get("TEST").keypads.L2.solved);
