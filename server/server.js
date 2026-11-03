@@ -9,6 +9,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {WebSocketServer} from "ws";
 import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
+import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models"]);            // nothing else in the repo is public
@@ -43,6 +44,9 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
     const next = fuseAct(floorFuses(room, scene), id, {a: "release"});
     if (next) { room.fuses[scene] = next; sendFuses(room, scene); }
   }
+  // switches: the same idea for the floors that have them (state per floor, kept for the life of the room)
+  const floorSwitches = (room, scene) => room.switches[scene] ||= newSwitches();
+  const sendSwitches = (room, scene) => broadcast(room, {t: "switches", scene, st: floorSwitches(room, scene)}, undefined, scene);
   // the waiting room: everyone readies, then a countdown, then the round starts for the whole room (a round runs until the room empties)
   const lobbyMsg = room => ({t: "lobby", phase: room.phase, countdownMs: room.timer ? countdownMs : null,
     players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char, ready: p.ready}))});
@@ -76,7 +80,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
       if (!me) {
         if (m.t !== "join") return;
         const code = String(m.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "MAIN";
-        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}}; rooms.set(code, room);
+        room = rooms.get(code) || {code, players: new Map(), hosts: {}, seq: 0, phase: "lobby", timer: null, fuses: {}, switches: {}}; rooms.set(code, room);
         if (room.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({t: "full"})); return ws.close(); }
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
@@ -101,7 +105,15 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000} = {}) 
             broadcast(room, {t: "p", id: me.id, scene}, me.id); elect(room);
             if (was) releaseFuse(room, me.id, was);
             if (GATED.includes(scene)) send(me, {t: "fuses", scene, st: floorFuses(room, scene)});
+            if (SWITCH_FLOORS.includes(scene)) send(me, {t: "switches", scene, st: floorSwitches(room, scene)});
           }
+          break;
+        }
+        case "switch": {                                              // flip one switch on the floor you are on
+          const scene = me.scene;
+          if (!SWITCH_FLOORS.includes(scene)) break;
+          const next = flipSwitch(floorSwitches(room, scene), m.i);
+          if (next) { room.switches[scene] = next; sendSwitches(room, scene); }
           break;
         }
         case "fuse": {                                                // take / slot / drop a fuse on the floor you are on

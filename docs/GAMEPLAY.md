@@ -31,7 +31,7 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 | Floor | Puzzle | Status |
 |---|---|---|
 | B1 | **Fuses:** 3 lie around the floor; carry them one at a time to the stair door | **built** |
-| L1 | **Switches:** two far-apart switches pressed together; the loud one draws the monsters off | planned (L1 uses fuses until this exists) |
+| L1 | **Switches:** two far-apart switches, flipped one at a time in any order; each flip is loud and draws nearby monsters to look | **built** |
 | L2 | **Keypad:** a 4-digit code, each digit found at a different place, shared by the team | planned (L2 uses fuses until this exists) |
 | L3 | Break floor, no monsters. A **fuse box** here is an optional shortcut that powers L4's doors early | planned |
 | L4 | **The trick:** the doors are shut unless the L3 box was thrown; otherwise the power switch is on the far side of the room, with the monsters | planned |
@@ -43,6 +43,12 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - A downed carrier drops the fuse where they fell. A carrier who leaves the floor or the room puts it back where it started. A powered door stays powered.
 - State is held by the server per room (`shared/fuses.js` is the one rule set, used by the server and by solo play); a late joiner sees the current state.
 - The art is drawn in code for now; an optional `models/fuse.glb` replaces it (`docs/MODELS.md` has the Meshy prompts and the budget).
+
+### Switches (built)
+- Two switch posts stand at least 14 m apart (usually 25+), in the same places for everyone (seeded, like the fuses). Press E / X within 1.6 m to flip one. They are flipped one at a time, by anyone, in any order, and stay flipped; both on powers the stair door. The lamps over the door and the HUD (`SWITCHES 1/2`) show progress.
+- A flip is loud: every monster on the floor within 40 m goes to look at the switch (unless it is already chasing someone). The floor's host runs the monsters, so this works the same in a room and solo.
+- A player arriving on the floor later sees which switches are already on. State is held by the server per room (`shared/switches.js` is the one rule set).
+- Placeholder art in code; an optional `models/switch.glb` replaces it (see `docs/MODELS.md`).
 
 - **Finale (L4):** taking the last fuse to the exit sets off the alarm. For 60 s every L4 monster hunts toward the exit; run the parking lot to get out. Where the exit sits on L4 is still to be decided after walking the map. (planned)
 - **Score:** how many escaped out of how many started, the time, and a bonus if nobody went down. (planned)
@@ -56,7 +62,7 @@ No assigned classes. The camera watcher matters because monsters show on the han
 1. Ready-up lobby, group spawn, floor-only position relay: **built**
 2. Downed and revive, scream arrow: **built**
 3. Close doors: **built**
-4. Fuses and the gated stair door: **built** (B1; L1 and L2 reuse it until their own puzzles exist). Then the switch puzzle (L1), the keypad (L2), and the L3 box / L4 power trick.
+4. Fuses and the gated stair door: **built** (B1, and L2 until its keypad exists). Switches on L1: **built**. Still to do: the keypad (L2) and the L3 box / L4 power trick.
 5. Monsters on the map only through cameras
 6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
 7. Finale alarm and scoring

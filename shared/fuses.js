@@ -1,7 +1,7 @@
 // The fuse rules, shared by the game (solo play) and the server (rooms), so both agree on what is allowed.
 // A gated floor has NEED fuses lying around; carry them one at a time to the door at the top of that floor's stairs and put them in.
 // A fuse is {s: 0 at home | 1 carried by `by` | 2 in the door | 3 dropped at x, z}.
-export const GATED = ["B1", "L1", "L2"];            // L3 is the breather, L4 is the finale (not built yet)
+export const GATED = ["B1", "L2"];                  // fuse floors. L1 has switches (shared/switches.js); L2 reuses fuses until its keypad exists; L3 is the breather, L4 the finale
 export const NEED = 3;
 export const newFloor = () => Array.from({length: NEED}, () => ({s: 0}));
 export const carrying = (st, who) => st.findIndex(f => f.s === 1 && f.by === who);

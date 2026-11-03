@@ -10,12 +10,12 @@ Meshy is a paid step in the studio: run the `asset-3d` pipeline on your own mach
 |---|---|---|---|---|
 | `fuse` | `models/fuse.glb` | "A heavy industrial cartridge fuse, about 30 cm long: a glass body glowing amber with a visible filament, brass end caps, worn and slightly dirty, game prop, single object, no stand" | 0.30 m | A prop, no rig needed. Keep it under about 3k triangles; centred; long axis vertical. |
 
-## Needed later (puzzle steps 2 to 4)
+## Needed later
 
 | id | prompt | height | for |
 |---|---|---|---|
 | `gate_panel` | "A wall-mounted electrical lock panel with three small indicator lamps in a row and a fuse slot, dirty 1990s industrial, game prop" | 0.40 m | the stair door's fuse panel (replaces the three code-made lamps) |
-| `switch` | "A heavy industrial wall switch, black lever on a grey steel plate with a red warning stripe, game prop" | 0.35 m | L1 two-switch puzzle |
+| `switch` | "A waist-high industrial control pedestal with a heavy black lever switch on a grey steel plate and a small indicator lamp, worn paint, game prop" | 1.2 m | L1 switches (the loader already looks for `models/switch.glb`; the lever and lamp of the placeholder are what show on/off today) |
 | `keypad` | "A wall-mounted numeric keypad with a small green LCD, scuffed grey plastic, game prop" | 0.30 m | L2 four-digit code |
 | `fuse_box` | "An open grey electrical fuse box on a wall with a big power lever, labelled breakers, grime, game prop" | 0.7 m | L3 break-floor box / L4 power switch |
 

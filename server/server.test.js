@@ -130,15 +130,32 @@ test("fuses: take and slot are relayed to the floor, a floor change or leaving p
 
 test("fuses: state is kept for the room; leaving releases; junk is ignored", async () => {
   const srv = await createServer();
-  const a = await join(srv, "R8", "Ann"); a.send({t: "s", scene: "L1"}); await a.next(kind("fuses"));
+  const a = await join(srv, "R8", "Ann"); a.send({t: "s", scene: "L2"}); await a.next(kind("fuses"));
   a.send({t: "fuse", a: "take", i: 0}); await a.next(m => m.t === "fuses" && m.st[0].s === 1);
   a.send({t: "fuse", a: "slot"}); await a.next(m => m.t === "fuses" && m.st[0].s === 2);
   a.send({t: "fuse", a: "take", i: "x"}); a.send({t: "fuse", a: "evil", i: 1}); a.send({t: "fuse", a: "drop", x: NaN, z: 0});
   assert.ok(!(await a.quiet(150)).some(m => m.t === "fuses"), "junk changed nothing");
-  const b = await join(srv, "R8", "Bob"); b.send({t: "s", scene: "L1"});
+  const b = await join(srv, "R8", "Bob"); b.send({t: "s", scene: "L2"});
   assert.equal((await b.next(kind("fuses"))).st[0].s, 2, "a later joiner sees the slotted fuse");
   b.send({t: "fuse", a: "take", i: 1}); await a.next(m => m.t === "fuses" && m.st[1].s === 1);
   b.ws.close(); const back = await a.next(m => m.t === "fuses" && m.st[1].s === 0);
   assert.equal(back.st[1].s, 0, "Bob left holding a fuse, it went back");
+  await srv.close();
+});
+
+test("switches: flipped one at a time on L1, kept for the room, refused elsewhere", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "R9", "Ann"), b = await join(srv, "R9", "Bob");
+  a.send({t: "s", scene: "L1"}); b.send({t: "s", scene: "B1"});
+  const first = await a.next(kind("switches")); assert.deepEqual(first.st, [{on: false}, {on: false}]);
+  a.send({t: "switch", i: 1}); const one = await a.next(m => m.t === "switches" && m.st[1].on);
+  assert.equal(one.st[0].on, false, "only the one flipped is on");
+  a.send({t: "switch", i: 1}); a.send({t: "switch", i: 7}); a.send({t: "switch", i: "x"});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "switches"), "flipping it again, or a switch that does not exist, changes nothing");
+  b.send({t: "switch", i: 0});                                           // Bob is on B1, which has no switches
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "switches"));
+  b.send({t: "s", scene: "L1"}); assert.equal((await b.next(kind("switches"))).st[1].on, true, "Bob arrives and sees Ann's flip");
+  b.send({t: "switch", i: 0}); const done = await a.next(m => m.t === "switches" && m.st[0].on);
+  assert.ok(done.st.every(s => s.on), "both on: done");
   await srv.close();
 });

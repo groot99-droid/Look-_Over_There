@@ -89,6 +89,19 @@ try {
   check("both on L1 with one host", A.scene === "L1" && B.scene === "L1" && A.host !== B.host && A.peers[0]?.scene === "L1" && B.peers[0]?.scene === "L1", JSON.stringify({A: [A.scene, A.host, A.peers[0]?.scene], B: [B.scene, B.host, B.peers[0]?.scene]}));
   const [host, guest] = A.host ? [a, b] : [b, a];
 
+  // ---- L1 switches: flipped one at a time by different players, in any order; each flip draws the monsters
+  const swSpots = await a.evaluate(() => window.__game.FZ.vis.sws.map(i => i.home)), swSpotsB = await b.evaluate(() => window.__game.FZ.vis.sws.map(i => i.home));
+  check("two switches, in the same places on both clients", swSpots.length === 2 && JSON.stringify(swSpots) === JSON.stringify(swSpotsB));
+  check("the L1 stair door starts locked", await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
+  const goSw = (page, xz) => page.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);
+  await host.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0]; m.pos.set(x + 8, m.fy, z); }, swSpots[1]);     // a monster within earshot of switch 1
+  await goSw(guest, swSpots[1]); await guest.keyboard.press("KeyE");
+  await until("the guest flips switch 2 (the host sees it)", host, () => { const st = window.__game.SW.st.L1; return !!st && st[1].on && !st[0].on; });
+  check("one switch is not enough", await host.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
+  check("the host's monsters went to look at the clunk", await host.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
+  await goSw(host, swSpots[0]); await host.keyboard.press("KeyE");
+  await until("the host flips the other switch; the guest sees the door powered", guest, () => { const st = window.__game.SW.st.L1; return !!st && st.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor()); });
+
   // doors: opened by the guest, open for the host; then shut by the guest, shut for the host
   const door = await guest.evaluate(() => { const g = window.__game, d = g.doors.find(x => !x.link && x.target === 0); if (!d) return null; g.openDoor(d, true); return d.d.name; });
   if (door) await until("door opened by one is open for the other", host, n => window.__game.doors.find(x => x.d.name === n).target === 1, door); else check("door opened by one is open for the other", false, "no door found");

@@ -69,6 +69,7 @@ import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
 import {DRACOLoader} from "three/addons/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
+import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 
 const MON_URL = "world/monsters.json";
 // one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
@@ -177,6 +178,8 @@ async function loadScene(id, arrival) {
   S.nav = buildNav(cfg.floor);
   spawnMonsters();
   if (!net.on && GATED.includes(id)) FZ.st[id] ||= newFloor();
+  if (!net.on && SWITCH_FLOORS.includes(id)) SW.st[id] ||= newSwitches();
+  if (net.on) delete SW.st[id];                                              // in a room the server sends the floor's state on arrival; that first state is not news
   buildFuseVisuals();
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
@@ -416,6 +419,10 @@ class Monster {
     this.visual(dt);
     return {caught: targets.filter(t => this.onFloorY(t.y) && Math.hypot(t.x - this.pos.x, t.z - this.pos.z) < 1.0 && this.los(t)).map(t => t.id)};
   }
+  alert(x, z) {                                                              // a loud noise at x, z: go and look (unless already chasing)
+    if (this.state === "chase") return;
+    this.state = "search"; this.lost = 0; this.last = [x, z]; this.goTo(x, z);
+  }
   // On every other client in the scene the monster only follows the host's snapshot: s = [x, z, yaw, speed, stateIndex].
   follow(dt, s) {
     if (s) {
@@ -551,7 +558,7 @@ addEventListener("keydown", e => {
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
   if (e.repeat || dead) return;
-  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse()) useDoor();
+  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch()) useDoor();
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyQ") cycleCam(-1);
@@ -573,7 +580,7 @@ function pad() {
   const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
   if (!dead) {
-    if (edge(2) && !reviveTarget() && !tryFuse()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
+    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
@@ -586,7 +593,15 @@ function pad() {
 const FZ = {st: {}, vis: null};
 const fz = () => FZ.st[S.id] || (GATED.includes(S.id) ? newFloor() : null);
 const upDoor = () => doors.find(d => d.link && /_up$/.test(d.d.name));
-const isLocked = dr => !!(GATED.includes(S.id) && dr.link && /_up$/.test(dr.d.name) && !unlocked(fz()));
+const SW = {st: {}};
+const sw = () => SW.st[S.id] || (SWITCH_FLOORS.includes(S.id) ? newSwitches() : null);
+const isLocked = dr => !!(dr.link && /_up$/.test(dr.d.name) && ((GATED.includes(S.id) && !unlocked(fz())) || (SWITCH_FLOORS.includes(S.id) && !swDone(sw()))));
+// what this floor asks for, if anything: fuses or switches, how many are needed and how many are done
+function puzzle() {
+  if (GATED.includes(S.id)) { const st = fz(); return {kind: "FUSES", need: NEED, count: slotted(st), done: unlocked(st)}; }
+  if (SWITCH_FLOORS.includes(S.id)) { const st = sw(); return {kind: "SWITCHES", need: NEED_SW, count: swCount(st), done: swDone(st)}; }
+  return null;
+}
 const myCarry = () => { const st = fz(); return st ? carrying(st, net.id) : -1; };
 function setFuses(scene, st) {
   const was = unlocked(FZ.st[scene]);
@@ -599,12 +614,13 @@ function fuseAct(msg) {
   const n = fuseReduce(fz(), net.id, msg); if (n) setFuses(S.id, n);
 }
 function doorLocked() {
+  if (SWITCH_FLOORS.includes(S.id)) { toast(`The door has no power: ${swCount(sw())} of ${NEED_SW} switches flipped`); return; }
   if (myCarry() >= 0) fuseAct({a: "slot"});
   else toast(`The door has no power: ${slotted(fz())} of ${NEED} fuses`);
 }
 // where the fuses lie: in the floor's main walkable area (the stair door itself sits a storey up, off this grid), spread out, away from where monsters start.
 // Seeded, so every client picks the same spots.
-function fuseSpots() {
+function floorSpots(count, seedBase, tiers) {
   const dr = upDoor(); if (!dr || !S.nav) return [];
   const walk = S.nav, seen = new Uint8Array(NW * NH); let cells = [];
   for (let c0 = 0; c0 < NW * NH; c0++) {                                       // flood-fill each region in index order; keep the biggest
@@ -623,20 +639,22 @@ function fuseSpots() {
     if (reg.length > cells.length) cells = reg;
   }
   if (!cells.length) return [];
-  const rnd = rng32(9100 + Object.keys(SCENES).indexOf(S.id) * 37), out = [];
-  for (const [gap, fromDoor, fromMon] of [[12, 10, 5], [7, 5, 3], [3, 2, 0]]) {       // relax if the floor is too small for the first try
+  const rnd = rng32(seedBase + Object.keys(SCENES).indexOf(S.id) * 37), out = [];
+  for (const [gap, fromDoor, fromMon] of tiers) {                                  // relax if the floor is too small for the first try
     out.length = 0;
-    for (let tries = 0; tries < 6000 && out.length < NEED; tries++) {
+    for (let tries = 0; tries < 6000 && out.length < count; tries++) {
       const [x, z] = cellXZ(cells[Math.floor(rnd() * cells.length)]);
       if (Math.hypot(x - dr.cx, z - dr.cz) < fromDoor) continue;
       if (monsters.some(m => Math.hypot(x - m.home[0], z - m.home[1]) < fromMon)) continue;
       if (out.some(o => Math.hypot(x - o[0], z - o[1]) < gap)) continue;
       out.push([x, z]);
     }
-    if (out.length === NEED) break;
+    if (out.length === count) break;
   }
   return out;
 }
+const fuseSpots = () => floorSpots(NEED, 9100, [[12, 10, 5], [7, 5, 3], [3, 2, 0]]);
+const switchSpots = () => floorSpots(NEED_SW, 9500, [[25, 8, 6], [14, 5, 3], [6, 2, 0]]);            // far apart, so reaching both is a trip
 function glowTexture() {
   const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), r = g.createRadialGradient(32, 32, 2, 32, 32, 32);
   r.addColorStop(0, "rgba(255,230,140,1)"); r.addColorStop(.35, "rgba(255,190,60,.45)"); r.addColorStop(1, "rgba(255,160,0,0)");
@@ -666,27 +684,47 @@ function fuseMesh(halo = true) {
   return o;
 }
 const carryMesh = fuseMesh(false); carryMesh.scale.setScalar(1.3); carryMesh.position.set(-0.28, -0.3, -0.55); carryMesh.rotation.z = 0.5; carryMesh.visible = false; camera.add(carryMesh);
+// a waist-high control post with a lever and a lamp (placeholder, drawn in code; models/switch.glb replaces it)
+function switchMesh(facing) {
+  const o = new THREE.Group(), art = new THREE.Group(); o.add(art);
+  const post = new THREE.Mesh(new THREE.BoxGeometry(.34, 1.0, .34), new THREE.MeshBasicMaterial({color: 0x555a60})); post.position.y = .5;
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(.3, .38, .06), new THREE.MeshBasicMaterial({color: 0x2c2f33})); plate.position.set(0, 1.08, .19);
+  const lever = new THREE.Group(), stick = new THREE.Mesh(new THREE.BoxGeometry(.05, .24, .05), new THREE.MeshBasicMaterial({color: 0xe0e0e0})); stick.position.y = .12; lever.add(stick); lever.position.set(0, 1.0, .24); lever.rotation.x = -0.6;
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .05), new THREE.MeshBasicMaterial({color: 0xaa2020})); lamp.position.set(0, 1.2, .23);
+  art.add(post, plate, lever, lamp); o.rotation.y = facing; o.userData.art = art; o.userData.lever = lever; o.userData.lamp = lamp;
+  const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40c8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); sp.position.y = 1.1; o.add(sp); return sp; };
+  o.userData.halo = mk(0.9, 0.9, 0.6); o.userData.beacon = mk(0.3, 2.4, 0.3);
+  useModel(o, "switch", 1.2);
+  return o;
+}
 function buildFuseVisuals() {
-  FZ.vis = null; if (!GATED.includes(S.id) || !S.root) return;
-  const g = new THREE.Group(), items = fuseSpots().map(home => { const o = fuseMesh(); g.add(o); return {home, o}; });
-  const dr = upDoor(), lamps = [];
-  if (dr) for (let i = 0; i < NEED; i++) for (const side of [1, -1]) {                     // on both faces of the door
+  FZ.vis = null; const pz = puzzle(); if (!pz || !S.root) return;
+  const g = new THREE.Group(), dr = upDoor(), lamps = [];
+  const items = GATED.includes(S.id) ? fuseSpots().map(home => { const o = fuseMesh(); g.add(o); return {home, o}; }) : [];
+  const sws = SWITCH_FLOORS.includes(S.id) ? switchSpots().map(home => { const o = switchMesh(dr ? Math.atan2(dr.cx - home[0], dr.cz - home[1]) : 0); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; }) : [];
+  if (dr) for (let i = 0; i < pz.need; i++) for (const side of [1, -1]) {                     // on both faces of the door
     const m = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, .08), new THREE.MeshBasicMaterial({color: 0xaa2020})), off = (i - 1) * .3;
     m.position.set(dr.cx + dr.dir[0] * off - dr.dir[1] * side * .2, dr.cy + 1.8, dr.cz + dr.dir[1] * off + dr.dir[0] * side * .2); m.rotation.y = dr.th; m.userData.lamp = i; g.add(m); lamps.push(m);
   }
-  S.root.add(g); FZ.vis = {items, lamps};                                  // inside the scene's root, so it is disposed with the floor
+  S.root.add(g); FZ.vis = {items, lamps, sws};                                  // inside the scene's root, so it is disposed with the floor
 }
 function animateFuses(t) {
-  const v = FZ.vis, st = fz(); if (!v || !st) { carryMesh.visible = false; return; }
-  v.items.forEach((it, i) => {
+  const v = FZ.vis, st = fz(), pz = puzzle(); if (!v || !pz) { carryMesh.visible = false; return; }
+  v.sws.forEach((it, i) => {                                               // switch posts: the lever and lamp show whether it is on, the glow fades as you come close
+    const on = !!(sw() && sw()[i] && sw()[i].on), u = it.o.userData, d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.lever.rotation.x = on ? 0.6 : -0.6; u.lamp.material.color.setHex(on ? 0x44dd55 : 0xaa2020);
+    u.halo.material.color.setHex(on ? 0x55ee66 : 0x40c8ff); u.beacon.material.color.setHex(on ? 0x55ee66 : 0x40c8ff);
+    u.halo.material.opacity = (on ? 0.25 : 0.6) * k; u.beacon.material.opacity = (on ? 0.1 : 0.3) * k;
+  });
+  if (st) v.items.forEach((it, i) => {
     const f = st[i], here = f && (f.s === 0 || f.s === 3); it.o.visible = !!here; if (!here) return;
     const [x, z] = f.s === 3 ? [f.x, f.z] : it.home;
     it.o.position.set(x, S.floor + 0.5 + Math.sin(t * 2 + i) * 0.05, z); it.o.rotation.y = t;
     const d = Math.hypot(x - P.p.x, z - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
     if (it.o.userData.halo) { it.o.userData.halo.material.opacity = 0.7 * k; it.o.userData.beacon.material.opacity = 0.35 * k; }
   });
-  v.lamps.forEach(m => m.material.color.setHex(m.userData.lamp < slotted(st) ? 0x44dd55 : 0xaa2020));
-  carryMesh.visible = myCarry() >= 0 && !dead;
+  v.lamps.forEach(m => m.material.color.setHex(m.userData.lamp < pz.count ? 0x44dd55 : 0xaa2020));
+  carryMesh.visible = !!st && myCarry() >= 0 && !dead;
 }
 function nearFuse() {
   const v = FZ.vis, st = fz(); if (!v || !st || dead || loading || myCarry() >= 0 || Math.abs(S.floor - P.p.y) > 1.5) return -1;
@@ -694,15 +732,44 @@ function nearFuse() {
   v.items.forEach((it, i) => { const f = st[i]; if (!f || (f.s !== 0 && f.s !== 3)) return; const [x, z] = f.s === 3 ? [f.x, f.z] : it.home, d = Math.hypot(x - P.p.x, z - P.p.z); if (d < bd) { bd = d; best = i; } });
   return best;
 }
+function nearSwitch() {
+  const v = FZ.vis, st = sw(); if (!v || !st || dead || loading || Math.abs(S.floor - P.p.y) > 1.5) return -1;
+  let best = -1, bd = 1.6;
+  v.sws.forEach((it, i) => { if (!st[i] || st[i].on) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function swAct(i) {
+  if (!SWITCH_FLOORS.includes(S.id)) return;
+  if (net.on) { net.send({t: "switch", i}); return; }                       // the server answers with the new state
+  const n = swFlip(sw(), i); if (n) setSwitches(S.id, n);
+}
+function trySwitch() { const i = nearSwitch(); if (i < 0) return false; swAct(i); return true; }
+function setSwitches(scene, st) {
+  const old = SW.st[scene]; SW.st[scene] = st;
+  if (scene !== S.id || !old) return;                                       // the first state you get on arriving is not news
+  st.forEach((s, k) => { if (s.on && !old[k].on) switchFlipped(k); });
+  if (swDone(st) && !swDone(old)) toast("The door hums. It has power.");
+  else if (!swDone(st)) toast(`Switch flipped: ${swCount(st)} of ${NEED_SW}`);
+}
+// the clunk carries: monsters on the floor go to look (the floor's host runs them; everyone else just follows)
+function switchFlipped(k) {
+  const it = FZ.vis && FZ.vis.sws[k]; if (!it || !net.host()) return;
+  for (const m of monsters) if (Math.hypot(m.pos.x - it.home[0], m.pos.z - it.home[1]) < 40) m.alert(it.home[0], it.home[1]);
+}
 function tryFuse() { const i = nearFuse(); if (i < 0) return false; fuseAct({a: "take", i}); return true; }
 function updatePrompt() {
-  const el = $("prompt"), hud = $("fusehud"), st = fz(); let msg = "";
-  if (st && !dead && !loading && !reviveTarget()) {
+  const el = $("prompt"), hud = $("fusehud"), pz = puzzle(); let msg = "";
+  if (pz && !dead && !loading && !reviveTarget()) {
     if (nearFuse() >= 0) msg = "Press E to pick up the fuse";
-    else { const dr = upDoor(); if (dr && isLocked(dr) && Math.hypot(dr.cx - P.p.x, dr.cz - P.p.z) < 2.4) msg = myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${slotted(st)} of ${NEED} fuses`; }
+    else if (nearSwitch() >= 0) msg = "Press E to flip the switch";
+    else {
+      const dr = upDoor();
+      if (dr && isLocked(dr) && Math.hypot(dr.cx - P.p.x, dr.cz - P.p.z) < 2.4)
+        msg = pz.kind === "FUSES" ? (myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${pz.count} of ${pz.need} fuses`) : `The door has no power: ${pz.count} of ${pz.need} switches flipped`;
+    }
   }
   el.textContent = msg; el.style.display = msg ? "block" : "none";
-  if (st) { hud.style.display = "block"; hud.textContent = unlocked(st) ? "DOOR POWERED" : `FUSES ${slotted(st)}/${NEED}` + (myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
+  if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : `${pz.kind} ${pz.count}/${pz.need}` + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
 }
 
 // ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
@@ -793,6 +860,7 @@ function onNet(m) {
     case "caught": if (!dead && !loading && !(P.imm > 0)) die(); break;
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
+    case "switches": setSwitches(m.scene, m.st); break;
   }
 }
 // the nearest downed teammate within reach on your floor
@@ -1012,7 +1080,7 @@ await lobby();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

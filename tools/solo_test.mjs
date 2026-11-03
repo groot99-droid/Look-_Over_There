@@ -48,14 +48,31 @@ try {
     await until(`fuse ${i + 1} in the door`, p, n => window.__game.FZ.st.B1.filter(f => f.s === 2).length === n + 1, i);
   }
   check("three fuses power the door", await p.evaluate(() => { const g = window.__game; g.step(0.016); return !g.isLocked(g.upDoor()) && /DOOR POWERED/.test(document.getElementById("fusehud").textContent); }));
-  // a fuse carried off the floor goes back to where it started
-  await p.evaluate(() => window.__game.loadScene("L1")); await p.waitForFunction(() => window.__game.S.id === "L1" && !window.__game.loading, null, {timeout: 60000});
-  check("L1 has its own three fuses, locked", await p.evaluate(() => { const g = window.__game; return g.FZ.vis.items.length === 3 && g.isLocked(g.upDoor()); }));
+  const load = id => p.evaluate(i => window.__game.loadScene(i), id).then(() => p.waitForFunction(i => window.__game.S.id === i && !window.__game.loading, id, {timeout: 60000}));
+  // L1 has switches instead: flip them one at a time, in any order; each clunk sends the monsters to look
+  await load("L1");
+  check("L1: two switches, no fuses, door locked", await p.evaluate(() => { const g = window.__game, v = g.FZ.vis; return v.sws.length === 2 && v.items.length === 0 && g.isLocked(g.upDoor()) && g.puzzle().kind === "SWITCHES"; }));
+  const swAt = i => p.evaluate(i => window.__game.FZ.vis.sws[i].home, i);
+  const s0 = await swAt(0), s1 = await swAt(1);
+  check("the two switches are far apart", Math.hypot(s0[0] - s1[0], s0[1] - s1[1]) >= 14, `(${Math.hypot(s0[0] - s1[0], s0[1] - s1[1]).toFixed(1)} m)`);
+  await p.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0]; m.pos.set(x + 8, m.fy, z); }, s1);     // one monster within earshot of switch 1
+  await go(s1); await p.keyboard.press("KeyE");
+  await until("flipping the second switch first works (any order)", p, () => { const st = window.__game.SW.st.L1; return !st[0].on && st[1].on; });
+  check("one switch is not enough: the door stays locked", await p.evaluate(() => { const g = window.__game; g.step(0.016); return g.isLocked(g.upDoor()) && /SWITCHES 1\/2/.test(document.getElementById("fusehud").textContent); }));
+  check("the clunk sent a monster to look", await p.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
+  check("a flipped switch stays flipped (E again does not undo it)", await p.evaluate(() => { const g = window.__game; g.swAct(1); return g.SW.st.L1[1].on === true; }));
+  await go(s0); await p.keyboard.press("KeyE");
+  await until("the other switch is flipped one at a time", p, () => window.__game.SW.st.L1.every(x => x.on));
+  check("both on: the door is powered", await p.evaluate(() => { const g = window.__game; g.step(0.016); return !g.isLocked(g.upDoor()) && /DOOR POWERED/.test(document.getElementById("fusehud").textContent); }));
+  // L2 still uses fuses: a fuse carried off the floor goes back to where it started
+  await load("L2");
+  check("L2 has fuses, locked", await p.evaluate(() => { const g = window.__game, v = g.FZ.vis; return v.items.length === 3 && v.sws.length === 0 && g.isLocked(g.upDoor()) && g.puzzle().kind === "FUSES"; }));
   await go(await p.evaluate(() => window.__game.FZ.vis.items[0].home)); await p.keyboard.press("KeyE");
-  await until("a fuse picked up on L1", p, () => window.__game.myCarry() === 0);
-  await p.evaluate(() => window.__game.loadScene("B1")); await p.waitForFunction(() => window.__game.S.id === "B1" && !window.__game.loading, null, {timeout: 60000});
-  await p.evaluate(() => window.__game.loadScene("L1")); await p.waitForFunction(() => window.__game.S.id === "L1" && !window.__game.loading, null, {timeout: 60000});
-  check("a fuse carried off L1 went back to its start", await p.evaluate(() => window.__game.FZ.st.L1[0].s === 0));
+  await until("a fuse picked up on L2", p, () => window.__game.myCarry() === 0);
+  await load("B1"); await load("L2");
+  check("a fuse carried off L2 went back to its start", await p.evaluate(() => window.__game.FZ.st.L2[0].s === 0));
+  await load("L1");
+  check("coming back to L1 the switches are still on", await p.evaluate(() => window.__game.SW.st.L1.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor())));
 
   const q = await solo(withModel.port);
   await until("with models/fuse.glb the model replaces the placeholder", q, () => window.__game.FZ.vis.items.every(i => i.o.userData.model));
