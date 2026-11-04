@@ -201,3 +201,16 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
   | what they see and hear, no cameras (`--nocams`) | 0/3 | 17 | 32 |
 
   The scout learned of monsters through cameras alone for 356 s of the round. Fair bots with cameras did as well as all-knowing ones; without cameras they did worse. No team finished B1 in any of the runs, and one run each cannot separate a real effect from the spread (earlier runs ranged from 15 to 24 downs).
+
+## Bot tuning of the beacon and the cloak (tried, inconclusive)
+
+New rules: the cloak goes on only when a monster is within 9 m or hunting, never below 40% battery, never when two teammates already have theirs on, and off once clear (16 m) or flat; bots collect beacons from up to 28 m away and roll one at a monster that has not seen them (9 to 28 m), not only at a chaser. Measured with the new per-bot figures (time to first fuse, seconds carrying, cloak seconds wasted).
+
+4 bots, B1, 450 s, three rounds each:
+
+| | fuses in the door | team downs | hits taken | beacons thrown |
+|---|---|---|---|---|
+| tuned | 0, 1, 1 | 14, 15, 13 | 30, 28, 25 | 2, 2, 1 |
+| old (`--legacy-items`) | 0, 0, 0 | 13, 6, 14 | 27, 15, 29 | 2, 2, 2 |
+
+The cloak is no longer wasted (1 to 9 s per round with no monster near, against all of its use before), but the round outcomes are inside the spread: no clear gain. The real finding is that bots throw only 1 to 2 beacons per round between four of them, so they rarely hold one; the beacon pickups are not on their way. The next step would be to route the runner past the nearest beacon at the start, not to tune throwing.
