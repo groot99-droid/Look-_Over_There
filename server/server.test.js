@@ -320,3 +320,32 @@ test("loot: one gun each from the B1 lockers, and leaving puts the locker back",
   c.send({t: "loot", k: "locker", i: 0}); assert.ok(await b.next(m => m.t === "loot" && m.st.lockers[0] === c.id), "a newcomer can use it");
   await srv.close();
 });
+
+test("ray gun: a shot goes to the floor's host only, everyone else on the floor sees the beam", async () => {
+  const srv = await createServer({countdownMs: 100});
+  const [a, b, c] = await round(srv, "R23", ["Ann", "Bob", "Cy"]);                  // Ann joined first: she hosts B1
+  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); c.send({t: "s", scene: "L1"}); await a.quiet(150);
+  const o = [1, 1.5, 2], d = [0, 0, -1];
+  b.send({t: "shot", o, d, e: [1, 1.5, -20]});
+  const shot = await a.next(kind("shot")); assert.deepEqual([shot.id, shot.o, shot.d], [b.id, o, d]);
+  const beam = await a.next(kind("beam")); assert.deepEqual(beam.e, [1, 1.5, -20]);
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "shot" || m.t === "beam"), "the shooter is told nothing back");
+  assert.ok(!(await c.quiet(10)).some(m => m.t === "shot" || m.t === "beam"), "Cy is on another floor");
+  a.send({t: "shot", o, d});                                                        // the host's own shot: Bob sees the beam, nobody is sent a shot
+  const mine = await b.next(kind("beam")); assert.equal(mine.id, a.id); assert.deepEqual(mine.e, [1, 1.5, -23], "no end given: 25 m along the aim");
+  assert.ok(!(await a.quiet(100)).some(m => m.t === "shot"));
+  b.send({t: "shot", o: [1, 2], d}); b.send({t: "shot", o: ["x", 0, 0], d}); b.send({t: "shot", o});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "shot"), "bad aims are dropped");
+  await srv.close();
+});
+test("ray gun: only a floor's host can announce a banish", async () => {
+  const srv = await createServer({countdownMs: 100});
+  const [a, b] = await round(srv, "R24", ["Ann", "Bob"]);
+  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); await a.quiet(150);
+  b.send({t: "zap", scene: "B1", i: 0, from: [1, 2], to: [30, 40]});
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "zap"), "Bob is not the host");
+  a.send({t: "zap", scene: "B1", i: 2, from: [1, 2], to: [30, 40]});
+  const z = await b.next(kind("zap")); assert.deepEqual([z.i, z.from, z.to], [2, [1, 2], [30, 40]]);
+  a.send({t: "zap", scene: "B1", i: "x", from: [1, 2], to: [3]}); assert.ok(!(await b.quiet(150)).some(m => m.t === "zap"), "junk is dropped");
+  await srv.close();
+});

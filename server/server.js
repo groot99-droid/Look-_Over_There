@@ -154,6 +154,22 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           if (next) { room.power = next; broadcast(room, {t: "power", on: true, by: next.by}); maybeAlarm(room); }
           break;
         }
+        case "shot": {                                                // a ray-gun shot: the floor's host (who runs the monsters) decides the hit; everyone else just sees the beam
+          const scene = me.scene; if (!scene) break;
+          const nums = (v, n) => Array.isArray(v) && v.length === n && v.every(x => typeof x === "number" && Number.isFinite(x)) ? v : null;
+          const o = nums(m.o, 3), d = nums(m.d, 3); if (!o || !d) break;
+          const e = nums(m.e, 3) || [o[0] + d[0] * 25, o[1] + d[1] * 25, o[2] + d[2] * 25];
+          const host = room.players.get(room.hosts[scene]);
+          if (host && host !== me) send(host, {t: "shot", id: me.id, o, d});
+          broadcast(room, {t: "beam", id: me.id, o, e}, me.id, scene);
+          break;
+        }
+        case "zap": {                                                 // the host banished a monster: tell the floor so it can play the glitch (only the host may)
+          const nums = (v, n) => Array.isArray(v) && v.length === n && v.every(x => typeof x === "number" && Number.isFinite(x)) ? v : null;
+          const from = nums(m.from, 2), to = nums(m.to, 2);
+          if (room.hosts[m.scene] === me.id && from && to && Number.isInteger(m.i)) broadcast(room, {t: "zap", scene: m.scene, i: m.i, from, to}, me.id, m.scene);
+          break;
+        }
         case "loot": {                                                // open a locker (a gun) or take an ammo pack on the floor you are on
           const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack")) break;
           const st = floorLoot(room, scene);

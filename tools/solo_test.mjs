@@ -71,10 +71,35 @@ try {
   for (const i of [0, 1, 2]) { await stand("packs", i); await p.evaluate(() => window.__game.tryLoot()); picked.push(await p.evaluate(() => window.__game.LT.rounds)); }
   check("each pack adds 3 rounds, and nobody carries more than 9", picked.join() === "6,9,9", picked.join());
   check("a pack you cannot carry stays on the floor", await p.evaluate(() => window.__game.LT.st.B1.packs.filter(v => v === 0).length === 1));
+  // the gun: held, fired, a hit banishes the monster far away and out of sight, a shot is as loud as a run
+  await p.waitForFunction(() => window.__game.GUN.obj, null, {timeout: 60000});
+  check("the gun is held once you have one (the Meshy model, not the placeholder)", await p.evaluate(() => { const g = window.__game; g.step(0.016); return g.GUN.pivot.visible && g.GUN.obj.isGroup === true; }));
+  const shot = await p.evaluate(() => {
+    const g = window.__game, m = g.monsters[0]; m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0};          // keep it still
+    const eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; let spot = null;
+    for (let a = 0; a < 6.28 && !spot; a += 0.35) { const d = [-Math.sin(a), 0, -Math.cos(a)], x = g.P.p.x + d[0] * 6, z = g.P.p.z + d[2] * 6; if (g.rayClear(eye, d, 7) && g.S.nav[g.cellOf(x, z)]) spot = {a, x, z}; }
+    if (!spot) return null;
+    m.pos.set(spot.x, m.fy, spot.z); m.state = "patrol"; g.P.yaw = spot.a; g.P.pitch = 0; g.P.imm = 999; g.GUN.cool = 0;
+    const rounds = g.LT.rounds, fired = g.fire(), moved = Math.hypot(m.pos.x - spot.x, m.pos.z - spot.z), away = Math.hypot(m.pos.x - g.P.p.x, m.pos.z - g.P.p.z);
+    const path = g.astar(g.S.nav, g.cellOf(g.P.p.x, g.P.p.z), g.cellOf(m.pos.x, m.pos.z)), pathM = path ? path.length * g.NAV : 999;            // the rule: 35 m by path from the player
+    const hidden = !g.segClear(g.P.p.x, g.P.p.y + 1.5, g.P.p.z, m.pos.x, g.S.floor + 1.4, m.pos.z, 0.5);                                             // and out of the player's sight
+    return {fired, spent: rounds - g.LT.rounds, moved: +moved.toFixed(1), away: +away.toFixed(1), pathM: +pathM.toFixed(1), hidden, glitch: m.glitchT > 0, immune: m.immuneT > 0, state: m.state, loud: g.P.shotT > 0, spot};
+  });
+  check("a shot spends a round and a hit deletes the monster to a spot 15 m+ away, 35 m+ by path, out of sight", !!shot && shot.fired && shot.spent === 1 && shot.moved > 5 && shot.away >= 15 && shot.pathM >= 35 && shot.hidden && shot.glitch && shot.state === "patrol", JSON.stringify(shot));
+  check("the banished monster cannot be banished again for a while, and the shot was as loud as a run", !!shot && shot.immune && shot.loud);
+  const again = await p.evaluate(sp => {
+    const g = window.__game, m = g.monsters[0]; g.GUN.cool = 0; m.pos.set(sp.x, m.fy, sp.z); const before = [m.pos.x, m.pos.z], rounds = g.LT.rounds;
+    g.fire(); return {spent: rounds - g.LT.rounds, stayed: Math.hypot(m.pos.x - before[0], m.pos.z - before[1]) < 0.01};
+  }, shot.spot);
+  check("a second shot at it is wasted: the round is spent, the monster stays", again.spent === 1 && again.stayed);
+  const dry = await p.evaluate(() => { const g = window.__game; g.GUN.cool = 0; const keep = g.LT.rounds; g.LT.rounds = 0; const f = g.fire(); g.LT.rounds = keep; return f; });
+  check("with no rounds the gun does not fire", dry === false);
+  check("firing is limited to one shot every 0.6 s", await p.evaluate(() => { const g = window.__game; g.GUN.cool = 0; const a = g.fire(), b = g.fire(); g.GUN.cool = 0; return a === true && b === false; }));
   await go(await at(0)); await p.keyboard.press("KeyE");
   await until("pressing E picks up the fuse", p, () => window.__game.myCarry() === 0);
   await p.evaluate(() => window.__game.step(0.016));
   check("the counter shows you are carrying", await p.evaluate(() => /CARRYING/.test(document.getElementById("fusehud").textContent)));
+  check("with a fuse in your hands you cannot fire", await p.evaluate(() => { const g = window.__game; g.GUN.cool = 0; const before = g.LT.rounds, f = g.fire(); return f === false && g.LT.rounds === before; }));
   // down with a fuse in hand: it stays where you fell; the old solo rule still applies (3 s, then back up somewhere random)
   await p.evaluate(() => window.__game.die());
   const drop = await p.evaluate(() => { const f = window.__game.FZ.st.B1[0]; return {s: f.s, near: Math.hypot(f.x - window.__game.P.p.x, f.z - window.__game.P.p.z) < 0.01}; });

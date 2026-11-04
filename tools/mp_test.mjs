@@ -65,6 +65,21 @@ try {
   await standBy(a, "packs", 0);
   await until("a pack gives Ann 3 more rounds", a, () => window.__game.LT.rounds === 6);
   await until("Bob sees the pack gone", b, () => window.__game.LT.st.B1.packs[0] !== 0);
+  // ---- the gun across the network: the guest fires, the server sends the shot to the floor's host, who banishes its monster; both see it
+  const fighter = A.host ? b : a, owner = A.host ? a : b;
+  const aim = await fighter.evaluate(() => {
+    const g = window.__game, eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; g.P.imm = 999;
+    for (let k = 0; k < 18; k++) { const ang = k * 0.35, d = [-Math.sin(ang), 0, -Math.cos(ang)], x = g.P.p.x + d[0] * 6, z = g.P.p.z + d[2] * 6; if (g.rayClear(eye, d, 7) && g.S.nav[g.cellOf(x, z)]) return {ang, x, z}; }
+    return null;
+  });
+  check("the guest finds open floor to aim across", !!aim);
+  await owner.evaluate(sp => { const g = window.__game, m = g.monsters[0]; g.P.imm = 999; m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0}; m.pos.set(sp.x, m.fy, sp.z); m.state = "patrol"; }, aim);
+  await until("the guest sees the host's monster where it was put", fighter, sp => { const m = window.__game.monsters[0]; return Math.hypot(m.pos.x - sp.x, m.pos.z - sp.z) < 1; }, aim);
+  const roundsBefore = await fighter.evaluate(() => window.__game.LT.rounds);
+  await fighter.evaluate(sp => { const g = window.__game; g.P.yaw = sp.ang; g.P.pitch = 0; g.GUN.cool = 0; g.fire(); }, aim);
+  await until("the host's monster is deleted to a far spot", owner, sp => { const m = window.__game.monsters[0]; return Math.hypot(m.pos.x - sp.x, m.pos.z - sp.z) > 20 && m.state === "patrol"; }, aim);
+  await until("the guest sees it there too", fighter, sp => { const m = window.__game.monsters[0]; return Math.hypot(m.pos.x - sp.x, m.pos.z - sp.z) > 20; }, aim);
+  check("the shot cost the guest a round", await fighter.evaluate(n => window.__game.LT.rounds === n - 1, roundsBefore));
   // ---- fuses on B1: the stair door stays shut until three fuses are in it
   const spotsA = await a.evaluate(() => window.__game.FZ.vis.items.map(i => i.home)), spotsB = await b.evaluate(() => window.__game.FZ.vis.items.map(i => i.home));
   check("three fuses, in the same places on both clients", spotsA.length === 3 && JSON.stringify(spotsA) === JSON.stringify(spotsB), JSON.stringify(spotsA));
