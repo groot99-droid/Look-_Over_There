@@ -622,7 +622,7 @@ function updateSeen(t) {
   const who = [{name: "you", x: P.p.x, z: P.p.z, y: P.p.y, dead}]; if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) who.push({name: p.name, x: p.x, z: p.z, y: p.y, dead: p.dead});
   S.cams.forEach((c, i) => {
     for (const m of monsters) {
-      if (!m.onFloorY(P.p.y) || !camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z)) continue;
+      if (!camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z)) continue;
       MAPSEEN.set(m, {at: now, x: m.pos.x, z: m.pos.z, yaw: m.yaw, name: m.cfg.name, cam: i});
       (CAMHOT.get(i) || CAMHOT.set(i, []).get(i)).push(m);
       const close = who.filter(w => !w.dead && Math.abs(w.y - m.fy) < 1.6).map(w => [Math.hypot(w.x - m.pos.x, w.z - m.pos.z), w.name]).sort((a, b) => a[0] - b[0])[0];
