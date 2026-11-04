@@ -49,6 +49,11 @@
   #hp{position:fixed;left:16px;bottom:18px;width:150px;height:8px;background:rgba(0,0,0,.5);z-index:1;pointer-events:none;box-shadow:0 0 4px #000}
   #hp i{display:block;height:100%;width:100%;background:#c8504a}
   #hp b{position:absolute;left:0;top:-15px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:#e8c8c0;text-shadow:0 0 4px #000}
+  #cloak{position:fixed;left:16px;bottom:44px;width:150px;height:6px;background:rgba(0,0,0,.5);z-index:1;pointer-events:none;box-shadow:0 0 4px #000;display:none}
+  #cloak i{display:block;height:100%;width:100%;background:#40d8ff}
+  #cloak b{position:absolute;left:0;top:-14px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:#9fe8ff;text-shadow:0 0 4px #000}
+  #cloakfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;box-shadow:inset 0 0 110px 25px rgba(64,216,255,.5);transition:opacity .25s}
+  #beacons{position:fixed;right:16px;bottom:40px;color:#ffb060;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 5px #000}
   #hurt{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:rgba(200,20,10,.38)}
   #stam{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:120px;height:4px;background:rgba(0,0,0,.45);z-index:1;pointer-events:none;opacity:0;transition:opacity .3s}
   #stam i{display:block;height:100%;width:100%;background:#cdb}
@@ -72,7 +77,7 @@
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
 <div id="hud"></div>
-<div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
+<div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
 <div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
@@ -102,7 +107,9 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
-import {LOOT, MAX_ROUNDS, GUN_ROUNDS, newLoot, takeLocker, takePack, roundsAfterPack} from "./shared/loot.js";
+import {LOOT, MAX_ROUNDS, GUN_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, takeBeacon, roundsAfterPack} from "./shared/loot.js";
+import {newCloak, toggle as cloakToggle, tick as cloakTick, SHORT_M} from "./shared/cloak.js";
+import {LURE_S, SAFE_M, ROLL_M, lures as lureCovers, ringSpot, rollEnd} from "./shared/beacon.js";
 import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as hpRevived, downed as hpDowned, mayHit} from "./shared/health.js";
 import {pick as pickSpawn} from "./shared/spawn.js";
@@ -185,7 +192,7 @@ async function loadScene(id, arrival) {
   loading = true; pendingLink = null; devOn.v = false; net.snap = null; closeKeypad();
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
-  monsters.forEach(m => m.dispose()); monsters.length = 0; MAPSEEN.clear();
+  monsters.forEach(m => m.dispose()); monsters.length = 0; MAPSEEN.clear(); clearBeacons();
   const cfg = SCENES[id], doc = await (await fetch(`world/${id}.json`)).json();
   const root = new THREE.Group();
   const gl = await Promise.all(cfg.glbs.map(loadGlb));
@@ -354,7 +361,7 @@ class Monster {
   constructor(cfg, level, x, z) {
     this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
     this.home = [x, z]; this.pos = new THREE.Vector3(x, this.fy, z); this.yaw = Math.random() * 6.28;
-    this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0; this.doorT = 0; this.last = null; this.glitchT = 0; this.immuneT = 0; this.hitAt = {}; this.hitAt = {};
+    this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0; this.doorT = 0; this.last = null; this.glitchT = 0; this.immuneT = 0; this.hitAt = {}; this.k = Math.abs(Math.floor(x * 7.3 + z * 3.1)) % 97; this.lureId = null; this.lureAt = null; this.spot = null;
     const asset = monsterAssets[cfg.name];
     if (asset) {
       this.obj = SkeletonUtils.clone(asset.scene);
@@ -395,6 +402,7 @@ class Monster {
   sees(t) {                                                                         // t: a player {x, y, z, crouch}: me or anyone in the room
     if (!this.onFloorY(t.y)) return false;
     const dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
+    if (t.cloak && d > SHORT_M) return false;                                          // a cloaked player is only seen from very close (they are still heard)
     if (d > this.cfg.sight * (t.crouch ? (t.carry ? 0.75 : 0.5) : 1)) return false;   // crouching halves how far they can see you (a carrier only a quarter less)
     const fwd = [-Math.sin(this.yaw), -Math.cos(this.yaw)];
     const ang = Math.acos(Math.max(-1, Math.min(1, (fwd[0] * dx + fwd[1] * dz) / (d || 1)))) * 180 / Math.PI;
@@ -414,7 +422,7 @@ class Monster {
     return null;
   }
   // The simulation runs on one client per scene (the host). targets = every living player on this floor: {id, x, y, z, crouch, moving}.
-  update(dt, targets) {
+  update(dt, targets, lureList = []) {
     const c = this.cfg;
     this.immuneT = Math.max(0, this.immuneT - dt);
     if (this.glitchT > 0) { this.glitchT -= dt; this.speed = 0; this.visual(dt); return {caught: []}; }                    // being deleted: it does nothing for a moment
@@ -427,6 +435,20 @@ class Monster {
       const rad = c.hear * tier * (t.carry && !t.crouch ? 1.5 : 1) * (d < 2 || this.los(t) ? 1 : NOISE_WALL);
       if (d < rad && d < nd) { nd = d; noiseAt = [t.x, t.z]; }
     }
+    // an AFK Beacon within 30 m: it goes to a spot on a ring round the can and idles there, ignoring players unless one is within SAFE_M of it; when the beacon ends it searches there
+    const nowS = performance.now() / 1000; let lure = null, ld = 1e9;
+    for (const b of lureList) { const d = Math.hypot(b.x - this.pos.x, b.z - this.pos.z); if (d < ld && lureCovers(b, this.pos.x, this.pos.z, nowS)) { ld = d; lure = b; } }
+    let lured = false;
+    if (lure) {
+      if (seenT && sd > SAFE_M) seenT = null;
+      if (noiseAt && nd > SAFE_M) noiseAt = null;
+      if (!seenT) lured = true;
+    }
+    if (lured) {
+      this.lost = 0; if (this.state === "chase") this.state = "search"; this.state = "search";
+      if (this.lureId !== lure.id) { this.lureId = lure.id; this.lureAt = [lure.x, lure.z]; this.spot = ringSpot(lure, this.k); this.goTo(...this.spot); }
+      else if (!this.path.length && this.spot && Math.hypot(this.spot[0] - this.pos.x, this.spot[1] - this.pos.z) > 0.9 && (this.repath -= dt) <= 0) { this.goTo(...this.spot); this.repath = 1; }
+    } else if (this.lureId !== null) { this.lureId = null; this.state = "search"; this.lost = 0; this.last = this.lureAt; this.goTo(...this.lureAt); }
     const ct = seenT || targets.find(t => t.id === this.tgt) || null;               // whoever it is chasing
     if (seenT) { this.state = "chase"; this.lost = 0; this.tgt = seenT.id; this.last = [seenT.x, seenT.z]; }
     else if (this.state === "chase") {                                               // it lost sight: it runs to where it last saw you, and gives up if it gets there or CHASE_LOSE_S passes
@@ -468,6 +490,7 @@ class Monster {
       const want = Math.atan2(-(seenT.x - this.pos.x), -(seenT.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
       this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
     }
+    if (lured && !this.path.length) { const want = Math.atan2(-(lure.x - this.pos.x), -(lure.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); this.yaw += Math.sign(da) * Math.min(Math.abs(da), 3 * dt); }
     this.visual(dt);
     const now = performance.now() / 1000;                                         // a touch is a hit at most every HIT_GAP seconds per monster; the target's own grace period covers hits from several monsters
     return {caught: targets.filter(t => this.onFloorY(t.y) && Math.hypot(t.x - this.pos.x, t.z - this.pos.z) < 1.0 && this.los(t) && mayHit(this.hitAt[t.id], now)).map(t => (this.hitAt[t.id] = now, t.id))};
@@ -670,6 +693,8 @@ addEventListener("keydown", e => {
   if (e.code === "Tab") toggleDevice();
   if (e.code === "KeyM") toggleMode();
   if (e.code === "KeyF") fire();
+  if (e.code === "KeyV") toggleCloak();
+  if (e.code === "KeyG") throwBeacon();
   if (e.code === "KeyQ") cycleCam(-1);
   if (e.code === "KeyR") cycleCam(1);
 });
@@ -694,6 +719,8 @@ function pad() {
     if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
     if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
     if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
+    if (edge(6)) toggleCloak();                               // LT: the cloak
+    if (edge(5)) throwBeacon();                               // RB: roll an AFK Beacon
     if (edge(7)) fire();                                      // RT: fire the ray gun (RB and LT are kept for the beacon and the cloak)
     if (edge(15)) cycleCam(1);                                // D-pad right: next camera
   }
@@ -782,6 +809,7 @@ const LT = {st: {}, vis: null, gun: false, rounds: 0};
 const lt = () => LT.st[S.id] || newLoot(S.id);
 const myId = () => net.on ? net.id : 1;                                       // solo: the one player is 1
 const lockerSpots = () => LOOT[S.id] && LOOT[S.id].lockers ? floorSpots(LOOT[S.id].lockers, 9900, [[6, 4, 5], [3, 2, 3], [1.5, 1, 0]]) : [];
+const beaconSpots = () => LOOT[S.id] ? floorSpots(LOOT[S.id].beacons || 2, 9980, [[10, 6, 6], [6, 3, 3], [3, 1, 0]]) : [];
 const packSpots = () => LOOT[S.id] ? floorSpots(LOOT[S.id].packs, 9950, [[10, 6, 6], [6, 3, 3], [3, 1, 0]]) : [];
 const cyanGlow = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40d8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); return sp; };
 function lockerMesh() {
@@ -805,7 +833,8 @@ function buildLootVisuals() {
   const g = new THREE.Group();
   const lockers = lockerSpots().map((home, i) => { const o = lockerMesh(); o.position.set(home[0], S.floor, home[1]); o.rotation.y = (i * 2.1) % 6.28; g.add(o); return {home, o}; });
   const packs = packSpots().map(home => { const o = packMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; });
-  S.root.add(g); LT.vis = {lockers, packs};
+  const beacons = beaconSpots().map(home => { const o = beaconMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; });
+  S.root.add(g); LT.vis = {lockers, packs, beacons};
 }
 function animateLoot() {
   const v = LT.vis, st = lt();
@@ -814,8 +843,10 @@ function animateLoot() {
     v.lockers.forEach((it, i) => { const taken = st.lockers[i] !== 0, u = it.o.userData, k = fade(it);
       u.door.rotation.y += ((taken ? -1.7 : 0) - u.door.rotation.y) * 0.25; u.lamp.material.color.setHex(taken ? 0x2a3a3a : 0x40d8ff);
       u.halo.material.opacity = (taken ? 0 : 0.6) * k; u.beacon.material.opacity = (taken ? 0 : 0.3) * k; });
+    v.beacons.forEach((it, i) => { const gone = (st.beacons || [])[i] !== 0; it.o.visible = !gone; if (gone) return; const k = fade(it); it.o.userData.halo.material.opacity = 0.6 * k; it.o.userData.beacon.material.opacity = 0.3 * k; it.o.rotation.y += 0.01; });
     v.packs.forEach((it, i) => { const gone = st.packs[i] !== 0; it.o.visible = !gone; if (gone) return; const k = fade(it); it.o.userData.halo.material.opacity = 0.6 * k; it.o.userData.beacon.material.opacity = 0.3 * k; });
   }
+  const eb = $("beacons"); eb.style.display = BC.have ? "block" : "none"; if (BC.have) eb.textContent = `BEACON ×${BC.have}  [G]`;
   const el = $("ammo"); el.style.display = LT.gun ? "block" : "none"; if (LT.gun) el.textContent = `RAY  ${"● ".repeat(LT.rounds)}${"○ ".repeat(Math.max(0, 3 - LT.rounds))}${LT.rounds}/${MAX_ROUNDS}`;
 }
 // ---------------------------------------------------------------- the Error Deletion Ray (models/gun.glb): held bottom right, fired with the left mouse button, F or the right trigger.
@@ -905,29 +936,99 @@ function animateGun(dt) {
     if (k >= 1) { scene.remove(f.o); f.o.geometry?.dispose(); f.o.material.dispose(); list.splice(i, 1); }
   }
 }
-// what is within reach: {k: "locker" | "pack", i} or null
+// ---------------------------------------------------------------- the cloak (models/cloak.glb) and the AFK Beacon (models/beacon.glb)
+// Cloak: V (controller: left trigger) toggles it; on, monsters see you only from 1.5 m (they still hear you); a battery drains in 15 s and recharges slowly while off (shared/cloak.js).
+const CL = {have: false, st: newCloak(), pivot: new THREE.Group()};
+CL.pivot.position.set(-0.3, -0.3, -0.5); CL.pivot.visible = false; camera.add(CL.pivot);
+function loadCloakModel() {                                                  // once, when it is first needed (a plain block until the model arrives)
+  CL.loaded = true;
+  const stub = new THREE.Mesh(new THREE.BoxGeometry(.08, .2, .05), new THREE.MeshStandardMaterial({color: 0x20303a})); CL.pivot.add(stub);
+  loadModel("cloak").then(g => { if (!g) return; const m = SkeletonUtils.clone(g.scene); m.scale.setScalar(0.12); m.rotation.set(0.2, 0.5, 0.1); m.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); CL.pivot.remove(stub); CL.pivot.add(m); });
+}
+function toggleCloak() {
+  if (!CL.have || dead || loading) return;
+  const n = cloakToggle(CL.st); if (n === CL.st) { toast("The cloak is flat"); return; }
+  CL.st = n; toast(n.on ? "Cloak on: monsters see you only from very close" : "Cloak off");
+}
+function animateCloak(dt) {
+  if (CL.have && !CL.loaded) loadCloakModel();
+  if (CL.have && !dead && !loading) CL.st = cloakTick(CL.st, dt); else if (CL.st.on) CL.st = {...CL.st, on: false};
+  const bar = $("cloak"); bar.style.display = CL.have && !loading && !FIN.results ? "block" : "none"; bar.querySelector("i").style.width = CL.st.b * 100 + "%";
+  $("cloakfx").style.opacity = CL.st.on ? 0.55 + 0.25 * Math.sin(performance.now() / 120) : 0;
+  CL.pivot.visible = CL.have && !dead && !loading && !devOn.v && !FIN.results;
+  if (CL.pivot.visible) CL.pivot.position.set(-0.3, -0.3 + (CL.st.on ? 0.03 * Math.sin(performance.now() / 150) : 0), -0.5);
+}
+// AFK Beacon: pick up to 2 (two lie on every floor), G (controller: RB) rolls one 12 m ahead. For 25 s every monster within 30 m goes to it and idles round it.
+const BC = {have: 0, list: [], n: 0, tpl: null};
+function beaconMesh() {
+  const o = new THREE.Group(), can = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .22, 10), new THREE.MeshBasicMaterial({color: 0x8a7a55}));
+  can.rotation.z = Math.PI / 2; can.position.y = .08; const halo = cyanGlow(.7, .7, .6), beacon = cyanGlow(.25, 1.8, .3);
+  halo.material.color.setHex(0xffa040); beacon.material.color.setHex(0xffa040); halo.position.y = .3; beacon.position.y = .9; o.add(can, halo, beacon);
+  Object.assign(o.userData, {art: can, halo, beacon});
+  loadModel("beacon").then(g => { if (!g) return; const m = SkeletonUtils.clone(g.scene), bb = new THREE.Box3().setFromObject(m, true), k = 0.36 / (bb.getSize(new THREE.Vector3()).x || 1), c = bb.getCenter(new THREE.Vector3());
+    m.scale.setScalar(k); m.position.set(-c.x * k, -bb.min.y * k, -c.z * k); const w = new THREE.Group(); w.add(m); o.add(w); can.visible = false; o.userData.model = w; });
+  return o;
+}
+function beaconLures() {                                                    // what the monsters of this floor react to: beacons that have landed and are still running
+  const now = clk(); return BC.list.filter(b => b.scene === S.id && now >= b.land && now < b.until);
+}
+function addBeacon(x, z, from) {
+  const now = clk(), roll = Math.hypot(x - from[0], z - from[1]) / 4, o = beaconMesh();
+  const led = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xff2010, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true})); led.scale.set(.18, .18, 1); led.position.set(.1, .2, 0); o.add(led);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({color: 0xffa040, transparent: true, opacity: .35, side: THREE.DoubleSide, depthWrite: false})); ring.rotation.x = -Math.PI / 2; ring.position.y = .03; ring.visible = false; o.add(ring);
+  o.position.set(from[0], S.floor, from[1]); scene.add(o);
+  const b = {id: ++BC.n, x, z, from, scene: S.id, y: S.floor, t0: now, land: now + roll, until: now + roll + LURE_S, o, led, ring, roll};
+  BC.list.push(b); return b;
+}
+function clearBeacons() { for (const b of BC.list) { scene.remove(b.o); b.o.traverse(m => { if (m.geometry) m.geometry.dispose?.(); }); } BC.list.length = 0; }
+function throwBeacon() {
+  if (BC.have <= 0 || dead || loading || FIN.out || KPUI.open || devOn.v || myCarry() >= 0) return false;
+  const dx = -Math.sin(P.yaw), dz = -Math.cos(P.yaw), sx = P.p.x + dx * 0.5, sz = P.p.z + dz * 0.5;
+  const blocked = (x, z) => { const c = cellOf(x, z); return c < 0 || !S.nav[c] || !!collide({x, y: S.floor + 0.5, z}); };
+  const [ex, ez] = rollEnd(sx, sz, dx, dz, blocked);
+  BC.have--; addBeacon(ex, ez, [sx, sz]);
+  if (net.on) net.send({t: "beacon", x: ex, z: ez});
+  toast(BC.have ? `AFK Beacon rolled: ${BC.have} left` : "AFK Beacon rolled"); return true;
+}
+function animateBeacons(dt) {
+  const now = clk();
+  for (let i = BC.list.length - 1; i >= 0; i--) {
+    const b = BC.list[i];
+    if (b.scene !== S.id || now > b.until + 0.3) { scene.remove(b.o); BC.list.splice(i, 1); continue; }
+    const u = Math.min(1, (now - b.t0) / Math.max(0.01, b.roll)), e = 1 - (1 - u) * (1 - u);
+    b.o.position.set(b.from[0] + (b.x - b.from[0]) * e, b.y, b.from[1] + (b.z - b.from[1]) * e);
+    if (u < 1) b.o.rotation.z = -e * 6 * Math.PI * (Math.hypot(b.x - b.from[0], b.z - b.from[1]) / 12);
+    const left = Math.max(0, b.until - now) / LURE_S;
+    b.led.material.opacity = now < b.until ? 0.5 + 0.5 * Math.sin(now * 9) : 0;
+    b.ring.visible = u >= 1 && now < b.until; b.ring.scale.setScalar(0.6 + 2.6 * left); b.ring.material.opacity = 0.15 + 0.3 * left;
+    if (now > b.until) b.o.visible = (Math.floor(now * 12) % 2) === 0;
+  }
+}
+// what is within reach: {k: "locker" | "pack" | "beacon", i} or null
 function nearLoot() {
   const v = LT.vis; if (!v || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return null;
   const st = lt(); let best = null, bd = 1.5;
   const look = (items, k, list) => items.forEach((it, i) => { if (list[i] !== 0) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = {k, i}; } });
-  look(v.lockers, "locker", st.lockers); look(v.packs, "pack", st.packs);
+  look(v.lockers, "locker", st.lockers); look(v.packs, "pack", st.packs); look(v.beacons, "beacon", st.beacons || []);
   return best;
 }
 function lootAct(k, i) {
-  if (net.on) { net.send({t: "loot", k, i, rounds: LT.rounds}); return; }                  // the server answers with the floor's new state
-  const st = lt(), next = k === "locker" ? takeLocker(st, i, myId(), LT.gun) : takePack(st, i, myId(), LT.rounds);
+  if (net.on) { net.send({t: "loot", k, i, rounds: LT.rounds, have: BC.have}); return; }                  // the server answers with the floor's new state
+  const st = lt(), next = k === "locker" ? takeLocker(st, i, myId(), LT.gun) : k === "beacon" ? takeBeacon(st, i, myId(), BC.have) : takePack(st, i, myId(), LT.rounds);
   if (next) setLoot(S.id, next, myId(), k);
 }
 function tryLoot() {
   const n = nearLoot(); if (!n) return false;
   if (n.k === "locker" && LT.gun) { toast("You already carry a gun"); return true; }
+  if (n.k === "beacon" && BC.have >= MAX_BEACONS) { toast(`You cannot carry more than ${MAX_BEACONS} beacons`); return true; }
   if (n.k === "pack" && LT.rounds >= MAX_ROUNDS) { toast(`You cannot carry more than ${MAX_ROUNDS} rounds`); return true; }
   lootAct(n.k, n.i); return true;
 }
 function setLoot(scene, st, by, k) {
   LT.st[scene] = st;
   if (by !== undefined && by === myId()) {
-    if (k === "locker") { LT.gun = true; LT.rounds = GUN_ROUNDS; toast(`You take the Error Deletion Ray: ${GUN_ROUNDS} rounds`); }
+    if (k === "locker") { LT.gun = true; LT.rounds = GUN_ROUNDS; CL.have = true; CL.st = newCloak(); toast(`You take the Error Deletion Ray (${GUN_ROUNDS} rounds) and a cloak: V toggles it`); }
+    else if (k === "beacon") { BC.have = Math.min(MAX_BEACONS, BC.have + 1); toast(`AFK Beacon ×${BC.have}: G rolls one ahead, monsters nearby swarm it for ${LURE_S} s`); }
     else if (k === "pack") { LT.rounds = roundsAfterPack(LT.rounds); toast(`Ammo: ${LT.rounds} rounds`); }
   }
 }
@@ -1126,7 +1227,7 @@ function updatePrompt() {
     }
   }
   if (!pz && !dead && !loading && !reviveTarget() && nearPower()) msg = "Press E to switch on the power";
-  if (!msg && !dead && !loading && !reviveTarget()) { const n = nearLoot(); if (n) msg = n.k === "locker" ? (LT.gun ? "You already carry a gun" : "Press E to open the locker") : (LT.rounds >= MAX_ROUNDS ? "You cannot carry more ammo" : "Press E to take the ammo pack (+3)"); }
+  if (!msg && !dead && !loading && !reviveTarget()) { const n = nearLoot(); if (n) msg = n.k === "locker" ? (LT.gun ? "You already carry a gun" : "Press E to open the locker") : n.k === "beacon" ? (BC.have >= MAX_BEACONS ? "You cannot carry more beacons" : "Press E to take the AFK Beacon") : (LT.rounds >= MAX_ROUNDS ? "You cannot carry more ammo" : "Press E to take the ammo pack (+3)"); }
   el.textContent = msg; el.style.display = msg ? "block" : "none";
   if (!pz && POWER_SOURCES.includes(S.id)) { hud.style.display = "block"; hud.textContent = POWER.on ? "POWER ON" : "POWER OFF"; }
   else if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
@@ -1314,7 +1415,7 @@ function onNet(m) {
     case "s": {
       const p = net.peers.get(m.id); if (!p) break;
       const moved = p.scene !== m.scene, wasDead = p.dead;
-      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry; if (Number.isFinite(m.hp)) { const hp = Math.max(0, Math.min(MAX_HP, Math.round(m.hp / 5) * 5)); if (hp !== p.hp) { p.hp = hp; peerTag(p); } }
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry; p.cloak = !!m.cloak; if (Number.isFinite(m.hp)) { const hp = Math.max(0, Math.min(MAX_HP, Math.round(m.hp / 5) * 5)); if (hp !== p.hp) { p.hp = hp; peerTag(p); } }
       if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
       if (!wasDead && p.dead && m.scene === S.id) { net.alert = {id: p.id, until: performance.now() + 8000}; toast(`${p.name} was caught`); }     // the scream: an arrow toward the body
       break;
@@ -1330,6 +1431,7 @@ function onNet(m) {
       break;
     }
     case "hit": applyHit(m.dmg); break;
+    case "beacon": if (m.scene === S.id && !loading) addBeacon(m.x, m.z, [m.x, m.z]); break;                       // someone rolled a beacon on this floor (it lands at once for us)
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
@@ -1366,7 +1468,7 @@ function updatePeers(dt) {
     p.obj.visible = here; if (!here) continue;
     p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.z += (p.tz - p.z) * k;
     let da = p.tyaw - p.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); p.yaw += da * k;
-    p.halo.visible = !!p.carry && !p.dead;
+    p.halo.visible = !!p.carry && !p.dead; if (p.cloak && !p.dead) p.obj.visible = Math.floor(performance.now() / 90 + p.id) % 3 !== 0;       // a cloaked teammate shimmers
     p.obj.position.set(p.x, p.y, p.z); p.obj.rotation.y = p.yaw;
     p.pivot.scale.y += ((p.crouch ? .7 : 1) - p.pivot.scale.y) * k;
     p.pivot.rotation.z = p.dead ? 1.45 : 0; p.pivot.position.set(p.dead ? p.lie[0] : 0, p.dead ? p.lie[1] : 0, 0);
@@ -1384,7 +1486,7 @@ function netTick(dt) {
   if (!net.on) return;
   if ((net.t -= dt) <= 0) {
     net.t = 1 / 15;
-    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp)});
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp), cloak: CL.st.on ? 1 : 0});
   }
   if (!loading && net.host() && (net.mt -= dt) <= 0) {
     net.mt = 0.1;
@@ -1496,15 +1598,20 @@ function respawn() {
 // the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
 function targetList() {
   const out = [];
-  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch && !(P.shotT > 0), moving: P.moving || P.shotT > 0, run: P.running || P.shotT > 0, carry: myCarry() >= 0});
-  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch && !(p.shotT > 0), moving: !!p.moving || p.shotT > 0, run: !!p.run || p.shotT > 0, carry: !!p.carry});
+  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch && !(P.shotT > 0), moving: P.moving || P.shotT > 0, run: P.running || P.shotT > 0, carry: myCarry() >= 0, cloak: CL.st.on});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({cloak: !!p.cloak, id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch && !(p.shotT > 0), moving: !!p.moving || p.shotT > 0, run: !!p.run || p.shotT > 0, carry: !!p.carry});
   return out;
 }
 function simMonsters(dt) {
   if (net.host()) {
     const targets = targetList();
+    const lureList = beaconLures();
     for (const m of monsters) {
-      for (const id of m.update(dt, targets).caught) { if (id === net.id) applyHit(HIT_DMG); else net.send({t: "hit", to: id, dmg: HIT_DMG}); }
+      for (const id of m.update(dt, targets, lureList).caught) { if (id === net.id) applyHit(HIT_DMG); else net.send({t: "hit", to: id, dmg: HIT_DMG}); }
+    }
+    for (const a of monsters) if (a.lureId !== null) for (const b of monsters) if (b !== a && b.lureId !== null) {            // swarming monsters bump into each other and shuffle apart
+      const dx = a.pos.x - b.pos.x, dz = a.pos.z - b.pos.z, d = Math.hypot(dx, dz);
+      if (d < 0.8 && d > 0.001) { const push = (0.8 - d) * 0.5 * Math.min(1, dt * 6); a.pos.x += dx / d * push; a.pos.z += dz / d * push; }
     }
   } else monsters.forEach((m, i) => m.follow(dt, net.snap && net.snap.l[i]));
 }
@@ -1556,7 +1663,7 @@ function update(dt) {
 }
 // everything a frame does except drawing, so a bot (tools/bots.mjs, ?bot=1) can run the game without rendering it
 function sim(dt, t) {
-  update(dt); hpHud(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); animateGun(dt); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); hpHud(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); animateGun(dt); animateCloak(dt); animateBeacons(dt); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
 }
 const BOT = new URLSearchParams(location.search).has("bot");
 function step(dtOverride) {
@@ -1588,7 +1695,7 @@ FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {CL, BC, toggleCloak, throwBeacon, addBeacon, beaconLures, beaconSpots, spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

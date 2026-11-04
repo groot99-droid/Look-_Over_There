@@ -289,7 +289,7 @@ test("loot: the floor's state arrives with you; a pack is taken once and told to
   const srv = await createServer();
   const a = await join(srv, "R20", "Ann"), b = await join(srv, "R20", "Bob"), c = await join(srv, "R20", "Cy");
   a.send({t: "s", scene: "L2"}); b.send({t: "s", scene: "L2"}); c.send({t: "s", scene: "L1"});
-  const first = await a.next(kind("loot")); assert.equal(first.scene, "L2"); assert.deepEqual(first.st, {lockers: [], packs: [0, 0, 0]});
+  const first = await a.next(kind("loot")); assert.equal(first.scene, "L2"); assert.deepEqual(first.st, {lockers: [], packs: [0, 0, 0], beacons: [0, 0]});
   a.send({t: "loot", k: "pack", i: 1, rounds: 3});
   const got = await b.next(m => m.t === "loot" && m.by === a.id); assert.deepEqual([got.st.packs[1], got.by, got.k], [a.id, a.id, "pack"]);
   b.send({t: "loot", k: "pack", i: 1, rounds: 0});
@@ -351,5 +351,22 @@ test("ray gun: only a floor's host can announce a banish", async () => {
   a.send({t: "zap", scene: "B1", i: 2, from: [1, 2], to: [30, 40]});
   const z = await b.next(kind("zap")); assert.deepEqual([z.i, z.from, z.to], [2, [1, 2], [30, 40]]);
   a.send({t: "zap", scene: "B1", i: "x", from: [1, 2], to: [3]}); assert.ok(!(await b.quiet(150)).some(m => m.t === "zap"), "junk is dropped");
+  await srv.close();
+});
+
+test("a thrown beacon reaches the others on the floor only, junk is dropped; beacons are taken once and at most two carried", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "RB", "Ann"), b = await join(srv, "RB", "Bob"), c = await join(srv, "RB", "Cy");
+  a.send({t: "s", scene: "L1"}); b.send({t: "s", scene: "L1"}); c.send({t: "s", scene: "L2"});
+  await Promise.all([a, b, c].map(x => x.quiet(150)));
+  a.send({t: "beacon", x: 3, z: 4});
+  const got = await b.next(kind("beacon")); assert.deepEqual([got.x, got.z, got.from], [3, 4, a.id]);
+  a.send({t: "beacon", x: "x", z: 1}); a.send({t: "beacon", x: 1e9, z: 1});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "beacon") && !(await c.quiet(50)).some(m => m.t === "beacon"), "junk and other floors got nothing");
+  a.send({t: "loot", k: "beacon", i: 0, have: 0}); assert.equal((await a.next(kind("loot"))).by, a.id);
+  b.send({t: "loot", k: "beacon", i: 0, have: 0});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "loot" && m.by === b.id), "already taken");
+  b.send({t: "loot", k: "beacon", i: 1, have: 2});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "loot" && m.by === b.id), "carrying the most");
   await srv.close();
 });

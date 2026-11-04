@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {LOOT, LOOT_FLOORS, GUN_ROUNDS, PACK_ROUNDS, MAX_ROUNDS, newLoot, takeLocker, takePack, putBack, roundsAfterPack, lockersLeft, packsLeft} from "./loot.js";
+import {LOOT, LOOT_FLOORS, GUN_ROUNDS, PACK_ROUNDS, MAX_ROUNDS, BEACONS, MAX_BEACONS, takeBeacon, beaconsLeft, newLoot, takeLocker, takePack, putBack, roundsAfterPack, lockersLeft, packsLeft} from "./loot.js";
 import {GATED} from "./fuses.js";
 
 test("every floor has ammo, only B1 has lockers, enough of them for a full room", () => {
@@ -37,3 +37,11 @@ test("a player who leaves puts their locker back", () => {
   assert.equal(putBack(st, 99), null, "nothing to put back"); assert.equal(putBack(null, 4), null);
 });
 test("the loot floors are not changed by the puzzle rules", () => { assert.ok(GATED.every(f => LOOT_FLOORS.includes(f))); });
+test("two beacons lie on every floor, taken once, and nobody carries more than two", () => {
+  for (const f of LOOT_FLOORS) assert.equal(beaconsLeft(newLoot(f)), BEACONS);
+  const st = newLoot("L1"), a = takeBeacon(st, 0, 7, 0);
+  assert.equal(a.beacons[0], 7); assert.equal(st.beacons[0], 0, "the input is not changed");
+  assert.equal(takeBeacon(a, 0, 9, 0), null, "already taken"); assert.equal(takeBeacon(st, 1, 7, MAX_BEACONS), null, "carrying the most");
+  for (const bad of [-1, 2, 0.5, "0", null]) assert.equal(takeBeacon(st, bad, 7, 0), null);
+  assert.equal(takeBeacon(st, 0, 0, 0), null);
+});

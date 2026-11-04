@@ -13,7 +13,7 @@ export function brain(idx, N, opts = {}) {
   const g = window.__game, NW = g.NW, NH = g.NH, NAV = g.NAV, NX0 = g.NX0, NZ0 = g.NZ0, CELLS = NW * NH;
   const ROLES = ["runner", "bait", "scout", "runner", "runner", "bait", "runner", "runner"];
   const B = window.__bot = {idx, role: N === 1 ? "runner" : N === 2 ? ["runner", "bait"][idx] : ROLES[idx % ROLES.length], floors: {}, downs: 0, revives: 0, stuck: 0, fled: 0, cur: null, path: [], pathAt: 0,
-    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, shots: 0, hits: 0, armedAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
+    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, shots: 0, hits: 0, beacons: 0, cloakS: 0, hurts: 0, hp: 100, armedAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
   window.__bb = window.__bb || [];
   const now = () => performance.now() / 1000;
   const xz = c => [NX0 + ((c % NW) + 0.5) * NAV, NZ0 + (Math.floor(c / NW) + 0.5) * NAV];
@@ -154,6 +154,20 @@ export function brain(idx, N, opts = {}) {
     const f = g.fire(); if (f) { B.shots++; B.hits++; }
     g.P.pitch = 0; return f;
   }
+  // ---- the AFK Beacon: with a monster chasing from 7 to 22 m, roll a beacon at it (it and anything within 30 m of the can goes to the can); the cloak goes on when a monster is near and off when it is clear
+  function tryBeacon(m) {
+    if (opts.nobeacons || g.BC.have <= 0 || g.myCarry() >= 0 || g.BC.list.some(b => b.scene === g.S.id && performance.now() / 1000 < b.until)) return false;
+    const d = dist(m.pos.x, m.pos.z); if (d < 7 || d > 22 || !m.onFloorY(g.P.p.y)) return false;
+    const keep = g.P.yaw; face(m.pos.x, m.pos.z);
+    if (g.throwBeacon()) { B.beacons++; return true; }
+    g.P.yaw = keep; return false;
+  }
+  function cloakLogic(near, chaser) {
+    if (opts.nocloak || !g.CL.have) return;
+    const want = !!chaser || near < 14;
+    if (want && !g.CL.st.on && g.CL.st.b > 0.4) g.toggleCloak(); else if (!want && g.CL.st.on) g.toggleCloak();
+    if (g.CL.st.on) B.cloakS += 0.05;
+  }
   function wantLoot() {                                                        // true while the bot is on its way to a locker (no gun yet) or a close ammo pack (low on rounds)
     if (opts.nogun) return false;
     const v = g.LT.vis, st = g.LT.st[g.S.id]; if (!v || !st) return false;
@@ -161,7 +175,10 @@ export function brain(idx, N, opts = {}) {
     const free = (items, list, kind) => items.map((it, i) => list[i] === 0 ? {i, x: it.home[0], z: it.home[1]} : null).filter(Boolean).filter(it => !claimed(kind, it.i));
     let kind = null, items = [];
     if (!g.LT.gun && v.lockers.length) { kind = "locker"; items = free(v.lockers, st.lockers, kind); }
-    else if (g.LT.gun && g.LT.rounds < 6) { kind = "pack"; items = free(v.packs, st.packs, kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 22; }); }
+    else {
+      if (!opts.nobeacons && g.BC.have < 2 && v.beacons) { kind = "beacon"; items = free(v.beacons, st.beacons || [], kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 20; }); }
+      if (!items.length && g.LT.gun && g.LT.rounds < 6) { kind = "pack"; items = free(v.packs, st.packs, kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 22; }); }
+    }
     if (!items.length) return false;
     const it = pickNearest(items, kind); if (!it) return false;
     if (walkTo(it.x, it.z, 1.2)) { face(it.x, it.z); g.tryLoot(); }
@@ -217,9 +234,12 @@ export function brain(idx, N, opts = {}) {
     // what is around: sneak when a monster that has not noticed us is near; run only when nothing is near
     let near = 99, chaser = null;
     for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d < near) near = d; if (m.state === "chase" && d < 22 && (!chaser || d < dist(chaser.pos.x, chaser.pos.z))) chaser = m; }
+    if (g.HP.h.hp < B.hp - 1) B.hurts++; B.hp = g.HP.h.hp;
+    if (!chaser && g.HP.h.hp < 50) for (const m of g.monsters) if (m.onFloorY(g.P.p.y) && dist(m.pos.x, m.pos.z) < 16 && m.state !== "patrol") chaser = m;           // hurt: do not wait for it to charge
+    cloakLogic(near, chaser);
     B.sneak = near < 12 && !chaser; B.runOk = near > 20 && g.P.stam > 0.5;
     const role = hasRunner() ? B.role : "runner";
-    if (chaser) { B.claim = null; tryShoot(); if (flee(role === "bait" ? runnerPos() : null)) return; }
+    if (chaser) { B.claim = null; if (!tryBeacon(chaser)) tryShoot(); if (flee(role === "bait" ? runnerPos() : null)) return; }
     else if (B.hide && now() < B.hide.until) { stop(); g.P.crouch = true; return; }          // out of sight: keep still and quiet until it gives up
     // a teammate is down: lift them if the way there is safe
     const down = mates().find(b => b.dead);

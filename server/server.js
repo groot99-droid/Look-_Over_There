@@ -12,7 +12,7 @@ import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
 import {POWER_SOURCES, newPower, throwPower} from "../shared/power.js";
 import {ALARM_MS, newRun, exitPlayer, done as runDone, finish, results as runResults} from "../shared/finish.js";
-import {LOOT_FLOORS, MAX_ROUNDS, newLoot, takeLocker, takePack, putBack} from "../shared/loot.js";
+import {LOOT_FLOORS, MAX_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, takeBeacon, putBack} from "../shared/loot.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -164,6 +164,11 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           broadcast(room, {t: "beam", id: me.id, o, e}, me.id, scene);
           break;
         }
+        case "beacon": {                                              // a thrown AFK Beacon: everyone else on the floor learns where it lies (the host's monsters then swarm it)
+          const scene = me.scene, x = Number(m.x), z = Number(m.z); if (!scene || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 500 || Math.abs(z) > 500) break;
+          broadcast(room, {t: "beacon", from: me.id, scene, x, z}, me.id, scene);
+          break;
+        }
         case "zap": {                                                 // the host banished a monster: tell the floor so it can play the glitch (only the host may)
           const nums = (v, n) => Array.isArray(v) && v.length === n && v.every(x => typeof x === "number" && Number.isFinite(x)) ? v : null;
           const from = nums(m.from, 2), to = nums(m.to, 2);
@@ -171,11 +176,14 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           break;
         }
         case "loot": {                                                // open a locker (a gun) or take an ammo pack on the floor you are on
-          const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack")) break;
+          const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack" && m.k !== "beacon")) break;
           const st = floorLoot(room, scene);
           if (m.k === "locker") {
             const next = takeLocker(st, m.i, me.id, room.armed.has(me.id));
             if (next) { room.loot[scene] = next; room.armed.set(me.id, scene); sendLoot(room, scene, {by: me.id, k: "locker"}); }
+          } else if (m.k === "beacon") {
+            const next = takeBeacon(st, m.i, me.id, Number.isInteger(m.have) ? Math.min(Math.max(m.have, 0), MAX_BEACONS) : MAX_BEACONS);
+            if (next) { room.loot[scene] = next; sendLoot(room, scene, {by: me.id, k: "beacon"}); }
           } else {
             const next = takePack(st, m.i, me.id, Number.isInteger(m.rounds) ? Math.min(Math.max(m.rounds, 0), MAX_ROUNDS) : MAX_ROUNDS);
             if (next) { room.loot[scene] = next; sendLoot(room, scene, {by: me.id, k: "pack"}); }
