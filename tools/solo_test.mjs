@@ -126,6 +126,7 @@ try {
   check("the cloak toggles and the battery drains while it is on", cb.on && cb.off && cb.mid < 0.7 && cb.mid > 0.2, JSON.stringify(cb));
   const bc = await p.evaluate(() => {
     const g = window.__game; g.P.imm = 999; g.BC.have = 2; for (const q of g.monsters) { q.state = "patrol"; q.path = []; q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z); }
+    { const eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; let best = 0, bl = -1; for (let y = 0; y < 6.28; y += 0.2) { let L = 0; while (L < 12 && g.rayClear(eye, [-Math.sin(y), 0, -Math.cos(y)], L + 1)) L++; if (L > bl) { bl = L; best = y; } } g.P.yaw = best; }      // face the longest open stretch
     g.throwBeacon(); const b = g.BC.list[0]; if (!b) return {err: "no beacon"};
     const rolled = Math.hypot(b.x - g.P.p.x, b.z - g.P.p.z);
     b.land = performance.now() / 1000;                                             // skip the roll
