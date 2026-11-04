@@ -54,6 +54,9 @@
   #cloak b{position:absolute;left:0;top:-14px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:#9fe8ff;text-shadow:0 0 4px #000}
   #cloakfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;box-shadow:inset 0 0 110px 25px rgba(64,216,255,.5);transition:opacity .25s}
   #beacons{position:fixed;right:16px;bottom:40px;color:#ffb060;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 5px #000}
+  #camhud{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);font:700 13px/1.3 system-ui,sans-serif;letter-spacing:.16em;color:#bfe8d4;z-index:2;pointer-events:none;display:none;text-shadow:0 0 5px #000;text-align:center}
+  #camhud.hot{color:#ff6a5a}
+  #buzz{position:fixed;left:50%;top:76px;transform:translateX(-50%);font:700 13px/1 system-ui,sans-serif;letter-spacing:.14em;color:#ff7a6a;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000}
   #hurt{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:rgba(200,20,10,.38)}
   #stam{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:120px;height:4px;background:rgba(0,0,0,.45);z-index:1;pointer-events:none;opacity:0;transition:opacity .3s}
   #stam i{display:block;height:100%;width:100%;background:#cdb}
@@ -77,7 +80,7 @@
 <div id="fade"></div>
 <div id="death">YOU DIED</div>
 <div id="hud"></div>
-<div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
+<div id="camhud"></div><div id="buzz"></div><div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
 <div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
@@ -588,7 +591,7 @@ device.visible = false; camera.add(device);
 
 // Monsters show on the handheld map only through the security cameras: every camera on the floor sweeps on its loop, and a monster inside a camera's
 // view (and not behind a wall) is marked; the mark stays at its last seen spot for MAP_FADE_MS. A floor with no cameras shows no monsters.
-const MAPSEEN = new Map(), MAP_FADE_MS = 3000, CAM_RANGE = 40, camFrustum = new THREE.Frustum(), camM = new THREE.Matrix4(), camV = new THREE.Vector3();
+const MAPSEEN = new Map(), CAMHOT = new Map(), BUZZ = {at: {}, until: 0, text: ""}, MAP_FADE_MS = 6000, CAM_RANGE = 40, camFrustum = new THREE.Frustum(), camM = new THREE.Matrix4(), camV = new THREE.Vector3();
 function segClear(ax, ay, az, bx, by, bz, skip = 1.0) {                    // no wall box between the two points (same test the monsters use for sight)
   const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 0.3);
   for (let k = 1; k < steps; k++) {
@@ -604,12 +607,26 @@ function camSees(c, t, x, y, z) {                                           // t
   const p = feedCam.position;
   return Math.hypot(x - p.x, z - p.z) < CAM_RANGE && camFrustum.containsPoint(camV.set(x, y, z)) && segClear(p.x, p.y, p.z, x, y, z);
 }
+// every client computes the cameras' sweeps from the same clock (the server's time, kept as an offset), so a camera shows everyone the same picture
+const ctime = () => (Date.now() + (net.off || 0)) / 1000;
+// who sees what: every 0.2 s each camera is tested against each monster on the floor; a sighting stays on the team map for 6 s, and CAMHOT keeps which cameras see one now
 function updateSeen(t) {
-  const now = performance.now();
-  for (const m of monsters) {
-    if (!S.cams.some(c => camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z))) continue;
-    MAPSEEN.set(m, {at: now, x: m.pos.x, z: m.pos.z});
-  }
+  const now = performance.now(); CAMHOT.clear();
+  const who = [{name: "you", x: P.p.x, z: P.p.z, y: P.p.y, dead}]; if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) who.push({name: p.name, x: p.x, z: p.z, y: p.y, dead: p.dead});
+  S.cams.forEach((c, i) => {
+    for (const m of monsters) {
+      if (!m.onFloorY(P.p.y) || !camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z)) continue;
+      MAPSEEN.set(m, {at: now, x: m.pos.x, z: m.pos.z, yaw: m.yaw, name: m.cfg.name, cam: i});
+      (CAMHOT.get(i) || CAMHOT.set(i, []).get(i)).push(m);
+      const close = who.filter(w => !w.dead && Math.abs(w.y - m.fy) < 1.6).map(w => [Math.hypot(w.x - m.pos.x, w.z - m.pos.z), w.name]).sort((a, b) => a[0] - b[0])[0];
+      if (close && close[0] < 14 && now - (BUZZ.at[i] || -1e9) > 8000) { BUZZ.at[i] = now; BUZZ.until = now + 3000; BUZZ.text = `CAM ${i + 1}: ${m.cfg.name} near ${close[1]}`; rumble?.playEffect?.("dual-rumble", {duration: 90, strongMagnitude: .2, weakMagnitude: .4}); }
+    }
+  });
+}
+function hotCam() {                                                         // jump the feed to the nearest camera that sees a monster right now
+  let best = -1, bd = 1e9; for (const i of CAMHOT.keys()) { const c = S.cams[i], d = Math.hypot(c.position[0] - P.p.x, c.position[2] - P.p.z); if (d < bd) { bd = d; best = i; } }
+  if (best < 0) { toast("No camera sees a monster"); return false; }
+  camIdx = best; devMode = "cams"; devOn.v = true; device.visible = true; return true;
 }
 const mapXY = (x, z) => [256 + x * 5.6, 160 + (z - 2.5) * 5.6];
 function mapLayer(level) {
@@ -631,13 +648,22 @@ function drawMap(t) {
   mctx.drawImage(mapLayer(level), 0, 0);
   mctx.strokeStyle = "#e0a040"; mctx.lineWidth = 2;
   for (const dr of doors) if (dr.level === level && dr.p < 0.5) { const [a, b] = mapXY(dr.cx, dr.cz); mctx.beginPath(); mctx.moveTo(a - 2, b); mctx.lineTo(a + 2, b); mctx.stroke(); }
-  const now = performance.now();
-  for (const m of monsters) {                                               // a monster is on the map only while a camera sees it, then fades over 3 s at the spot it was last seen
+  const now = performance.now(), ct = ctime();
+  S.cams.forEach((c, i) => {                                                // each camera and the cone it covers right now: green, red while it sees a monster, the chosen one outlined
+    aimFeed(c, ct); const yaw = feedCam.rotation.y, half = Math.atan(Math.tan(feedCam.fov * Math.PI / 360) * 1.6), dirx = -Math.sin(yaw), dirz = -Math.cos(yaw), ang = Math.atan2(dirz, dirx), [a, b] = mapXY(c.position[0], c.position[2]), hot = CAMHOT.has(i);
+    mctx.fillStyle = hot ? "rgba(255,70,55,.30)" : "rgba(120,230,170,.11)"; mctx.beginPath(); mctx.moveTo(a, b); mctx.arc(a, b, 14 * 5.6, ang - half, ang + half); mctx.closePath(); mctx.fill();
+    mctx.fillStyle = hot ? "#ff6a5a" : "#9fe8c4"; mctx.fillRect(a - 2, b - 2, 4, 4);
+    if (i === camIdx) { mctx.strokeStyle = "#ffffff"; mctx.lineWidth = 1.2; mctx.strokeRect(a - 4, b - 4, 8, 8); }
+  });
+  mctx.font = "700 10px system-ui,sans-serif"; mctx.textAlign = "center";
+  for (const m of monsters) {                                               // a monster is on the map only while a camera sees it, then stays 6 s (fading) at the spot it was last seen, with its name and the way it was facing
     const sn = MAPSEEN.get(m); if (!sn || m.level !== level) continue;
     const age = now - sn.at; if (age > MAP_FADE_MS) continue;
     const fresh = age < 400, [a, b] = mapXY(sn.x, sn.z), ph = (((t * 0.9 + m.home[0]) % 1) + 1) % 1, fade = fresh ? 1 : 1 - age / MAP_FADE_MS;
     if (fresh) { mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke(); }
-    mctx.fillStyle = `rgba(255,74,61,${0.25 + 0.75 * fade})`; mctx.beginPath(); mctx.arc(a, b, fresh ? 3 : 2.4, 0, 7); mctx.fill();
+    mctx.fillStyle = `rgba(255,74,61,${0.25 + 0.75 * fade})`; mctx.beginPath(); mctx.arc(a, b, fresh ? 3.4 : 2.8, 0, 7); mctx.fill();
+    mctx.strokeStyle = `rgba(255,150,130,${0.3 + 0.7 * fade})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(a, b); mctx.lineTo(a - Math.sin(sn.yaw) * 11, b - Math.cos(sn.yaw) * 11); mctx.stroke();
+    mctx.fillStyle = `rgba(255,190,170,${0.35 + 0.65 * fade})`; mctx.fillText(sn.name, a, b - 7);
   }
   for (const p of net.peers.values()) {                                     // the others in the room, on this floor
     if (p.scene !== S.id || p.dead) continue;
@@ -664,6 +690,11 @@ function aimFeed(c, t) {
 }
 function toggleDevice() { devOn.v = !devOn.v; if (devOn.v) device.visible = true; }
 function toggleMode() { if (devOn.v) devMode = devMode === "cams" ? "map" : "cams"; else toggleDevice(); }
+function camHud() {                                                         // the feed's caption, and the buzz line when a camera sees a monster close to someone
+  const el = $("camhud"), show = devOn.v && devMode === "cams" && S.cams.length && !loading;
+  if (show) { const hot = CAMHOT.get(camIdx % S.cams.length); el.style.display = "block"; el.className = hot ? "hot" : ""; el.textContent = `CAM ${camIdx % S.cams.length + 1} / ${S.cams.length}` + (hot ? ` · ${hot.map(m => m.cfg.name).join(", ")} IN VIEW` : "") + `   [Q/R switch · 1-9 pick · Z hot camera]`; } else el.style.display = "none";
+  const bz = $("buzz"); bz.style.display = performance.now() < BUZZ.until && !loading ? "block" : "none"; bz.textContent = BUZZ.text;
+}
 function cycleCam(d) { const n = S.cams.length; if (n) camIdx = (camIdx + d + n * 100) % n; }
 
 // ---------------------------------------------------------------- input: keyboard (WASD + arrows), mouse look, Xbox controller
@@ -696,9 +727,12 @@ addEventListener("keydown", e => {
   if (e.code === "KeyF") fire();
   if (e.code === "KeyV") toggleCloak();
   if (e.code === "KeyG") throwBeacon();
+  if (e.code === "KeyZ") hotCam();
+  if (/^Digit[1-9]$/.test(e.code) && devOn.v && S.cams.length) camIdx = Math.min(+e.code.slice(5) - 1, S.cams.length - 1);
   if (e.code === "KeyQ") cycleCam(-1);
-  if (e.code === "KeyR") cycleCam(1);
+  if (e.code === "KeyR" && devOn.v) cycleCam(1);                                   // (R is also run: the cameras only answer while the device is out)
 });
+addEventListener("wheel", e => { if (devOn.v && devMode === "cams") cycleCam(e.deltaY > 0 ? 1 : -1); }, {passive: true});
 addEventListener("keyup", e => { keys[e.code] = false; });
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
 renderer.domElement.addEventListener("mousedown", e => { if (e.button === 0 && document.pointerLockElement === renderer.domElement) fire(); });
@@ -723,7 +757,8 @@ function pad() {
     if (edge(6)) toggleCloak();                               // LT: the cloak
     if (edge(5)) throwBeacon();                               // RB: roll an AFK Beacon
     if (edge(7)) fire();                                      // RT: fire the ray gun (RB and LT are kept for the beacon and the cloak)
-    if (edge(15)) cycleCam(1);                                // D-pad right: next camera
+    if (edge(15)) cycleCam(1);
+    if (edge(13)) hotCam();                                   // D-pad down: the nearest camera that sees a monster                                // D-pad right: next camera
   }
   return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), use: down(2), run: down(10), crouch: down(1) || down(11)};   // hold L-stick click to run; R-stick click (or B) crouches
 }
@@ -1399,6 +1434,7 @@ function hud() {
 function onNet(m) {
   switch (m.t) {
     case "welcome":
+      if (Number.isFinite(m.now)) net.off = m.now - Date.now();
       net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true; net.phase = m.phase;
       for (const p of m.players) if (p.id !== m.id) addPeer(p);
       if (m.phase !== "lobby") net.startRes?.();
@@ -1664,7 +1700,7 @@ function update(dt) {
 }
 // everything a frame does except drawing, so a bot (tools/bots.mjs, ?bot=1) can run the game without rendering it
 function sim(dt, t) {
-  update(dt); hpHud(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(t); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); animateGun(dt); animateCloak(dt); animateBeacons(dt); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+  update(dt); hpHud(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(ctime()); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); camHud(); animateGun(dt); animateCloak(dt); animateBeacons(dt); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
 }
 const BOT = new URLSearchParams(location.search).has("bot");
 function step(dtOverride) {
@@ -1681,7 +1717,7 @@ function step(dtOverride) {
     else {
       const cams = S.cams;
       if (cams.length) {
-        camIdx %= cams.length; aimFeed(cams[camIdx], t);
+        camIdx %= cams.length; aimFeed(cams[camIdx], ctime());
         device.visible = false; renderer.setRenderTarget(rt); renderer.render(scene, feedCam); renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); device.visible = true;
         feedMat.uniforms.time.value = t % 100; screenMesh.material = feedMat;
       } else { mctx.fillStyle = "#050806"; mctx.fillRect(0, 0, 512, 320); mapTex.needsUpdate = true; screenMesh.material = mapMat; }
@@ -1696,7 +1732,7 @@ FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {CL, BC, toggleCloak, throwBeacon, addBeacon, beaconLures, beaconSpots, spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {CAMHOT, hotCam, ctime, camHud, BUZZ, CL, BC, toggleCloak, throwBeacon, addBeacon, beaconLures, beaconSpots, spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

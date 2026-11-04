@@ -114,7 +114,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         me = {id: ++room.seq, seq: room.seq, ws, scene: null, ready: false, char, name: String(m.name || "Player").replace(/[^\w .-]/g, "").slice(0, 16) || "Player",
               color: COLORS.find(c => !used.has(c)) || COLORS[0]};
         room.players.set(me.id, me);
-        send(me, {t: "welcome", id: me.id, room: code, phase: room.phase, power: room.power.on, alarmMs: alarmMs(room), exited: room.run ? room.run.exits : [], results: room.run?.ended ? runResults(room.run) : null, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
+        send(me, {t: "welcome", now: Date.now(), id: me.id, room: code, phase: room.phase, power: room.power.on, alarmMs: alarmMs(room), exited: room.run ? room.run.exits : [], results: room.run?.ended ? runResults(room.run) : null, hosts: room.hosts, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
         broadcast(room, {t: "join", id: me.id, name: me.name, color: me.color, char: me.char}, me.id);
         lobbyChanged(room);
         return;

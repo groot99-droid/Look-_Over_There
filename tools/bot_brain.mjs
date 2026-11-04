@@ -51,9 +51,31 @@ export function brain(idx, N, opts = {}) {
   const tb = d => { const runM = Math.max(0, g.P.stam) * 4 * 7.5; return d <= runM ? d / 7.5 : runM / 7.5 + (d - runM) / 4; };
 
   // ---- the monsters on this floor and the fields they make (refreshed every 0.4 s)
+  // ---- what the bot knows about the monsters. Omniscient (--omniscient): everything in the game state, as the first versions did. Fair (default): only a monster it can see (18 m, line of sight) or hear (6 m),
+  // one a teammate reported on the blackboard, and, for the scout (the watcher), one a security camera shows (unless --nocams); an unseen monster is remembered at its last spot for 8 s, with no idea what it does.
+  const MEM = {}; let kAt = -1, kList = [];
+  function known() {
+    if (opts.omniscient) return g.monsters;
+    const t = Date.now(); if (t - kAt < 40) return kList; kAt = t;
+    B.seenNow = [];
+    g.monsters.forEach((m, i) => {
+      if (!m.onFloorY(g.P.p.y)) return;
+      const d = dist(m.pos.x, m.pos.z), see = d < 18 && g.segClear(g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z, m.pos.x, m.fy + 1.2, m.pos.z, 0.5);
+      let cam = false; if (!opts.nocams && B.role === "scout") { const sn = g.MAPSEEN.get(m); cam = !!sn && performance.now() - sn.at < 500; }
+      if (see || d < 6 || cam) { MEM[i] = {x: m.pos.x, z: m.pos.z, at: t, st: m.state, real: see || d < 6}; B.seenNow.push({i, x: m.pos.x, z: m.pos.z, st: m.state, at: t}); if (cam && !see) B.camSeen = (B.camSeen || 0) + 0.04; }
+    });
+    for (const b of mates()) for (const r of (b.seen || [])) if (t - r.at < 6000 && (!MEM[r.i] || MEM[r.i].at < r.at)) MEM[r.i] = {x: r.x, z: r.z, at: r.at, st: r.st, real: false};
+    kList = [];
+    for (const i in MEM) {
+      const k = MEM[i], m = g.monsters[i]; if (!m || t - k.at > 8000 || !m.onFloorY(g.P.p.y)) continue;
+      if (k.real && t - k.at < 150) kList.push(m);
+      else kList.push({ghost: true, pos: {x: k.x, z: k.z}, fy: m.fy, cfg: m.cfg, state: k.st === "chase" ? "chase" : "patrol", onFloorY: m.onFloorY.bind(m), immuneT: 0, glitchT: 0, home: m.home});
+    }
+    return kList;
+  }
   function fields() {
     if (B.fields && now() - B.fieldsAt < 0.4 && B.fields.id === g.S.id) return B.fields;
-    const mons = g.monsters.filter(m => m.onFloorY(g.P.p.y)).map(m => ({m, v: m.cfg.chase, f: dijk(cellOf(m.pos.x, m.pos.z))}));
+    const mons = known().filter(m => m.onFloorY(g.P.p.y)).map(m => ({m, v: m.cfg.chase, f: dijk(cellOf(m.pos.x, m.pos.z))}));
     B.fields = {id: g.S.id, bot: dijk(cellOf(g.P.p.x, g.P.p.z)), mons}; B.fieldsAt = now();
     return B.fields;
   }
@@ -145,7 +167,7 @@ export function brain(idx, N, opts = {}) {
   function tryShoot() {
     if (opts.nogun || !g.LT.gun || g.LT.rounds <= 0 || g.GUN.cool > 0 || g.myCarry() >= 0) return false;
     let best = null;
-    for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y) || m.immuneT > 0 || m.glitchT > 0 || m.state !== "chase") continue; const d = dist(m.pos.x, m.pos.z); if (d <= 13 && (!best || d < best.d)) best = {m, d}; }
+    for (const m of known()) { if (m.ghost || !m.onFloorY(g.P.p.y) || m.immuneT > 0 || m.glitchT > 0 || m.state !== "chase") continue; const d = dist(m.pos.x, m.pos.z); if (d <= 13 && (!best || d < best.d)) best = {m, d}; }
     if (!best) return false;
     const o = eye(), tx = best.m.pos.x - o[0], ty = best.m.fy + 0.5 * (best.m.cfg.height || 2.2) - o[1], tz = best.m.pos.z - o[2], L = Math.hypot(tx, ty, tz) || 1;
     const keep = [g.P.yaw, g.P.pitch]; g.P.yaw = Math.atan2(-tx, -tz); g.P.pitch = Math.asin(ty / L);
@@ -227,15 +249,16 @@ export function brain(idx, N, opts = {}) {
 
   function decide() {
     const id = g.S.id, st = g.FZ.st;
+    known();                                                           // keep the team's blackboard fresh with what this bot sees
     if (g.FIN.out) { stop(); return; }
     if (g.reviveTarget()) { stop(); g.keys.KeyE = true; B.hold += 0.05; return; }
     if (B.hold > 3.5) B.revives++; B.hold = 0; g.keys.KeyE = false;
     openNear();
     // what is around: sneak when a monster that has not noticed us is near; run only when nothing is near
     let near = 99, chaser = null;
-    for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d < near) near = d; if (m.state === "chase" && d < 22 && (!chaser || d < dist(chaser.pos.x, chaser.pos.z))) chaser = m; }
+    for (const m of known()) { if (!m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d < near) near = d; if (m.state === "chase" && d < 22 && (!chaser || d < dist(chaser.pos.x, chaser.pos.z))) chaser = m; }
     if (g.HP.h.hp < B.hp - 1) B.hurts++; B.hp = g.HP.h.hp;
-    if (!chaser && g.HP.h.hp < 50) for (const m of g.monsters) if (m.onFloorY(g.P.p.y) && dist(m.pos.x, m.pos.z) < 16 && m.state !== "patrol") chaser = m;           // hurt: do not wait for it to charge
+    if (!chaser && g.HP.h.hp < 50) for (const m of known()) if (m.onFloorY(g.P.p.y) && dist(m.pos.x, m.pos.z) < 16 && m.state !== "patrol") chaser = m;           // hurt: do not wait for it to charge
     cloakLogic(near, chaser);
     B.sneak = near < 12 && !chaser; B.runOk = near > 20 && g.P.stam > 0.5;
     const role = hasRunner() ? B.role : "runner";
@@ -295,7 +318,7 @@ export function brain(idx, N, opts = {}) {
       if (g.LT.gun && B.armedAt === null) B.armedAt = (t - g.FIN.t0) / 1000;
       B.was = g.dead;
       if (g.dead) stop(); else decide();
-      B.pub = {idx, role: B.role, floor: id, x: g.P.p.x, z: g.P.p.z, dead: g.dead, claim: B.claim};
+      B.pub = {seen: B.seenNow || [], idx, role: B.role, floor: id, x: g.P.p.x, z: g.P.p.z, dead: g.dead, claim: B.claim};
     }
     g.sim(dt, t / 1000);
   }, 50);
