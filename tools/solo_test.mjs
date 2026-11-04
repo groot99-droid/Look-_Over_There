@@ -130,7 +130,7 @@ try {
     const rolled = Math.hypot(b.x - g.P.p.x, b.z - g.P.p.z);
     b.land = performance.now() / 1000;                                             // skip the roll
     let spot = null; for (let i = 0; i < 400 && !spot; i++) { const c = g.spawnFor("B1"); const d = Math.hypot(c[0] - b.x, c[2] - b.z); if (d > 10 && d < 24 && Math.hypot(c[0] - g.P.p.x, c[2] - g.P.p.z) > 8) spot = c; }
-    const m = g.monsters[0], m2 = g.monsters[1]; if (!spot) return {err: "no spot", rolled};
+    const m = g.monsters.find(q => q.cfg.alert > 0 && q.cfg.chase > 0); if (!spot)   /* the gun test froze monsters[0] */ return {err: "no spot", rolled};
     m.glitchT = 0; m.immuneT = 0; m.wait = 0; m.lureId = null; m.spot = null; m.path = [];
     m.pos.set(spot[0], m.fy, spot[2]); m.state = "chase"; m.last = [g.P.p.x, g.P.p.z]; m.tgt = 1;                    // even a monster already chasing is pulled off
     const trace = []; b.until = performance.now() / 1000 + 120; for (let i = 0; i < 1600; i++) { g.update(0.05); if (i % 200 === 0) trace.push([+m.pos.x.toFixed(1), +m.pos.z.toFixed(1), m.path.length, m.state, +m.speed.toFixed(1)]); }                      // 80 s of game time: the maze route can be 50 m or more
