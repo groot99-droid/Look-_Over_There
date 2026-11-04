@@ -126,8 +126,12 @@ try {
   check("the cloak toggles and the battery drains while it is on", cb.on && cb.off && cb.mid < 0.7 && cb.mid > 0.2, JSON.stringify(cb));
   const bc = await p.evaluate(() => {
     const g = window.__game; g.P.imm = 999; g.BC.have = 2; for (const q of g.monsters) { q.state = "patrol"; q.path = []; q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z); }
-    { const eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; let best = 0, bl = -1; for (let y = 0; y < 6.28; y += 0.2) { let L = 0; while (L < 12 && g.rayClear(eye, [-Math.sin(y), 0, -Math.cos(y)], L + 1)) L++; if (L > bl) { bl = L; best = y; } } g.P.yaw = best; }      // face the longest open stretch
-    g.throwBeacon(); const b = g.BC.list[0]; if (!b) return {err: "no beacon"};
+    for (let k = 0; k < 32; k++) {                                              // try directions until a throw really rolls (low props can stop it where walls do not)
+      g.P.yaw = k * 0.2; g.BC.have = 2; g.throwBeacon(); const t = g.BC.list[g.BC.list.length - 1];
+      if (t && Math.hypot(t.x - g.P.p.x, t.z - g.P.p.z) > 4) { g.BC.list.splice(0, g.BC.list.length - 1); g.BC.have = 2; break; }
+      if (t) { g.BC.list.pop(); }
+    }
+    const b = g.BC.list[0]; if (!b) return {err: "no beacon"}; g.BC.have = 1;
     const rolled = Math.hypot(b.x - g.P.p.x, b.z - g.P.p.z);
     b.land = performance.now() / 1000;                                             // skip the roll
     let spot = null; for (let i = 0; i < 400 && !spot; i++) { const c = g.spawnFor("B1"); const d = Math.hypot(c[0] - b.x, c[2] - b.z); if (d > 10 && d < 24 && Math.hypot(c[0] - g.P.p.x, c[2] - g.P.p.z) > 8) spot = c; }
