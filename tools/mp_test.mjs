@@ -212,6 +212,10 @@ try {
   check("lifting takes a 4 s hold, not a tap", steps >= 78 && steps <= 90, `(${steps} steps of 0.05 s)`);
   await until("the guest is lifted", guest, () => !window.__game.dead);
   check("the lifted player is briefly safe", await guest.evaluate(() => window.__game.P.imm > 1));
+  await guest.evaluate(() => { const g = window.__game; g.BC.have = 1; let best = 0, bl = -1; const eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; for (let y = 0; y < 6.28; y += 0.2) { let L = 0; while (L < 12 && g.rayClear(eye, [-Math.sin(y), 0, -Math.cos(y)], L + 1)) L++; if (L > bl) { bl = L; best = y; } } g.P.yaw = best; g.throwBeacon(); });
+  await until("the host's floor shows the guest's beacon", host, () => window.__game.BC.list.length === 1);
+  check("the beacon is the same place for both", await (async () => { const a = await guest.evaluate(() => { const b = window.__game.BC.list[0]; return [b.x, b.z]; }), b = await host.evaluate(() => { const b = window.__game.BC.list[0]; return [b.x, b.z]; }); return Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.01; })());
+  await host.evaluate(() => { window.__game.BC.list.length = 0; });
 
   // the host's monster catches the guest (once the safety has run out)
   await guest.evaluate(() => { window.__game.P.imm = 0; });
