@@ -708,7 +708,7 @@ function toggleDevice() { devOn.v = !devOn.v; if (devOn.v) device.visible = true
 function toggleMode() { if (devOn.v) devMode = devMode === "cams" ? "map" : "cams"; else toggleDevice(); }
 function camHud() {                                                         // the feed's caption, and the buzz line when a camera sees a monster close to someone
   const el = $("camhud"), show = devOn.v && devMode === "cams" && S.cams.length && !loading;
-  if (show) { const hot = CAMHOT.get(camIdx % S.cams.length); el.style.display = "block"; el.className = hot ? "hot" : ""; el.textContent = `CAM ${camIdx % S.cams.length + 1} / ${S.cams.length}` + (hot ? ` · ${hot.map(m => m.cfg.name).join(", ")} IN VIEW` : "") + `   [Q/R switch · 1-9 pick · Z hot camera]`; } else el.style.display = "none";
+  if (show) { const hot = CAMHOT.get(camIdx % S.cams.length); el.style.display = "block"; el.className = hot ? "hot" : ""; el.textContent = `CAM ${camIdx % S.cams.length + 1} / ${S.cams.length}` + (hot ? ` · ${hot.map(m => m.cfg.name).join(", ")} IN VIEW` : "") + `   [Q/T switch · 1-9 pick · Z hot camera]`; } else el.style.display = "none";
   const bz = $("buzz"); bz.style.display = performance.now() < BUZZ.until && !loading ? "block" : "none"; bz.textContent = BUZZ.text;
 }
 function cycleCam(d) { const n = S.cams.length; if (n) camIdx = (camIdx + d + n * 100) % n; }
@@ -747,7 +747,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyZ") hotCam();
   if (/^Digit[1-9]$/.test(e.code) && devOn.v && S.cams.length) camIdx = Math.min(+e.code.slice(5) - 1, S.cams.length - 1);
   if (e.code === "KeyQ") cycleCam(-1);
-  if (e.code === "KeyR" && devOn.v) cycleCam(1);                                   // (R is also run: the cameras only answer while the device is out)
+  if (e.code === "KeyT" && devOn.v) cycleCam(1);                                   // next camera (R is only run)
 });
 addEventListener("wheel", e => { if (devOn.v && devMode === "cams") cycleCam(e.deltaY > 0 ? 1 : -1); }, {passive: true});
 addEventListener("keyup", e => { keys[e.code] = false; });
@@ -1434,6 +1434,8 @@ function addPeer(info) {
   const peer = {halo, id: info.id, name: info.name, color: info.color, char: info.char, scene: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, tyaw: 0, crouch: false, moving: false, dead: false, imm: false, fresh: true,
     obj, pivot, stand, mixer: null, acts: null, playing: null, lie: [.6, .25], cv, tex, hp: MAX_HP};
   peerTag(peer); net.peers.set(info.id, peer);
+  loadModel("gun").then(g => { if (!g || !net.peers.has(info.id)) return; const m = SkeletonUtils.clone(g.scene); m.scale.setScalar(0.12); m.rotation.y = -Math.PI / 2; m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });         // the ray gun in a teammate's hand
+    const w = new THREE.Group(); w.add(m); w.position.set(0.2, 1.0, -0.32); w.visible = false; pivot.add(w); peer.gunObj = w; });
   const c = CHARS[info.char];
   if (c) loadChar(c.id).then(gl => {
     if (!net.peers.has(peer.id)) return;
@@ -1478,7 +1480,7 @@ function onNet(m) {
     case "s": {
       const p = net.peers.get(m.id); if (!p) break;
       const moved = p.scene !== m.scene, wasDead = p.dead;
-      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry; p.cloak = !!m.cloak; if (Number.isFinite(m.hp)) { const hp = Math.max(0, Math.min(MAX_HP, Math.round(m.hp / 5) * 5)); if (hp !== p.hp) { p.hp = hp; peerTag(p); } }
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry; p.cloak = !!m.cloak; p.gun = !!m.gun; if (Number.isFinite(m.hp)) { const hp = Math.max(0, Math.min(MAX_HP, Math.round(m.hp / 5) * 5)); if (hp !== p.hp) { p.hp = hp; peerTag(p); } }
       if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
       if (!wasDead && p.dead && m.scene === S.id) { net.alert = {id: p.id, until: performance.now() + 8000}; toast(`${p.name} was caught`); }     // the scream: an arrow toward the body
       break;
@@ -1531,6 +1533,7 @@ function updatePeers(dt) {
     p.obj.visible = here; if (!here) continue;
     p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.z += (p.tz - p.z) * k;
     let da = p.tyaw - p.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); p.yaw += da * k;
+    if (p.gunObj) p.gunObj.visible = !!p.gun && !p.dead && !p.carry;
     p.halo.visible = !!p.carry && !p.dead; if (p.cloak && !p.dead) p.obj.visible = Math.floor(performance.now() / 90 + p.id) % 3 !== 0;       // a cloaked teammate shimmers
     p.obj.position.set(p.x, p.y, p.z); p.obj.rotation.y = p.yaw;
     p.pivot.scale.y += ((p.crouch ? .7 : 1) - p.pivot.scale.y) * k;
@@ -1549,7 +1552,7 @@ function netTick(dt) {
   if (!net.on) return;
   if ((net.t -= dt) <= 0) {
     net.t = 1 / 15;
-    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp), cloak: CL.st.on ? 1 : 0});
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp), cloak: CL.st.on ? 1 : 0, gun: LT.gun ? 1 : 0});
   }
   if (!loading && net.host() && (net.mt -= dt) <= 0) {
     net.mt = 0.1;

@@ -69,7 +69,7 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 - **The way out:** walking out of the store onto the parking lot (past z 28.8 between the doors) is your finish. The lot is safe: it is off the monsters' map, and a player who is out is not a target. You can walk back in to help a teammate; your place stays.
 - **The round ends when everyone still in the room is out.** Someone who leaves the room does not hold it up. Then everyone sees the results: place (the order they left), time (from the start of the round), and the best time on this browser (`BEST` or `NEW RECORD`). Solo ends the moment you walk out.
 - Rules: `shared/finish.js`; the server keeps the run and the alarm (`exit` is accepted only from L4 with the power on).
-- Not done: a siren sound (the game has no audio yet); the best record is per browser, not shared; the 60 s and the hunt are untuned.
+- Not done: a siren sound (now built: docs/AUDIO.md); the best record is per browser, not shared; the 60 s and the hunt are untuned.
 
 ## Movement, sight and hearing
 
@@ -140,7 +140,7 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - *A hit:* the floor's host (who runs the monsters) decides it. The monster is deleted: it flickers for 0.5 s while it does nothing, then stands at a spot on its floor that is at least 15 m from every player, out of every player's sight, and (where the floor allows) at least 35 m away by path; it forgets the chase, waits 4 s and patrols again. It cannot be banished again for 8 s: a shot at it in that time is a wasted round. Everyone sees the glitch at both places (a cyan flash) because the host announces it (`zap`).
 - *Noise:* a shot is heard as a run (9 m, halved through a wall) for half a second, even if you are crouching: the shooter counts as running for the monsters' hearing.
 - *In a room:* a shot from anyone but the host goes through the server to the floor's host only; the server sends everyone else just the beam. Rounds are counted by each player's own game (a modified client could cheat), like the rest of the trust in this build, and the hit itself is the host's call. The host works out the landing spot, which can cost it a moment (a few path searches) on a big floor.
-- *Not done yet:* the other players are not seen holding the gun; the bots do not use it (step 3); there is no sound (the game has none yet).
+- *Not done yet:* the other players are not seen holding the gun; the bots do not use it (step 3); sound is built (docs/AUDIO.md).
 
 ## Bots for tuning
 
@@ -189,7 +189,7 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - **Measured first** (`node tools/cam_coverage.mjs`): over a full sweep the cameras cover 56% of B1 (27 cameras), 53% of L1 (24), 53% of L2 (35), 60% of L3 (2) and 54% of L4 (4); at any one moment 21%, 18%, 20%, 44% and 2%. So there was plenty to see; the problem was that it could not be read.
 - **One clock.** The server's time is sent at join; every client computes each camera's sweep from it, so everyone sees the same picture at the same moment (`welcome.now`, `ctime()`).
 - **Team map** (M / View). Every camera and the cone it covers right now (green; red while it sees a monster; the chosen camera outlined). A sighting stays 6 s (it was 3), fading, with the monster's name and an arrow for the way it was facing. A ring pulses while it is in view.
-- **Feed.** A caption names the camera ("CAM 12 / 35") and says which monsters are in view. `Q` / `R` (or LB / D-pad left and right), the mouse wheel and `1` to `9` choose a camera; **`Z`** (D-pad down) jumps to the nearest camera that sees a monster right now.
+- **Feed.** A caption names the camera ("CAM 12 / 35") and says which monsters are in view. `Q` / `T` (or LB / D-pad left and right), the mouse wheel and `1` to `9` choose a camera; **`Z`** (D-pad down) jumps to the nearest camera that sees a monster right now.
 - **Buzz.** When a camera sees a monster within 14 m of anyone on the floor, a line shows for 3 s ("CAM 12: sinew near Bob") with a short buzz, at most once per camera per 8 s.
 - **Fair bots.** By default a bot knows only a monster it can see (18 m, line of sight) or hear (6 m), one a teammate reported on the team blackboard, and, for the scout (the watcher), one a security camera shows; it remembers an unseen monster at its last spot for 8 s with no idea what it does. `--omniscient` restores the old all-knowing bots; `--nocams` stops the scout reading cameras.
 - **Bots, 4 each, guns, cloak and beacons, 600 s, B1 (one run each, so a rough guide):**
