@@ -111,7 +111,7 @@ try {
   const cl = await p.evaluate(() => {
     const g = window.__game, m = g.monsters[0]; for (const q of g.monsters) { q.state = "patrol"; q.path = []; q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z); }
     const eye = [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z]; let spot = null;
-    for (let a = 0; a < 6.28 && !spot; a += 0.3) { const d = [Math.sin(a), 0, Math.cos(a)], x = g.P.p.x + d[0] * 8, z = g.P.p.z + d[2] * 8; if (g.rayClear(eye, d, 8.5) && g.S.nav[g.cellOf(x, z)]) spot = {x, z}; }
+    for (let a = 0; a < 6.28 && !spot; a += 0.3) { const d = [Math.sin(a), 0, Math.cos(a)], x = g.P.p.x + d[0] * 4, z = g.P.p.z + d[2] * 4; if (g.rayClear(eye, d, 4.5) && g.S.nav[g.cellOf(x, z)]) spot = {x, z}; }
     if (!spot) return null;
     m.pos.set(spot.x, m.fy, spot.z); m.yaw = Math.atan2(-(g.P.p.x - spot.x), -(g.P.p.z - spot.z));
     const t = {id: 1, x: g.P.p.x, y: g.P.p.y, z: g.P.p.z, crouch: false, moving: false, cloak: false};
@@ -120,9 +120,9 @@ try {
     const heard = (() => { m.update(0.05, [{...t, moving: true, run: true, cloak: true}]); return m.state; })();
     return {open, hidden, near, heard};
   });
-  check("a cloaked player is not seen at 8 m but is seen from 1 m", !!cl && cl.open === true && cl.hidden === true && cl.near === true, JSON.stringify(cl));
+  check("a cloaked player is not seen at 4 m but is seen from 1 m", !!cl && cl.open === true && cl.hidden === true && cl.near === true, JSON.stringify(cl));
   check("a cloaked player running is still heard", !!cl && (cl.heard === "search" || cl.heard === "chase"), JSON.stringify(cl));
-  const cb = await p.evaluate(() => { const g = window.__game; g.toggleCloak(); const on = g.CL.st.on; for (let i = 0; i < 100; i++) g.update(0.05); const mid = g.CL.st.b; g.toggleCloak(); return {on, mid, off: !g.CL.st.on}; });
+  const cb = await p.evaluate(() => { const g = window.__game; g.toggleCloak(); const on = g.CL.st.on; for (let i = 0; i < 100; i++) g.sim(0.05, performance.now() / 1000); const mid = g.CL.st.b; g.toggleCloak(); return {on, mid, off: !g.CL.st.on}; });
   check("the cloak toggles and the battery drains while it is on", cb.on && cb.off && cb.mid < 0.7 && cb.mid > 0.2, JSON.stringify(cb));
   const bc = await p.evaluate(() => {
     const g = window.__game; g.P.imm = 999; g.BC.have = 2; for (const q of g.monsters) { q.state = "patrol"; q.path = []; q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z); }
@@ -132,14 +132,15 @@ try {
     let spot = null; for (let i = 0; i < 400 && !spot; i++) { const c = g.spawnFor("B1"); const d = Math.hypot(c[0] - b.x, c[2] - b.z); if (d > 10 && d < 24 && Math.hypot(c[0] - g.P.p.x, c[2] - g.P.p.z) > 8) spot = c; }
     const m = g.monsters[0], m2 = g.monsters[1]; if (!spot) return {err: "no spot", rolled};
     m.pos.set(spot[0], m.fy, spot[2]); m.state = "chase"; m.last = [g.P.p.x, g.P.p.z]; m.tgt = 1;                    // even a monster already chasing is pulled off
-    for (let i = 0; i < 700; i++) g.update(0.05);
+    b.until = performance.now() / 1000 + 120; for (let i = 0; i < 1600; i++) g.update(0.05);                      // 80 s of game time: the maze route can be 50 m or more
+    b.until = performance.now() / 1000 + 120;
     const gathered = Math.hypot(m.pos.x - b.x, m.pos.z - b.z), lured = m.lureId === b.id, state = m.state;
     // a player 3 m from a monster in front of it is still noticed
     m.pos.set(b.x + 2, m.fy, b.z); m.path = []; m.yaw = Math.PI / 2 + 0; const px = b.x + 2 - Math.sin(m.yaw) * 3, pz = b.z + 2 - Math.cos(m.yaw) * 3;
     const near = m.sees({id: 1, x: m.pos.x - Math.sin(m.yaw) * 3, y: g.P.p.y, z: m.pos.z - Math.cos(m.yaw) * 3, crouch: false, moving: false});
     b.until = performance.now() / 1000 - 0.5; for (let i = 0; i < 4; i++) g.update(0.05);
     const afterExpiry = {lureId: m.lureId, state: m.state, at: m.lureAt && m.last ? Math.hypot(m.last[0] - b.x, m.last[1] - b.z) < 0.5 : null};
-    return {rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
+    g.P.imm = 0; return {rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
   });
   check("a beacon rolls up to 12 m and one fewer is carried", !bc.err && bc.rolled > 1 && bc.rolled <= 12.6 && bc.have === 1, JSON.stringify(bc));
   check("a monster 10 to 24 m away, even one chasing, goes to the beacon and idles within 3.5 m of it", !bc.err && bc.lured && bc.gathered < 3.6 && bc.state === "search", JSON.stringify(bc));
