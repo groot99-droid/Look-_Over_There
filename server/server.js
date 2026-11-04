@@ -213,9 +213,9 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           if (to && to.scene && to.scene === me.scene) send(to, {t: "revived", by: me.id});
           break;
         }
-        case "caught": {                                              // only the scene's host may kill someone
-          const to = room.players.get(m.to);
-          if (to && room.hosts[to.scene] === me.id) send(to, {t: "caught"});
+        case "hit": {                                                 // only the scene's host may hurt someone; the damage is clamped to 1..50
+          const to = room.players.get(m.to), dmg = Math.min(50, Math.max(1, Math.round(Number(m.dmg)) || 0));
+          if (to && room.hosts[to.scene] === me.id && Number.isFinite(Number(m.dmg))) send(to, {t: "hit", dmg});
           break;
         }
       }

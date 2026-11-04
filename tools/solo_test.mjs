@@ -106,6 +106,19 @@ try {
   check("a downed carrier drops the fuse where they fell", drop.s === 3 && drop.near);
   const respawn = await p.evaluate(() => { const g = window.__game; let n = 0; while (g.dead && n < 200) { g.update(0.05); n++; } return +(n * 0.05).toFixed(2); });
   check("solo respawn is still about 3 s", respawn > 3 && respawn < 3.6, `(${respawn} s)`);
+  // health: 100 HP, 35 a hit, a second of grace, a hit from one monster at most every 1.2 s, regeneration after 10 s, three hits down you
+  const hp1 = await p.evaluate(() => { const g = window.__game; return {hp: g.HP.h.hp, imm: g.P.imm}; });
+  check("after the respawn you have full health", hp1.hp === 100);
+  const hp2 = await p.evaluate(() => { const g = window.__game; g.HP.h.hurtAt = -Infinity; g.applyHit(35); const a = g.HP.h.hp; g.applyHit(35); return [a, g.HP.h.hp]; });
+  check("a hit takes 35 and a second hit inside the grace second takes nothing", hp2[0] === 65 && hp2[1] === 65, JSON.stringify(hp2));
+  const hp3 = await p.evaluate(() => { const g = window.__game; g.HP.h.hurtAt = performance.now() / 1000 - 5; for (let i = 0; i < 40; i++) g.update(0.05); const early = g.HP.h.hp; g.HP.h.hurtAt = performance.now() / 1000 - 11; for (let i = 0; i < 40; i++) g.update(0.05); return [early, g.HP.h.hp]; });
+  check("no regeneration before 10 s, then about +1 per second", hp3[0] === 65 && hp3[1] > 66.5 && hp3[1] < 67.5, JSON.stringify(hp3));
+  const touch = await p.evaluate(() => { const g = window.__game; g.HP.h.hp = 100; g.HP.h.hurtAt = -Infinity; g.P.imm = 0; for (const m of g.monsters) { m.state = "patrol"; m.path = []; m.hitAt = {}; } const m = g.monsters[0]; m.pos.set(g.P.p.x + 0.3, m.fy, g.P.p.z); for (const q of g.monsters) if (q !== m) q.pos.set(g.P.p.x + 60, q.fy, g.P.p.z); g.update(0.05); const a = g.HP.h.hp; g.update(0.05); const b = g.HP.h.hp; return [a, b, g.dead]; });
+  check("a touching monster hits for 35, once, and does not down you", touch[0] === 65 && touch[1] === 65 && touch[2] === false, JSON.stringify(touch));
+  const three = await p.evaluate(() => { const g = window.__game; for (const m of g.monsters) m.pos.set(g.P.p.x + 80, m.fy, g.P.p.z); g.HP.h.hurtAt = -Infinity; g.applyHit(35); g.HP.h.hurtAt = -Infinity; g.applyHit(35); return [g.HP.h.hp, g.dead]; });
+  check("the third hit downs you", three[0] === 0 && three[1] === true, JSON.stringify(three));
+  await p.evaluate(() => { const g = window.__game; let n = 0; while (g.dead && n < 200) { g.update(0.05); n++; } });
+  check("and you come back with full health", await p.evaluate(() => window.__game.HP.h.hp === 100));
   // a fuse carried off the floor goes back to where it started
   await go(await at(1)); await p.keyboard.press("KeyE");
   await until("a fuse picked up on B1", p, () => window.__game.myCarry() === 1);
@@ -152,7 +165,7 @@ try {
   await p.evaluate(w => { for (const c of w) window.__game.kpPress(c); window.__game.kpPress("OK"); }, wrong);
   await until("a wrong code counts as a fail and locks the keypad", p, () => { const v = window.__game.KP.st.L2; return v.fails === 1 && v.lockMs > 7000 && !v.solved; });
   check("the wrong code sent a monster to the door", await p.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
-  await p.evaluate(c => { for (const d of c) window.__game.kpPress(String(d)); window.__game.kpPress("OK"); }, code);
+  await p.evaluate(c => { window.__game.KP.st.L2.until = performance.now() + 60000; for (const d of c) window.__game.kpPress(String(d)); window.__game.kpPress("OK"); }, code);     // hold the lock open: software rendering is slow enough to let the 8 s run out
   check("even the right code does nothing while it is locked", await p.evaluate(() => !window.__game.KP.st.L2.solved));
   await p.evaluate(() => { window.__game.KP.local.L2.lockUntil = 0; window.__game.KP.st.L2.until = 0; });          // skip the 8 s wait
   await p.keyboard.type(code.join("")); await p.keyboard.press("Enter");                                              // the keyboard works while it is up

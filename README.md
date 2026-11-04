@@ -12,8 +12,8 @@ Run it locally by serving the folder (`python -m http.server`) and opening `inde
 ## The game
 
 You start on the pool level (B1) and work upwards. Every door is shut: you open one with X (controller) or X / E (keyboard) and the monsters have to open them too.
-Move with WASD / arrow keys / left stick; look with the mouse, left-right arrows or right stick; you walk by default; hold R (or the right trigger) to run, which is faster than any monster but loud and lasts about 4 s before a short recovery; Shift or the left trigger (or B) crouches (monsters see you from half as far and cannot hear you).
-Tab or Y takes the handheld device out: it shows the security cameras on your floor (Q / R or LB / RB to switch) and, toggled with M or View, a map of the floor with the monsters pinged.
+Move with WASD / arrow keys / left stick; look with the mouse, left-right arrows or right stick; you walk by default; hold R (or press in the left stick) to run, which is faster than any monster but loud and lasts about 4 s before a short recovery; Shift, B or a push of the right stick crouches (monsters see you from half as far and cannot hear you).
+Tab or Y takes the handheld device out: it shows the security cameras on your floor (Q / R, or LB / D-pad right, to switch) and, toggled with M or View, a map of the floor with the monsters pinged.
 If a monster sees you it chases; if it catches you, you die and come back on the same floor in a random spot.
 
 Monsters (config in `world/monsters.json`): Sinew of the Abyss on B1, The Pale Traveler on L1, a clawed creature on L2, the first creature in the showroom (L4).

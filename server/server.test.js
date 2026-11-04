@@ -71,10 +71,14 @@ test("only a floor's host sends monsters or kills; revive needs the same floor",
   a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); c.send({t: "s", scene: "L1"});
   await b.next(kind("hosts"));
   await Promise.all([a, b, c].map(x => x.quiet(100)));
-  b.send({t: "m", scene: "B1", l: []}); b.send({t: "caught", to: a.id});     // Bob is not B1's host (Ann joined first)
+  b.send({t: "m", scene: "B1", l: []}); b.send({t: "hit", to: a.id, dmg: 35});     // Bob is not B1's host (Ann joined first)
   a.send({t: "m", scene: "B1", l: [[1, 1, 0, 0, 0]]});
   await b.next(kind("m"));
-  assert.ok(!(await a.quiet(150)).some(m => m.t === "m" || m.t === "caught"), "Bob's monsters and kill were ignored");
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "m" || m.t === "hit"), "Bob's monsters and hit were ignored");
+  a.send({t: "hit", to: b.id, dmg: 35}); assert.equal((await b.next(kind("hit"))).dmg, 35, "the host's hit arrives");
+  a.send({t: "hit", to: b.id, dmg: 9999}); assert.equal((await b.next(kind("hit"))).dmg, 50, "clamped");
+  a.send({t: "hit", to: b.id, dmg: "x"}); a.send({t: "hit", to: c.id, dmg: 35});
+  assert.ok(!(await b.quiet(150)).some(m => m.t === "hit") && !(await c.quiet(100)).some(m => m.t === "hit"), "junk and other floors are dropped");
   b.send({t: "revive", to: a.id}); await a.next(kind("revived"));
   c.send({t: "revive", to: a.id});
   assert.ok(!(await a.quiet(150)).some(m => m.t === "revived"), "Cy is on another floor and cannot revive Ann");

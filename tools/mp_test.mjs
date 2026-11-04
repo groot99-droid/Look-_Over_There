@@ -220,7 +220,11 @@ try {
   await guest.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); }, target);
   await until("the host knows where the guest stands, and that it is no longer safe", host, t => { const p = [...window.__game.net.peers.values()][0]; return Math.hypot(p.tx - t[0], p.tz - t[1]) < 0.5 && !p.imm && !p.dead; }, target);
   await host.evaluate(() => { for (let i = 0; i < 20; i++) window.__game.update(0.05); });        // run the host's monsters by hand rather than wait on its frame rate
-  await until("host's monster caught the guest", guest, () => window.__game.dead);
+  await until("host's monster hit the guest for 35", guest, () => window.__game.HP.h.hp === 65);
+  await until("the host sees the guest's 65 HP under their name", host, () => [...window.__game.net.peers.values()][0].hp === 65);
+  check("one touch does not down anyone", await guest.evaluate(() => !window.__game.dead));
+  await guest.evaluate(() => { const g = window.__game; g.HP.h.hurtAt = -Infinity; g.applyHit(35); g.HP.h.hurtAt = -Infinity; g.applyHit(35); });     // the 2nd and 3rd hits, past the grace second
+  await until("the third hit downs the guest", guest, () => window.__game.dead);
   await until("host sees the guest down, with the scream arrow", host, () => { const g = window.__game; return [...g.net.peers.values()][0].dead === true && !!g.net.alert && document.getElementById("scream").style.display === "block"; });
 
   // leaving hands the floor over
