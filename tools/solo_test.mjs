@@ -141,7 +141,8 @@ try {
     const near = m.sees({id: 1, x: m.pos.x - Math.sin(m.yaw) * 3, y: g.P.p.y, z: m.pos.z - Math.cos(m.yaw) * 3, crouch: false, moving: false});
     b.until = performance.now() / 1000 - 0.5; for (let i = 0; i < 4; i++) g.update(0.05);
     const afterExpiry = {lureId: m.lureId, state: m.state, at: m.lureAt && m.last ? Math.hypot(m.last[0] - b.x, m.last[1] - b.z) < 0.5 : null};
-    g.P.imm = 0; return {trace, start: spot.map(v => +v.toFixed(1)), beacon: [+b.x.toFixed(1), +b.z.toFixed(1)], rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
+    g.P.imm = 0; const doorsNear = g.doors.map(d => ({n: d.d.name, link: !!d.link, t: d.target, p: +(d.p || 0).toFixed(2), dist: +Math.hypot(d.cx - m.pos.x, d.cz - m.pos.z).toFixed(1), cy: +d.cy.toFixed(1)})).filter(d => d.dist < 3), pth = m.path.slice(0, 2), ahead = pth.length ? !!m.closedDoorAhead(pth[0][0] - m.pos.x, pth[0][1] - m.pos.z) : null, fy = m.fy;
+    g.P.imm = 0; return {doorsNear, pth, ahead, fy, py: +g.P.p.y.toFixed(1), sid: g.S.id, gl: m.glitchT, wait: m.wait, trace, start: spot.map(v => +v.toFixed(1)), beacon: [+b.x.toFixed(1), +b.z.toFixed(1)], rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
   });
   check("a beacon rolls up to 12 m and one fewer is carried", !bc.err && bc.rolled > 1 && bc.rolled <= 12.6 && bc.have === 1, JSON.stringify(bc));
   check("a monster 10 to 24 m away, even one chasing, goes to the beacon and idles within 3.5 m of it", !bc.err && bc.lured && bc.gathered < 3.6 && bc.state === "search", JSON.stringify(bc));
