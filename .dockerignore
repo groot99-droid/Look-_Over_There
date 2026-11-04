@@ -1,5 +1,3 @@
-.git
-blender
-tools
+audio/files
 node_modules
-server/node_modules
+.git
