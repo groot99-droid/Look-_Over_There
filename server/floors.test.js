@@ -47,20 +47,10 @@ test("the floor's players get snapshots of the monsters, others do not", async (
   assert.ok(!(await ps[1].quiet(300)).some(x => x.t === "m" && x.scene === "B1"), "a player on another floor gets none of B1's");
   await srv.close();
 });
-test("a monster touching a player hits for 35, again only after its gap, and not a player who is immune or down", async () => {
-  const srv = await createServer(), {ps, floor} = await floorWith(srv, "F3", "B1", ["Ann"]);
-  const m = floor.monsters[0]; at(ps[0], "B1", m.pos.x + 0.4, m.pos.z); await sleep(100); ps[0].inbox.length = 0;
-  m.state = "patrol"; m.wait = 99; stepN(floor, 0.2); const h = await ps[0].next(kind("hit")); assert.equal(h.dmg, 35);
-  stepN(floor, 0.5); assert.ok(!(await ps[0].quiet(100)).some(x => x.t === "hit"), "inside the gap");
-  floor.t += 1.5; stepN(floor, 0.2); await ps[0].next(kind("hit"));
-  at(ps[0], "B1", m.pos.x + 0.4, m.pos.z, {imm: 1}); await sleep(100); floor.t += 5; stepN(floor, 0.3); assert.ok(!(await ps[0].quiet(100)).some(x => x.t === "hit"), "immune");
-  at(ps[0], "B1", m.pos.x + 0.4, m.pos.z, {dead: 1}); await sleep(100); floor.t += 5; stepN(floor, 0.3); assert.ok(!(await ps[0].quiet(100)).some(x => x.t === "hit"), "down");
-  await srv.close();
-});
 test("a ray-gun shot is decided here: a hit banishes the monster and the floor gets a zap; a shot from nowhere near the shooter does nothing", async () => {
   const srv = await createServer(), {ps, floor} = await floorWith(srv, "F4", "B1", ["Ann", "Bob"]);
   const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
-  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150); ps[0].inbox.length = 0; ps[1].inbox.length = 0;
+  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150); ps[0].send({t: "loot", k: "locker", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.gun); ps[0].inbox.length = 0; ps[1].inbox.length = 0;
   const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), d = [dx / L, 0, dz / L], o = [a[0], floor.W.floor + 1.52, a[1]];
   ps[0].send({t: "shot", o: [o[0] + 40, o[1], o[2]], d}); await sleep(150); assert.ok(m.glitchT <= 0, "a shot from 40 m away from the shooter is refused");
   ps[0].send({t: "shot", o, d, e: [b[0], o[1], b[1]]});
@@ -72,8 +62,9 @@ test("a ray-gun shot is decided here: a hit banishes the monster and the floor g
 test("a thrown beacon pulls the monsters in range and ends in a search; junk is ignored", async () => {
   const srv = await createServer(), {ps, floor} = await floorWith(srv, "F5", "B1", ["Ann", "Bob"]);
   const [a, b] = clearPair(floor.W, 10), m = floor.monsters[0]; m.pos.set(b[0], m.fy, b[1]); m.state = "patrol"; m.wait = 99;
+  m.yaw = Math.atan2(a[0] - b[0], a[1] - b[1]);                                          // facing away from the players: it does not see them
   const can = [a[0] + (b[0] - a[0]) * 0.85, a[1] + (b[1] - a[1]) * 0.85];                  // the can lies 8.5 m from the thrower, near the monster (more than 4 m from any player, or it would notice them)
-  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] - 2, a[1]); await sleep(150); ps[1].inbox.length = 0;
+  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] - 2, a[1]); await sleep(150); ps[0].send({t: "loot", k: "beacon", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 1); ps[1].inbox.length = 0;
   ps[0].send({t: "beacon", x: "x", z: 1}); ps[0].send({t: "beacon", x: 1e9, z: 1}); await sleep(100); assert.equal(floor.lures.length, 0);
   ps[0].send({t: "beacon", x: can[0], z: can[1]}); await ps[1].next(kind("beacon")); assert.equal(floor.lures.length, 1);
   stepN(floor, 20); assert.equal(m.lureId, 1, "it went to the can"); assert.ok(Math.hypot(m.pos.x - can[0], m.pos.z - can[1]) < 4, "and is round it");
@@ -83,7 +74,7 @@ test("a noise alerts the monsters near it: a flipped switch, a wrong code; the f
   const srv = await createServer(), {ps, floor, room} = await floorWith(srv, "F6", "L1", ["Ann"]);
   const m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; at(ps[0], "L1", m.pos.x + 12, m.pos.z); await sleep(100);
   ps[0].send({t: "switch", i: 0}); await sleep(150); assert.equal(m.state, "search", "a switch flipped 12 m away is heard");
-  const srv2 = await createServer(), f2 = await floorWith(srv2, "F7", "L4", ["Ann"]); at(f2.ps[0], "L4", 0, 0, {dead: 1}); await sleep(100); f2.room.alarmAt = Date.now();          // (down, so nothing is chasing her)
+  const srv2 = await createServer(), f2 = await floorWith(srv2, "F7", "L4", ["Ann"]); f2.room.run = {startedAt: 0, exits: [{id: f2.ps[0].id}], ended: false}; f2.room.alarmAt = Date.now();          // (she is already out, so nothing chases her)
   for (const mm of f2.floor.monsters) { mm.state = "patrol"; mm.wait = 99; } stepN(f2.floor, 2.2);
   assert.ok(f2.floor.monsters.length > 0 && f2.floor.monsters.every(mm => mm.state === "search" && Math.abs(mm.last[1] - 24.5) < 0.1), "all hunt for the doors while the alarm runs");
   void room; await srv.close(); await srv2.close();
@@ -102,4 +93,48 @@ test("simulating a busy floor is cheap: 8 players on B1 for 10 s of game time", 
   const r = rng32(9), cells = mainRegion(floor.W); ps.forEach((p, i) => { const [x, z] = cellXZ(cells[Math.floor(r() * cells.length)]); at(p, "B1", x, z, {moving: 1, run: i % 2}); }); await sleep(150);
   const t0 = process.hrtime.bigint(); stepN(floor, 10); const ms = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
   console.log(`  average tick ${ms.toFixed(2)} ms`); assert.ok(ms < 5, `${ms} ms per tick`); await srv.close();
+});
+
+// ---- the server owns health, rounds, cloak and beacons
+const clockOf = () => { const c = {t: 1000, now: () => c.t, adv(s) { c.t += s; }}; return c; };
+test("a monster's hit costs 35 HP that the server tracks and tells the player and the floor; a client cannot say otherwise", async () => {
+  const clk = clockOf(), srv = await createServer({clock: clk.now}), {ps, floor} = await floorWith(srv, "P1", "B1", ["Ann", "Bob"]);
+  const m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; at(ps[0], "B1", m.pos.x + 0.4, m.pos.z, {hp: 100}); at(ps[1], "B1", m.pos.x + 30, m.pos.z); await sleep(150);
+  stepN(floor, 0.2); const me = await ps[0].next(m2 => m2.t === "me" && m2.hp === 65); assert.equal(me.hp, 65);
+  ps[1].inbox.length = 0; at(ps[0], "B1", m.pos.x + 0.4, m.pos.z, {hp: 100, dead: 0}); const s2 = await ps[1].next(m2 => m2.t === "s" && m2.id === ps[0].id); assert.equal(s2.hp, 65, "the client's own hp (100) is ignored");
+  await srv.close();
+});
+test("three hits down a player: the server says so (dead on the relay), and they get up alone after 45 s with 100 HP", async () => {
+  const clk = clockOf(), srv = await createServer({clock: clk.now}), {ps, floor} = await floorWith(srv, "P2", "B1", ["Ann", "Bob"]);
+  const m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; at(ps[0], "B1", m.pos.x + 0.4, m.pos.z); at(ps[1], "B1", m.pos.x + 30, m.pos.z); await sleep(150);
+  for (let i = 0; i < 3; i++) { clk.adv(1.5); floor.t += 2; stepN(floor, 0.1); await sleep(30); }
+  await ps[0].next(m2 => m2.t === "me" && m2.hp === 0);
+  at(ps[0], "B1", m.pos.x + 0.4, m.pos.z); const s = await ps[1].next(m2 => m2.t === "s" && m2.id === ps[0].id && m2.dead === 1); assert.equal(s.hp, 0);
+  clk.adv(46); const up = await ps[0].next(m2 => m2.t === "me" && m2.respawn === 1); assert.equal(up.hp, 100);
+  await srv.close();
+});
+test("a teammate within 2.5 m lifts a downed player to 50 HP; too far, or an upright target, does nothing", async () => {
+  const clk = clockOf(), srv = await createServer({clock: clk.now}), {ps, floor} = await floorWith(srv, "P3", "B1", ["Ann", "Bob"]);
+  const m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; at(ps[0], "B1", m.pos.x + 0.4, m.pos.z); at(ps[1], "B1", m.pos.x + 20, m.pos.z); await sleep(150);
+  ps[1].send({t: "revive", to: ps[0].id}); await sleep(100); assert.ok(!(await ps[0].quiet(50)).some(x => x.t === "revived"), "not down");
+  for (let i = 0; i < 3; i++) { clk.adv(1.5); floor.t += 2; stepN(floor, 0.1); await sleep(30); }
+  await ps[0].next(m2 => m2.t === "me" && m2.hp === 0); ps[0].inbox.length = 0;
+  ps[1].send({t: "revive", to: ps[0].id}); await sleep(100); assert.ok(!(await ps[0].quiet(50)).some(x => x.t === "revived"), "too far");
+  at(ps[1], "B1", m.pos.x + 1.5, m.pos.z); await sleep(100); ps[1].send({t: "revive", to: ps[0].id});
+  await ps[0].next(kind("revived")); const me = await ps[0].next(m2 => m2.t === "me" && m2.hp === 50); assert.equal(me.hp, 50); await srv.close();
+});
+test("rounds, the cloak and beacons: nothing without the locker or pickups, the server counts them, and a shot costs a round", async () => {
+  const clk = clockOf(), srv = await createServer({clock: clk.now}), {ps, floor} = await floorWith(srv, "P4", "B1", ["Ann", "Bob"]);
+  const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
+  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150);
+  const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), d = [dx / L, 0, dz / L], o = [a[0], floor.W.floor + 1.52, a[1]];
+  ps[0].send({t: "shot", o, d}); ps[0].send({t: "cloak"}); ps[0].send({t: "beacon", x: a[0] + 3, z: a[1]}); await sleep(150);
+  assert.ok(m.glitchT <= 0 && floor.lures.length === 0, "no gun and no beacon: nothing happens"); ps[0].inbox.length = 0;
+  ps[0].send({t: "loot", k: "locker", i: 0}); const got = await ps[0].next(m2 => m2.t === "me" && m2.gun === true); assert.deepEqual([got.rounds, !!got.cloak], [3, true]);
+  ps[0].send({t: "cloak"}); assert.equal((await ps[0].next(m2 => m2.t === "me" && m2.cloak && m2.cloak.on)).cloak.on, true);
+  ps[0].send({t: "shot", o, d}); const afterShot = await ps[0].next(m2 => m2.t === "me" && m2.rounds === 2); assert.equal(afterShot.rounds, 2); assert.ok(m.glitchT > 0, "the shot hit");
+  clk.adv(0.1); ps[0].send({t: "shot", o, d}); await sleep(100); assert.equal(srv.rooms.get("P4").players.get(ps[0].id).ps.rounds, 2, "too soon after the last");
+  ps[0].send({t: "loot", k: "beacon", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 1);
+  clk.adv(2); ps[0].send({t: "beacon", x: a[0] + 3, z: a[1]}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 0); assert.equal(floor.lures.length, 1);
+  await srv.close();
 });

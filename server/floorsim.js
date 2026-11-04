@@ -12,8 +12,8 @@ const nums = (v, n) => Array.isArray(v) && v.length === n && v.every(x => typeof
 
 export class Floor {
   // room: the server's room object ({players: Map, power, alarmAt}); io: {to(player, msg), toFloor(msg, exceptId)}; docs: {doc(scene) -> world json}; monCfg: world/monsters.json
-  constructor({scene, room, io, doc, monCfg, rnd = Math.random, onHit = () => {}}) {
-    this.scene = scene; this.room = room; this.io = io; this.t = 0; this.rnd = rnd; this.onHit = onHit;
+  constructor({scene, room, io, doc, monCfg, rnd = Math.random, onHit = () => {}, flags = p => ({dead: !!p.st.dead, imm: !!p.st.imm, cloak: !!p.st.cloak})}) {
+    this.scene = scene; this.room = room; this.io = io; this.t = 0; this.rnd = rnd; this.onHit = onHit; this.flags = flags;
     this.W = worldFromDoc(doc, scene, {powerOn: room.power.on});
     this.env = {W: this.W, now: () => this.t, rnd, openDoor: dr => this.openDoor(dr)};
     this.monsters = spawnPlan(this.W, monCfg, scene).map(p => new MonsterSim(p.cfg, scene, p.x, p.z, this.env));
@@ -23,14 +23,14 @@ export class Floor {
   exited(p) { return !!(this.room.run && this.room.run.exits.some(e => e.id === p.id)); }
   // who the monsters can see and hear: living, not newly lifted (immune), still in the building; a shot counts as running noise for half a second
   targets() {
-    return this.players().filter(p => p.st && !p.st.dead && !p.st.imm && !this.exited(p)).map(p => {
+    return this.players().filter(p => p.st && !this.exited(p)).map(p => ({p, f: this.flags(p)})).filter(({f}) => !f.dead && !f.imm).map(({p, f}) => {
       const s = p.st, shot = (p.shotT || 0) > 0;
-      return {id: p.id, x: s.x, y: s.y, z: s.z, crouch: !!s.crouch && !shot, moving: !!s.moving || shot, run: !!s.run || shot, carry: !!s.carry, cloak: !!s.cloak};
+      return {id: p.id, x: s.x, y: s.y, z: s.z, crouch: !!s.crouch && !shot, moving: !!s.moving || shot, run: !!s.run || shot, carry: !!s.carry, cloak: f.cloak};
     });
   }
   doorBusy(dr) {
     const inside = (x, y, z) => Math.abs(y - dr.cy) < 1.8 && Math.hypot(x - dr.cx, z - dr.cz) < 1.1;
-    return this.players().some(p => p.st && !p.st.dead && inside(p.st.x, p.st.y, p.st.z)) || this.monsters.some(m => inside(m.pos.x, m.fy, m.pos.z));
+    return this.players().some(p => p.st && !this.flags(p).dead && inside(p.st.x, p.st.y, p.st.z)) || this.monsters.some(m => inside(m.pos.x, m.fy, m.pos.z));
   }
   openDoor(dr) {                                                  // monsters open doors too (they never shut them, and never use the stair doors)
     if (dr.target !== 0 || dr.link) return;
@@ -44,19 +44,21 @@ export class Floor {
     if (want === 0 && this.doorBusy(dr)) return false;
     dr.target = want; this.io.toFloor({t: "door", scene: this.scene, name, open: want}, p.id); return true;
   }
-  // a shot: the ray starts at the shooter's eye (it must be near where they are) and banishes the monster it hits
-  shot(p, o, d) {
+  // a shot: the ray starts at the shooter's eye (it must be near where they are) and banishes the monster it hits. `spend()` is called once the shot is known to be genuine
+  // (it takes the round); returns null when the shot is refused, else {r: what it banished or null}.
+  shot(p, o, d, spend = () => true) {
     o = nums(o, 3); d = nums(d, 3); if (!o || !d || !p.st) return null;
     if (Math.hypot(o[0] - p.st.x, o[2] - p.st.z) > 3 || Math.abs(o[1] - p.st.y - 1.5) > 1.2) return null;
     const L = Math.hypot(...d); if (!(L > 0.5 && L < 1.5)) return null; d = d.map(v => v / L);
+    if (!spend()) return null;
     p.shotT = 0.5;
-    const r = resolveShot(this.W, this.monsters, this.players().filter(q => q.st && !q.st.dead).map(q => ({x: q.st.x, y: q.st.y, z: q.st.z})), o, d, this.rnd);
+    const r = resolveShot(this.W, this.monsters, this.players().filter(q => q.st && !this.flags(q).dead).map(q => ({x: q.st.x, y: q.st.y, z: q.st.z})), o, d, this.rnd);
     if (r) this.io.toFloor({t: "zap", scene: this.scene, i: r.i, from: r.from, to: r.to});
-    return r;
+    return {r};
   }
   // a thrown AFK Beacon: it rolls from the thrower to (x, z) at 4 m/s, then runs for LURE_S seconds
-  beacon(p, x, z) {
-    if (!p.st || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 500 || Math.abs(z) > 500) return false;
+  beacon(p, x, z, spend = () => true) {
+    if (!p.st || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 500 || Math.abs(z) > 500 || !spend()) return false;
     const roll = Math.min(5, Math.hypot(x - p.st.x, z - p.st.z) / THROW_SPEED), land = this.t + roll;
     this.lures.push({id: ++this.beaconSeq, x, z, land, until: land + LURE_S});
     this.io.toFloor({t: "beacon", from: p.id, scene: this.scene, x, z}, p.id); return true;

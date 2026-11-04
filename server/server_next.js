@@ -11,17 +11,18 @@ import {GATED, newFloor, act as fuseAct} from "../shared/fuses.js";
 import {SWITCH_FLOORS, newSwitches, flip as flipSwitch} from "../shared/switches.js";
 import {POWER_SOURCES, newPower, throwPower} from "../shared/power.js";
 import {ALARM_MS, newRun, exitPlayer, done as runDone, finish, results as runResults} from "../shared/finish.js";
-import {LOOT_FLOORS, MAX_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, takeBeacon, putBack} from "../shared/loot.js";
+import {LOOT_FLOORS, newLoot, takeLocker, takePack, takeBeacon, putBack} from "../shared/loot.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 import {FLOORS} from "../shared/world.js";
-import {Floor, TICK_S} from "./floorsim.js";
+import {Floor} from "./floorsim.js";
+import * as PS from "./playerstate.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript", ".ogg": "audio/ogg"};
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
 
-export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random, simHz = Number(process.env.SIM_HZ) || 20} = {}) {
+export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random, simHz = Number(process.env.SIM_HZ) || 20, clock = () => Date.now() / 1000} = {}) {
   const docs = new Map(), readJson = rel => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));
   const worldDoc = scene => { if (!docs.has(scene)) docs.set(scene, readJson(`world/${scene}.json`)); return docs.get(scene); };
   let monCfgCache = null; const monCfg = () => monCfgCache ||= readJson("world/monsters.json");
@@ -50,11 +51,20 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
     try {
       return room.floors[scene] = new Floor({scene, room, doc: worldDoc(scene), monCfg: monCfg(), rnd: rng,
         io: {toFloor: (msg, except) => broadcast(room, msg, except, scene)},
-        onHit: (id, dmg) => { const p = room.players.get(id); if (p) send(p, {t: "hit", dmg}); }});
+        flags: p => ({dead: PS.isDown(p.ps), imm: PS.isImmune(p.ps, clock()), cloak: PS.cloakOn(p.ps)}),
+        onHit: (id, dmg) => hurtPlayer(room, room.players.get(id), dmg)});
     } catch (e) { console.error("floor", scene, e.message); return null; }
   }
+  // what the server knows about each player (health, rounds, cloak, beacons): the client is told, and cannot say otherwise
+  const sendMe = (p, extra = {}) => { p.ps.sent = JSON.stringify(PS.view(p.ps)); send(p, {t: "me", ...PS.view(p.ps), ...extra}); };
+  function hurtPlayer(room, p, dmg) { if (p && p.ps && PS.hit(p.ps, dmg, clock())) sendMe(p); }
   function pruneFloors(room) { for (const scene of Object.keys(room.floors)) if (!room.floors[scene].players().length) delete room.floors[scene]; }
-  const ticker = setInterval(() => { for (const room of rooms.values()) for (const f of Object.values(room.floors)) f.step(1 / simHz); }, 1000 / simHz);
+  const ticker = setInterval(() => {
+    for (const room of rooms.values()) {
+      for (const f of Object.values(room.floors)) f.step(1 / simHz);
+      for (const p of room.players.values()) { const r = PS.tick(p.ps, 1 / simHz, clock()); if (r === "respawn") sendMe(p, {respawn: 1}); else if (PS.changed(p.ps)) sendMe(p); }
+    }
+  }, 1000 / simHz);
   // fuses: one state array per gated floor, kept for the life of the room. Rules are in shared/fuses.js; this only relays them to the floor's players.
   const floorFuses = (room, scene) => room.fuses[scene] ||= newFloor();
   const sendFuses = (room, scene) => broadcast(room, {t: "fuses", scene, st: floorFuses(room, scene)}, undefined, scene);
@@ -96,7 +106,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
     clearTimeout(room.timer); room.timer = null;
     const all = [...room.players.values()];
     if (all.length && all.every(p => p.ready)) {
-      room.timer = setTimeout(() => { room.timer = null; room.phase = "playing"; room.run = newRun(Date.now()); broadcast(room, {t: "start"}); }, countdownMs);
+      room.timer = setTimeout(() => { room.timer = null; room.phase = "playing"; room.run = newRun(Date.now()); for (const p of room.players.values()) { p.ps = PS.newPS(); sendMe(p); } broadcast(room, {t: "start"}); }, countdownMs);
     }
     broadcast(room, lobbyMsg(room));
   }
@@ -113,7 +123,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         const used = new Set([...room.players.values()].map(p => p.color));
         const taken = new Set([...room.players.values()].map(p => p.char));                    // a character you ask for is yours even if someone has it; with no choice you get one nobody has
         const char = Number.isInteger(m.char) && m.char >= 0 && m.char < NUM_CHARS ? m.char : ([...Array(NUM_CHARS).keys()].find(c => !taken.has(c)) ?? (room.seq % NUM_CHARS));
-        me = {id: ++room.seq, seq: room.seq, ws, scene: null, ready: false, char, name: String(m.name || "Player").replace(/[^\w .-]/g, "").slice(0, 16) || "Player",
+        me = {id: ++room.seq, seq: room.seq, ws, scene: null, ready: false, ps: PS.newPS(), st: null, char, name: String(m.name || "Player").replace(/[^\w .-]/g, "").slice(0, 16) || "Player",
               color: COLORS.find(c => !used.has(c)) || COLORS[0]};
         room.players.set(me.id, me);
         send(me, {t: "welcome", now: Date.now(), id: me.id, room: code, phase: room.phase, power: room.power.on, alarmMs: alarmMs(room), exited: room.run ? room.run.exits : [], results: room.run?.ended ? runResults(room.run) : null, players: [...room.players.values()].map(p => ({id: p.id, name: p.name, color: p.color, char: p.char}))});
@@ -129,7 +139,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           const scene = typeof m.scene === "string" ? m.scene.slice(0, 8) : null;
           const was = me.scene; me.scene = scene;
           const f = k => Number.isFinite(m[k]) ? m[k] : 0; me.st = {x: f("x"), y: f("y"), z: f("z"), yaw: f("yaw"), crouch: !!m.crouch, moving: !!m.moving, run: !!m.run, carry: !!m.carry, cloak: !!m.cloak, dead: !!m.dead, imm: !!m.imm};
-          broadcast(room, {...m, id: me.id}, me.id, scene);
+          broadcast(room, {...m, id: me.id, hp: Math.round(me.ps.hp.hp), cloak: PS.cloakOn(me.ps) ? 1 : 0, gun: me.ps.gun ? 1 : 0, dead: PS.isDown(me.ps) ? 1 : 0, imm: PS.isImmune(me.ps, clock()) ? 1 : 0}, me.id, scene);          // health, cloak, gun and being down are the server's word, not the client's
           if (was !== scene) {
             ensureFloor(room, scene); pruneFloors(room);
             broadcast(room, {t: "p", id: me.id, scene}, me.id);
@@ -167,30 +177,31 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           const nums = (v, n) => Array.isArray(v) && v.length === n && v.every(x => typeof x === "number" && Number.isFinite(x)) ? v : null;
           const o = nums(m.o, 3), d = nums(m.d, 3); if (!o || !d) break;
           const e = nums(m.e, 3) || [o[0] + d[0] * 25, o[1] + d[1] * 25, o[2] + d[2] * 25];
-          room.floors[scene]?.shot(me, o, d);                           // the server decides what the shot does (a monster is banished: a zap goes to the floor)
+          if (!room.floors[scene]?.shot(me, o, d, () => PS.shoot(me.ps, clock()) && (sendMe(me), true))) break;          // a genuine shot with a round to spend: the server decides what it does (a banished monster sends the floor a zap)
           broadcast(room, {t: "beam", id: me.id, o, e}, me.id, scene);
           break;
         }
         case "beacon": {                                              // a thrown AFK Beacon: everyone else on the floor learns where it lies (the host's monsters then swarm it)
           const scene = me.scene, x = Number(m.x), z = Number(m.z); if (!scene || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > 500 || Math.abs(z) > 500) break;
-          room.floors[scene]?.beacon(me, x, z);                         // the monsters swarm it; the floor's players see where it lies
+          room.floors[scene]?.beacon(me, x, z, () => PS.throwBeacon(me.ps, clock()) && (sendMe(me), true));          // one you carry, a second apart                         // the monsters swarm it; the floor's players see where it lies
           break;
         }
-        case "loot": {                                                // open a locker (a gun) or take an ammo pack on the floor you are on
-          const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack" && m.k !== "beacon")) break;
+        case "loot": {                                                // open a locker (a gun and a cloak), take an ammo pack or a beacon on the floor you are on
+          const scene = me.scene; if (!LOOT_FLOORS.includes(scene) || (m.k !== "locker" && m.k !== "pack" && m.k !== "beacon") || PS.isDown(me.ps)) break;
           const st = floorLoot(room, scene);
           if (m.k === "locker") {
-            const next = takeLocker(st, m.i, me.id, room.armed.has(me.id));
-            if (next) { room.loot[scene] = next; room.armed.set(me.id, scene); sendLoot(room, scene, {by: me.id, k: "locker"}); }
+            const next = takeLocker(st, m.i, me.id, me.ps.gun);
+            if (next) { room.loot[scene] = next; room.armed.set(me.id, scene); PS.gotLocker(me.ps); sendLoot(room, scene, {by: me.id, k: "locker"}); sendMe(me); }
           } else if (m.k === "beacon") {
-            const next = takeBeacon(st, m.i, me.id, Number.isInteger(m.have) ? Math.min(Math.max(m.have, 0), MAX_BEACONS) : MAX_BEACONS);
-            if (next) { room.loot[scene] = next; sendLoot(room, scene, {by: me.id, k: "beacon"}); }
+            const next = takeBeacon(st, m.i, me.id, me.ps.beacons);
+            if (next) { room.loot[scene] = next; PS.gotBeacon(me.ps); sendLoot(room, scene, {by: me.id, k: "beacon"}); sendMe(me); }
           } else {
-            const next = takePack(st, m.i, me.id, Number.isInteger(m.rounds) ? Math.min(Math.max(m.rounds, 0), MAX_ROUNDS) : MAX_ROUNDS);
-            if (next) { room.loot[scene] = next; sendLoot(room, scene, {by: me.id, k: "pack"}); }
+            const next = takePack(st, m.i, me.id, me.ps.rounds);
+            if (next) { room.loot[scene] = next; PS.gotPack(me.ps); sendLoot(room, scene, {by: me.id, k: "pack"}); sendMe(me); }
           }
           break;
         }
+        case "cloak": if (PS.toggleCloak(me.ps)) sendMe(me); break;       // switch the cloak on or off (it drains on the server's clock)
         case "exit": {                                                // walked out of the store onto the parking lot
           if (me.scene !== "L4" || !room.power.on || !room.run) break;
           const r = exitPlayer(room.run, me.id, Date.now(), me.name);
@@ -216,9 +227,11 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           room.floors[scene]?.playerDoor(me, m.name.slice(0, 64), m.open);
           break;
         }
-        case "revive": {                                              // a teammate standing on the same floor lifts you
+        case "revive": {                                              // a teammate within reach on the same floor lifts you: 50 HP and a few safe seconds
           const to = room.players.get(m.to);
-          if (to && to.scene && to.scene === me.scene) send(to, {t: "revived", by: me.id});
+          if (!to || !to.scene || to.scene !== me.scene || to === me || !me.st || !to.st || PS.isDown(me.ps) || !PS.isDown(to.ps)) break;
+          if (Math.hypot(me.st.x - to.st.x, me.st.z - to.st.z) > PS.REVIVE_R || Math.abs(me.st.y - to.st.y) > 2) break;
+          if (PS.lift(to.ps, clock())) { send(to, {t: "revived", by: me.id}); sendMe(to); }
           break;
         }
       }
