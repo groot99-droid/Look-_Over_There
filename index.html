@@ -120,6 +120,8 @@ import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as hpRevived, downed as hpDowned, mayHit} from "./shared/health.js";
 import {pick as pickSpawn} from "./shared/spawn.js";
 import {createAudio} from "./audio/engine.js";
+import {near as nearW, buildNav as buildNavW, cellOf, cellXZ, nearestWalk, astar, segClear as segClearW, rayClear as rayClearW, mainRegion as mainRegionW, pickSpots as pickSpotsW, indexBoxes, rng32, NAV, NX0, NZ0, NW, NH} from "./shared/world.js";
+import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW} from "./shared/monsters.js";
 import {levelMix, stepInterval, stepGain} from "./shared/mix.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
@@ -154,13 +156,7 @@ const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
 const S = {id: null, floor: 0, root: null, boxes: [], grid: new Map(), doors: [], cams: [], nav: null, mapLayer: null, markers: []};
 const boxes = S.boxes, doors = S.doors;                       // live arrays: emptied and refilled on every scene change
 const qy = a => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
-const CELL = 8, key = (i, k) => i + "," + k;
-function near(x, z, r) {
-  const out = new Set();
-  for (let i = Math.floor((x - r) / CELL); i <= Math.floor((x + r) / CELL); i++)
-    for (let k = Math.floor((z - r) / CELL); k <= Math.floor((z + r) / CELL); k++) (S.grid.get(key(i, k)) || []).forEach(id => out.add(id));
-  return out;
-}
+const near = (x, z, r) => nearW(S, x, z, r);                    // the shared world rules (shared/world.js) over this scene
 let pendingLink = null, loading = false;
 function openDoor(dr, byPlayer) {
   if (dr.target !== 0) return;
@@ -226,12 +222,7 @@ async function loadScene(id, arrival) {
   }
   S.shutter = null;
   if (id === "L4") { S.shutter = {n: [-2.7, 9.6, 27.0], x: [2.7, 13.0, 27.5], off: POWER.on}; boxes.push(S.shutter); }       // the store's glass doors: shut until the power is on (the opening has no collider in the model)
-  boxes.forEach((b, i) => {
-    for (let a = Math.floor(b.n[0] / CELL); a <= Math.floor(b.x[0] / CELL); a++)
-      for (let k = Math.floor(b.n[2] / CELL); k <= Math.floor(b.x[2] / CELL); k++) {
-        const kk = key(a, k); if (!S.grid.has(kk)) S.grid.set(kk, []); S.grid.get(kk).push(i);
-      }
-  });
+  indexBoxes(S);
   S.nav = buildNav(cfg.floor);
   spawnMonsters();
   if (!net.on && GATED.includes(id)) FZ.st[id] ||= newFloor();
@@ -283,55 +274,12 @@ const teleport = pos => { P.p.set(pos[0], pos[1] + 0.02, pos[2]); P.v.set(0, 0, 
 let armedFall = true;
 function checkFall() { if (P.p.y < S.floor - 14 && !loading) { teleport(randomSpawn(S.id)); P.pitch = 0; } }
 
-// ---------------------------------------------------------------- navigation grid per floor (monsters walk the same colliders the player does; doors are passable for them)
-const NAV = 0.5, NX0 = -27, NZ0 = -24, NW = Math.ceil(54 / NAV), NH = Math.ceil(54 / NAV);
-function buildNav(fy) {
-  const walk = new Uint8Array(NW * NH);
-  for (let j = 0; j < NH; j++) for (let i = 0; i < NW; i++) {
-    const x = NX0 + (i + .5) * NAV, z = NZ0 + (j + .5) * NAV;
-    let ground = false, blocked = false;
-    for (const id of near(x, z, 0.6)) {
-      const b = boxes[id]; if ((b.door && !b.link) || b.off) continue;
-      if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
-      if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
-    }
-    walk[j * NW + i] = ground && !blocked && !(S.id === "L4" && z > 27.6) ? 1 : 0;       // the parking lot is safe: monsters do not leave the store
-  }
-  return walk;
-}
-const cellOf = (x, z) => { const i = Math.floor((x - NX0) / NAV), j = Math.floor((z - NZ0) / NAV); return (i >= 0 && j >= 0 && i < NW && j < NH) ? j * NW + i : -1; };
-const cellXZ = c => [NX0 + ((c % NW) + .5) * NAV, NZ0 + (Math.floor(c / NW) + .5) * NAV];
-function nearestWalk(walk, x, z) {
-  let c = cellOf(x, z); if (c >= 0 && walk[c]) return c;
-  for (let r = 1; r < 8; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
-    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
-    const i = Math.floor((x - NX0) / NAV) + di, j = Math.floor((z - NZ0) / NAV) + dj;
-    if (i >= 0 && j >= 0 && i < NW && j < NH && walk[j * NW + i]) return j * NW + i;
-  }
-  return -1;
-}
-function astar(walk, a, b) {
-  if (a < 0 || b < 0) return null;
-  const open = [[0, a]], came = new Map([[a, -1]]), g = new Map([[a, 0]]);
-  const [bx, bz] = cellXZ(b);
-  const hx = c => { const [x, z] = cellXZ(c); return Math.hypot(x - bx, z - bz); };
-  let it = 0;
-  while (open.length && it++ < 9000) {
-    let mi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[mi][0]) mi = k;
-    const [, c] = open.splice(mi, 1)[0];
-    if (c === b) { const path = []; for (let q = c; q !== -1; q = came.get(q)) path.push(q); return path.reverse().map(cellXZ); }
-    const ci = c % NW, cj = Math.floor(c / NW);
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-      if (!di && !dj) continue;
-      const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= NW || j >= NH) continue;
-      const n = j * NW + i; if (!walk[n]) continue;
-      if (di && dj && (!walk[cj * NW + i] || !walk[j * NW + ci])) continue;
-      const ng = g.get(c) + (di && dj ? 1.414 : 1) * NAV;
-      if (!g.has(n) || ng < g.get(n)) { g.set(n, ng); came.set(n, c); open.push([ng + hx(n), n]); }
-    }
-  }
-  return null;
-}
+// ---------------------------------------------------------------- navigation: the grid, path-finding and rays are shared with the server (shared/world.js)
+const buildNav = fy => buildNavW(S, fy);
+const segClear = (ax, ay, az, bx, by, bz, skip = 1.0) => segClearW(S, ax, ay, az, bx, by, bz, skip);
+const rayClear = (o, d, t) => rayClearW(S, o, d, t);
+const mainRegion = () => mainRegionW(S);
+const pickSpots = (level, count, rnd, avoid = [], minGap = 9) => pickSpotsW(S, count, rnd, avoid, minGap);
 
 // ---------------------------------------------------------------- monsters: one kind per floor (config in world/monsters.json)
 const monCfg = await fetch(MON_URL).then(r => r.ok ? r.json() : null).catch(() => null) ||
@@ -353,27 +301,11 @@ function placeholderMonster(h) {
   return g;
 }
 const monsters = [];
-function rng32(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
-function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
-  const walk = S.nav, out = []; let tries = 0;
-  while (out.length < count && tries++ < 6000) {
-    const c = Math.floor(rnd() * NW * NH); if (!walk[c]) continue;
-    const [x, z] = cellXZ(c);
-    if (doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4)) continue;
-    if (out.some(o => Math.hypot(x - o[0], z - o[1]) < minGap)) continue;
-    if (avoid.some(o => Math.hypot(x - o[0], z - o[1]) < 16)) continue;
-    out.push([x, z]);
-  }
-  return out;
-}
-const MON_STATES = ["patrol", "chase", "search"];
-const SHOT_RANGE = 25, SHOT_COOL = 0.6, HIT_R = 0.6, SHOT_NOISE_S = 0.5, BANISH_PATH = 35, BANISH_FROM_PLAYER = 15, BANISH_WAIT = 4, BANISH_IMMUNE = 8, GLITCH_S = 0.5;       // the ray gun: range, time between shots, hit radius, how long a shot is heard (as a run); where a banished monster lands, how long it waits, how long it cannot be banished again, how long it glitches
-const NOISE_WALK = 0.5, NOISE_CARRY_CROUCH = 0.4, NOISE_WALL = 0.5, CHASE_LOSE_S = 2.5, SEARCH_S = 6;       // how loud walking is (of the full range), a crouching carrier, how much a wall takes off, how long it chases unseen, how long it searches
-class Monster {
+// what the shared monster rules (shared/monsters.js) need from this page: the scene's world, the clock, randomness, and what opening a door does here
+const MENV = {get W() { return S; }, now: () => performance.now() / 1000, rnd: Math.random, openDoor: dr => openDoor(dr)};
+class Monster extends MonsterSim {                                           // the rules from shared/monsters.js, plus a model and its animation
   constructor(cfg, level, x, z) {
-    this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
-    this.home = [x, z]; this.pos = new THREE.Vector3(x, this.fy, z); this.yaw = Math.random() * 6.28;
-    this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0; this.doorT = 0; this.last = null; this.glitchT = 0; this.immuneT = 0; this.hitAt = {}; this.k = Math.abs(Math.floor(x * 7.3 + z * 3.1)) % 97; this.lureId = null; this.lureAt = null; this.spot = null;
+    super(cfg, level, x, z, MENV);
     const asset = monsterAssets[cfg.name];
     if (asset) {
       this.obj = SkeletonUtils.clone(asset.scene);
@@ -401,128 +333,7 @@ class Monster {
     const n = this.clips[name]; n.reset(); n.setEffectiveTimeScale(name === "idle" && this.idleSlow ? 0.06 : 1); n.fadeIn(0.25).play();
     if (this.playing) this.playing.fadeOut(0.25); this.playing = n;
   }
-  onFloorY(y) { return Math.abs(y - this.fy) < 1.6; }
-  los(t) {
-    const ex = this.pos.x, ez = this.pos.z, ey = this.fy + 1.6, px = t.x, pz = t.z, py = t.y + 1.4;
-    const d = Math.hypot(px - ex, pz - ez), steps = Math.ceil(d / 0.3);
-    for (let s = 1; s < steps; s++) {
-      const u = s / steps, x = ex + (px - ex) * u, z = ez + (pz - ez) * u, y = ey + (py - ey) * u;
-      for (const id of near(x, z, 0.2)) { const b = boxes[id]; if (!b.off && x > b.n[0] && x < b.x[0] && z > b.n[2] && z < b.x[2] && y > b.n[1] && y < b.x[1] && b.x[1] - b.n[1] > 0.6) return false; }
-    }
-    return true;
-  }
-  sees(t) {                                                                         // t: a player {x, y, z, crouch}: me or anyone in the room
-    if (!this.onFloorY(t.y)) return false;
-    const dx = t.x - this.pos.x, dz = t.z - this.pos.z, d = Math.hypot(dx, dz);
-    if (t.cloak && d > SHORT_M) return false;                                          // a cloaked player is only seen from very close (they are still heard)
-    if (d > this.cfg.sight * (t.crouch ? (t.carry ? 0.75 : 0.5) : 1)) return false;   // crouching halves how far they can see you (a carrier only a quarter less)
-    const fwd = [-Math.sin(this.yaw), -Math.cos(this.yaw)];
-    const ang = Math.acos(Math.max(-1, Math.min(1, (fwd[0] * dx + fwd[1] * dz) / (d || 1)))) * 180 / Math.PI;
-    if (d > 2.5 && ang > this.cfg.fov / 2) return false;
-    return this.los(t);
-  }
-  ringSpotOpen(lure) {                                                       // a spot of its own on the ring that is walkable and in line of sight of the can (not behind a wall)
-    for (let j = 0; j < 14; j++) {
-      const sp = ringSpot(lure, this.k + j * 5), c = cellOf(sp[0], sp[1]);
-      if (c >= 0 && this.walk[c] && segClear(lure.x, this.fy + 0.4, lure.z, sp[0], this.fy + 0.4, sp[1], 0.3)) return sp;
-    }
-    return [lure.x, lure.z];
-  }
-  goTo(x, z) {
-    const a = nearestWalk(this.walk, this.pos.x, this.pos.z), b = nearestWalk(this.walk, x, z);
-    this.path = astar(this.walk, a, b) || []; this.path.shift(); this.target = [x, z];
-  }
-  closedDoorAhead(dirx, dirz) {
-    for (const dr of doors) {
-      if (dr.target || Math.abs(dr.cy - this.fy) > 1.5) continue;
-      const dx = dr.cx - this.pos.x, dz = dr.cz - this.pos.z, d = Math.hypot(dx, dz);
-      if (d < 1.4 && (dx * dirx + dz * dirz) / (d || 1) > 0.2) return dr;
-    }
-    return null;
-  }
-  // The simulation runs on one client per scene (the host). targets = every living player on this floor: {id, x, y, z, crouch, moving}.
-  update(dt, targets, lureList = []) {
-    const c = this.cfg;
-    this.immuneT = Math.max(0, this.immuneT - dt);
-    if (this.glitchT > 0) { this.glitchT -= dt; this.speed = 0; this.visual(dt); return {caught: []}; }                    // being deleted: it does nothing for a moment
-    let seenT = null, sd = 1e9;
-    for (const t of targets) if (this.sees(t)) { const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z); if (d < sd) { sd = d; seenT = t; } }
-    let noiseAt = null, nd = 1e9;                                                   // running is loud (the full hearing range), walking is half of it, crouching is silent; walls halve what gets through
-    for (const t of targets) if (t.moving && this.onFloorY(t.y)) {
-      const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z), tier = t.crouch ? (t.carry ? NOISE_CARRY_CROUCH : 0) : t.run ? 1 : NOISE_WALK;     // a fuse in your hands is heard 1.5x as far, and even crouched
-      if (!tier || d > c.hear * 1.5 * tier) continue;
-      const rad = c.hear * tier * (t.carry && !t.crouch ? 1.5 : 1) * (d < 2 || this.los(t) ? 1 : NOISE_WALL);
-      if (d < rad && d < nd) { nd = d; noiseAt = [t.x, t.z]; }
-    }
-    // an AFK Beacon within 30 m: it goes to a spot on a ring round the can and idles there, ignoring players unless one is within SAFE_M of it; when the beacon ends it searches there
-    const nowS = performance.now() / 1000; let lure = null, ld = 1e9;
-    for (const b of lureList) { const d = Math.hypot(b.x - this.pos.x, b.z - this.pos.z); if (d < ld && lureCovers(b, this.pos.x, this.pos.z, nowS)) { ld = d; lure = b; } }
-    let lured = false;
-    if (lure) {
-      if (seenT && sd > SAFE_M) seenT = null;
-      if (noiseAt && nd > SAFE_M) noiseAt = null;
-      if (!seenT) lured = true;
-    }
-    if (lured) {
-      this.lost = 0; if (this.state === "chase") this.state = "search"; this.state = "search";
-      if (this.lureId !== lure.id) { this.lureId = lure.id; this.lureAt = [lure.x, lure.z]; this.spot = this.ringSpotOpen(lure); this.goTo(...this.spot); }
-      else if (!this.path.length && this.spot && Math.hypot(this.spot[0] - this.pos.x, this.spot[1] - this.pos.z) > 0.9 && (this.repath -= dt) <= 0) { this.goTo(...this.spot); this.repath = 1; }
-    } else if (this.lureId !== null) { this.lureId = null; this.state = "search"; this.lost = 0; this.last = this.lureAt; this.goTo(...this.lureAt); }
-    const ct = seenT || targets.find(t => t.id === this.tgt) || null;               // whoever it is chasing
-    if (seenT) { this.state = "chase"; this.lost = 0; this.tgt = seenT.id; this.last = [seenT.x, seenT.z]; }
-    else if (this.state === "chase") {                                               // it lost sight: it runs to where it last saw you, and gives up if it gets there or CHASE_LOSE_S passes
-      this.last = this.last || [this.pos.x, this.pos.z]; this.lost += dt;
-      if (this.lost > CHASE_LOSE_S || Math.hypot(this.last[0] - this.pos.x, this.last[1] - this.pos.z) < 1.2) { this.state = "search"; this.lost = 0; this.goTo(...this.last); }
-    }
-    else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > SEARCH_S) { this.state = "patrol"; this.target = null; } }
-    if (noiseAt && this.state !== "chase") { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
-    this.repath -= dt;
-    let speed = c.patrol;
-    if (this.state === "chase") {
-      speed = c.chase;
-      if (this.repath <= 0) { const g = seenT ? [seenT.x, seenT.z] : this.last; if (g) this.goTo(...g); this.repath = 0.35; }          // only what it can see, never where you are now
-    } else if (this.state === "search") speed = c.alert;
-    else {
-      if (this.wait > 0) { this.wait -= dt; speed = 0; }
-      else if (!this.path.length) {
-        const spots = pickSpots(this.level, 1, Math.random);
-        if (spots.length) this.goTo(spots[0][0], spots[0][1]);
-        this.wait = 0.6 + Math.random() * 2.5;
-      }
-    }
-    this.speed = 0;
-    if (this.path.length && speed > 0) {
-      const [tx, tz] = this.path[0], dx = tx - this.pos.x, dz = tz - this.pos.z, dd = Math.hypot(dx, dz);
-      const door = this.closedDoorAhead(dx / (dd || 1), dz / (dd || 1));
-      if (door && door.link) { this.path = []; this.doorT = 0; }                                       // monsters never use the stair doors: give that route up rather than stand there
-      else if (door) { this.doorT += dt; if (this.doorT > 0.5) { openDoor(door); this.doorT = 0; } }       // they have to open doors too
-      else {
-        this.doorT = 0;
-        if (dd < 0.25) this.path.shift();
-        else {
-          const want = Math.atan2(-dx, -dz); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
-          this.yaw += Math.sign(da) * Math.min(Math.abs(da), (this.state === "chase" ? 7 : 3.5) * dt);
-          const step = Math.min(dd, speed * dt);
-          this.pos.x += (dx / dd) * step; this.pos.z += (dz / dd) * step; this.speed = speed;
-        }
-      }
-    } else if (this.state === "chase" && seenT && Math.hypot(seenT.x - this.pos.x, seenT.z - this.pos.z) > 0.1) {
-      const want = Math.atan2(-(seenT.x - this.pos.x), -(seenT.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
-      this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
-    }
-    if (lured && !this.path.length) { const want = Math.atan2(-(lure.x - this.pos.x), -(lure.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); this.yaw += Math.sign(da) * Math.min(Math.abs(da), 3 * dt); }
-    this.visual(dt);
-    const now = performance.now() / 1000;                                         // a touch is a hit at most every HIT_GAP seconds per monster; the target's own grace period covers hits from several monsters
-    return {caught: targets.filter(t => this.onFloorY(t.y) && Math.hypot(t.x - this.pos.x, t.z - this.pos.z) < 1.0 && this.los(t) && mayHit(this.hitAt[t.id], now)).map(t => (this.hitAt[t.id] = now, t.id))};
-  }
-  banish(x, z) {                                                             // the ray no-clips it to (x, z): it forgets the chase, waits, then patrols, and cannot be banished again for a while
-    this.pos.set(x, this.fy, z); this.state = "patrol"; this.path = []; this.target = null; this.lost = 0; this.last = null; this.tgt = null;
-    this.wait = BANISH_WAIT; this.glitchT = GLITCH_S; this.immuneT = BANISH_IMMUNE;
-  }
-  alert(x, z) {                                                              // a loud noise at x, z: go and look (unless already chasing)
-    if (this.state === "chase") return;
-    this.state = "search"; this.lost = 0; this.last = [x, z]; this.goTo(x, z);
-  }
+  update(dt, targets, lureList = []) { const r = super.update(dt, targets, lureList); this.visual(dt); return r; }
   // On every other client in the scene the monster only follows the host's snapshot: s = [x, z, yaw, speed, stateIndex].
   follow(dt, s) {
     this.glitchT = Math.max(0, this.glitchT - dt); this.immuneT = Math.max(0, this.immuneT - dt);
@@ -545,11 +356,7 @@ class Monster {
 }
 function spawnMonsters() {
   monsters.forEach(m => m.dispose()); monsters.length = 0;
-  const rnd = rng32(1999);
-  for (const cfg of monCfg.monsters) for (const [level, n] of Object.entries(cfg.perLevel || {})) {
-    if (level !== S.id) continue;
-    for (const [x, z] of pickSpots(level, n, rnd)) monsters.push(new Monster(cfg, level, x, z));
-  }
+  for (const p of spawnPlan(S, monCfg, S.id)) monsters.push(new Monster(p.cfg, S.id, p.x, p.z));             // where they start is seeded in shared/monsters.js: the same everywhere
 }
 
 // ---------------------------------------------------------------- spawning: everyone starts on the pool level; dying puts you back on that floor, somewhere random
@@ -608,15 +415,6 @@ device.visible = false; camera.add(device);
 // Monsters show on the handheld map only through the security cameras: every camera on the floor sweeps on its loop, and a monster inside a camera's
 // view (and not behind a wall) is marked; the mark stays at its last seen spot for MAP_FADE_MS. A floor with no cameras shows no monsters.
 const MAPSEEN = new Map(), CAMHOT = new Map(), BUZZ = {at: {}, until: 0, text: ""}, MAP_FADE_MS = 6000, CAM_RANGE = 40, camFrustum = new THREE.Frustum(), camM = new THREE.Matrix4(), camV = new THREE.Vector3();
-function segClear(ax, ay, az, bx, by, bz, skip = 1.0) {                    // no wall box between the two points (same test the monsters use for sight)
-  const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 0.3);
-  for (let k = 1; k < steps; k++) {
-    const u = k / steps; if (u * d < skip) continue;
-    const x = ax + (bx - ax) * u, z = az + (bz - az) * u, y = ay + (by - ay) * u;
-    for (const id of near(x, z, 0.2)) { const q = boxes[id]; if (!q.off && x > q.n[0] && x < q.x[0] && z > q.n[2] && z < q.x[2] && y > q.n[1] && y < q.x[1] && q.x[1] - q.n[1] > 0.6) return false; }
-  }
-  return true;
-}
 function camSees(c, t, x, y, z) {                                           // the camera's current aim and lens (as the feed shows it) against a point
   aimFeed(c, t); feedCam.updateMatrixWorld(true);
   camM.multiplyMatrices(feedCam.projectionMatrix, camM.copy(feedCam.matrixWorld).invert()); camFrustum.setFromProjectionMatrix(camM);
@@ -818,26 +616,6 @@ function doorLocked() {
 }
 // where the fuses lie: in the floor's main walkable area (the stair door itself sits a storey up, off this grid), spread out, away from where monsters start.
 // Seeded, so every client picks the same spots.
-function mainRegion() {
-  const walk = S.nav, seen = new Uint8Array(NW * NH); let cells = [];
-  if (!walk) return cells;
-  for (let c0 = 0; c0 < NW * NH; c0++) {                                       // flood-fill each region in index order; keep the biggest
-    if (!walk[c0] || seen[c0]) continue;
-    const stack = [c0], reg = []; seen[c0] = 1;
-    while (stack.length) {
-      const c = stack.pop(); reg.push(c); const ci = c % NW, cj = (c / NW) | 0;
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-        if (!di && !dj) continue;
-        const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= NW || j >= NH) continue;
-        const n = j * NW + i; if (seen[n] || !walk[n]) continue;
-        if (di && dj && (!walk[cj * NW + i] || !walk[j * NW + ci])) continue;
-        seen[n] = 1; stack.push(n);
-      }
-    }
-    if (reg.length > cells.length) cells = reg;
-  }
-  return cells;
-}
 function floorSpots(count, seedBase, tiers) {
   const dr = upDoor(); if (!S.nav) return [];                                      // the top floor has no stair door to keep clear
   const cells = mainRegion(); if (!cells.length) return [];
@@ -915,50 +693,17 @@ GUN.pivot.position.set(0.22, -0.3, -0.5); GUN.pivot.visible = false; GUN.flash.p
   obj.position.set(0, 0, 0); GUN.pivot.add(obj); GUN.obj = obj;
 })();
 // is there a wall between o and the point t metres along d? (the same box test the monsters' sight uses)
-function rayClear(o, d, t) {
-  for (let u = 0.3; u < t; u += 0.25) {
-    const x = o[0] + d[0] * u, y = o[1] + d[1] * u, z = o[2] + d[2] * u;
-    for (const id of near(x, z, 0.2)) { const b = boxes[id]; if (!b.off && x > b.n[0] && x < b.x[0] && z > b.n[2] && z < b.x[2] && y > b.n[1] && y < b.x[1] && b.x[1] - b.n[1] > 0.6) return false; }
-  }
-  return true;
-}
 const rayLength = (o, d) => { let lo = 0, hi = SHOT_RANGE; if (rayClear(o, d, hi)) return hi; for (let k = 0; k < 7; k++) { const mid = (lo + hi) / 2; if (rayClear(o, d, mid)) lo = mid; else hi = mid; } return lo; };
 // the nearest monster on o's floor that the ray from o along d (unit) hits: {m, t} or null
-function rayMonster(o, d) {
-  let best = null;
-  for (const m of monsters) {
-    if (Math.abs(o[1] - 1.5 - m.fy) > 1.6) continue;
-    for (const f of [0.15, 0.5, 0.85]) {                                    // three points up the body stand for a capsule
-      const q = [m.pos.x - o[0], m.fy + f * (m.cfg.height || 2.2) - o[1], m.pos.z - o[2]], t = q[0] * d[0] + q[1] * d[1] + q[2] * d[2];
-      if (t < 0.3 || t > SHOT_RANGE) continue;
-      if (Math.hypot(q[0] - d[0] * t, q[1] - d[1] * t, q[2] - d[2] * t) < HIT_R && (!best || t < best.t) && rayClear(o, d, t)) best = {m, t};
-    }
-  }
-  return best;
-}
-// where a banished monster lands: on its own floor, at least BANISH_PATH m away by path from every player, out of every player's sight, and at least BANISH_FROM_PLAYER m from any
-function banishSpot() {
-  const players = [];
-  if (!loading) players.push([P.p.x, P.p.z, P.p.y]);
-  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) players.push([p.tx, p.tz, p.ty]);
-  const cells = mainRegion(); if (!cells.length) return null;
-  let best = null, bs = -1, pathTries = 0;
-  for (let tries = 0; tries < 500; tries++) {
-    const c = cells[Math.floor(Math.random() * cells.length)], [x, z] = cellXZ(c);
-    const e = Math.min(99, ...players.map(q => Math.hypot(q[0] - x, q[1] - z))); if (e < BANISH_FROM_PLAYER) continue;
-    if (!players.every(q => !segClear(q[0], q[2] + 1.5, q[1], x, S.floor + 1.4, z, 0.5))) continue;            // blocked from every player's eye
-    if (e > bs) { bs = e; best = [x, z]; }                                  // the fallback: the farthest unseen cell
-    if (pathTries++ < 6 && players.every(q => { const a = cellOf(q[0], q[1]), path = astar(S.nav, a, c); return !path || path.length * NAV >= BANISH_PATH; })) return [x, z];
-  }
-  return best;
-}
+const rayMonster = (o, d) => rayMonsterW(S, monsters, o, d);
+const shotPlayers = () => { const out = []; if (!loading) out.push({x: P.p.x, y: P.p.y, z: P.p.z}); if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) out.push({x: p.tx, y: p.ty, z: p.tz}); return out; };
+const banishSpot = () => banishSpotW(S, shotPlayers(), Math.random);                  // where a banished monster lands (rules in shared/monsters.js)
 // the host's side of a shot: o is the shooter's eye, d the unit direction
 function resolveShot(o, d) {
-  const hit = rayMonster(o, d); if (!hit || hit.m.immuneT > 0 || hit.m.glitchT > 0) return null;
-  const to = banishSpot(); if (!to) return null;
-  const from = [hit.m.pos.x, hit.m.pos.z]; hit.m.banish(to[0], to[1]); flashAt(from[0], from[1]); flashAt(to[0], to[1]);
-  if (net.on) net.send({t: "zap", scene: S.id, i: monsters.indexOf(hit.m), from, to});
-  return {m: hit.m, from, to};
+  const r = resolveShotW(S, monsters, shotPlayers(), o, d, Math.random); if (!r) return null;
+  flashAt(r.from[0], r.from[1]); flashAt(r.to[0], r.to[1]);
+  if (net.on) net.send({t: "zap", scene: S.id, i: r.i, from: r.from, to: r.to});
+  return {m: r.m, from: r.from, to: r.to};
 }
 function flashAt(x, z) { const sp = cyanGlow(1, 1, 1); sp.position.set(x, S.floor + 1.2, z); scene.add(sp); GUN.fx.push({o: sp, t: 0}); }
 function beam(o, e) {                                                       // a thin cyan line from the gun (below and to the right of the eye, a little ahead) to where the ray ended
@@ -1342,7 +1087,7 @@ function tryPower() { if (!nearPower()) return false; powerAct(); return true; }
 function setPower(on, by, quiet) {
   const was = POWER.on; POWER.on = on; if (!on || was) return;
   POWER.by = by;
-  if (S.shutter) { S.shutter.off = true; S.nav = buildNav(S.floor); for (const m of monsters) m.walk = S.nav; }      // the opening is a way through now, for monsters too
+  if (S.shutter) { S.shutter.off = true; S.nav = buildNav(S.floor); }      // the opening is a way through now, for monsters too
   if (quiet) return;
   AUD.play("power"); AUD.stinger("st_power");
   toast(S.id === "L4" ? "The doors hum open." : S.id === "L3" ? "Somewhere below, a generator starts." : "Far away, a generator starts.");
