@@ -131,8 +131,9 @@ try {
     b.land = performance.now() / 1000;                                             // skip the roll
     let spot = null; for (let i = 0; i < 400 && !spot; i++) { const c = g.spawnFor("B1"); const d = Math.hypot(c[0] - b.x, c[2] - b.z); if (d > 10 && d < 24 && Math.hypot(c[0] - g.P.p.x, c[2] - g.P.p.z) > 8) spot = c; }
     const m = g.monsters[0], m2 = g.monsters[1]; if (!spot) return {err: "no spot", rolled};
+    m.glitchT = 0; m.immuneT = 0; m.wait = 0; m.lureId = null; m.spot = null; m.path = [];
     m.pos.set(spot[0], m.fy, spot[2]); m.state = "chase"; m.last = [g.P.p.x, g.P.p.z]; m.tgt = 1;                    // even a monster already chasing is pulled off
-    b.until = performance.now() / 1000 + 120; for (let i = 0; i < 1600; i++) g.update(0.05);                      // 80 s of game time: the maze route can be 50 m or more
+    const trace = []; b.until = performance.now() / 1000 + 120; for (let i = 0; i < 1600; i++) { g.update(0.05); if (i % 200 === 0) trace.push([+m.pos.x.toFixed(1), +m.pos.z.toFixed(1), m.path.length, m.state, +m.speed.toFixed(1)]); }                      // 80 s of game time: the maze route can be 50 m or more
     b.until = performance.now() / 1000 + 120;
     const gathered = Math.hypot(m.pos.x - b.x, m.pos.z - b.z), lured = m.lureId === b.id, state = m.state;
     // a player 3 m from a monster in front of it is still noticed
@@ -140,7 +141,7 @@ try {
     const near = m.sees({id: 1, x: m.pos.x - Math.sin(m.yaw) * 3, y: g.P.p.y, z: m.pos.z - Math.cos(m.yaw) * 3, crouch: false, moving: false});
     b.until = performance.now() / 1000 - 0.5; for (let i = 0; i < 4; i++) g.update(0.05);
     const afterExpiry = {lureId: m.lureId, state: m.state, at: m.lureAt && m.last ? Math.hypot(m.last[0] - b.x, m.last[1] - b.z) < 0.5 : null};
-    g.P.imm = 0; return {rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
+    g.P.imm = 0; return {trace, start: spot.map(v => +v.toFixed(1)), beacon: [+b.x.toFixed(1), +b.z.toFixed(1)], rolled: +rolled.toFixed(1), have: g.BC.have, gathered: +gathered.toFixed(1), lured, state, afterExpiry, near};
   });
   check("a beacon rolls up to 12 m and one fewer is carried", !bc.err && bc.rolled > 1 && bc.rolled <= 12.6 && bc.have === 1, JSON.stringify(bc));
   check("a monster 10 to 24 m away, even one chasing, goes to the beacon and idles within 3.5 m of it", !bc.err && bc.lured && bc.gathered < 3.6 && bc.state === "search", JSON.stringify(bc));
