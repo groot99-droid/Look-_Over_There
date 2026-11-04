@@ -183,3 +183,21 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - **Models.** Both Meshy exports (12 to 16 MB, 10k triangles, 2048 px maps) were reduced to 1024 px WebP maps and Draco: `beacon.glb` 0.9 MB, `cloak.glb` 0.8 MB, geometry unchanged. The beacon is 1.9 x 1.2 x 0.8 units (shown 0.36 m long); the cloak 1.0 x 1.9 x 0.6 units (held at 0.12x).
 - **Bots.** They pick up beacons within 20 m, roll one at a chaser 7 to 22 m away, and switch the cloak on when a monster is within 14 m and off when clear; below 50 HP they flee a monster that is not on patrol.
 - **Bot run with everything (4 bots, guns, cloak, beacons, 600 s, B1).** 0/3 fuses in the door, 17 team downs (4, 5, 5, 3), each bot hit 7 to 10 times, cloak on 71 to 100 s each, beacons thrown 0, 0, 0, 2. Not better than the health + spawns run (1/3, 13 downs); one run each is within the spread seen before (15 to 24 downs), so this says only that the items did not obviously help yet. The bots rarely walk to a beacon and the cloak is on whenever a monster is within 14 m, which drains it early; both are tuning for later.
+
+## Cameras, and bots that only know what they can know (built)
+
+- **Measured first** (`node tools/cam_coverage.mjs`): over a full sweep the cameras cover 56% of B1 (27 cameras), 53% of L1 (24), 53% of L2 (35), 60% of L3 (2) and 54% of L4 (4); at any one moment 21%, 18%, 20%, 44% and 2%. So there was plenty to see; the problem was that it could not be read.
+- **One clock.** The server's time is sent at join; every client computes each camera's sweep from it, so everyone sees the same picture at the same moment (`welcome.now`, `ctime()`).
+- **Team map** (M / View). Every camera and the cone it covers right now (green; red while it sees a monster; the chosen camera outlined). A sighting stays 6 s (it was 3), fading, with the monster's name and an arrow for the way it was facing. A ring pulses while it is in view.
+- **Feed.** A caption names the camera ("CAM 12 / 35") and says which monsters are in view. `Q` / `R` (or LB / D-pad left and right), the mouse wheel and `1` to `9` choose a camera; **`Z`** (D-pad down) jumps to the nearest camera that sees a monster right now.
+- **Buzz.** When a camera sees a monster within 14 m of anyone on the floor, a line shows for 3 s ("CAM 12: sinew near Bob") with a short buzz, at most once per camera per 8 s.
+- **Fair bots.** By default a bot knows only a monster it can see (18 m, line of sight) or hear (6 m), one a teammate reported on the team blackboard, and, for the scout (the watcher), one a security camera shows; it remembers an unseen monster at its last spot for 8 s with no idea what it does. `--omniscient` restores the old all-knowing bots; `--nocams` stops the scout reading cameras.
+- **Bots, 4 each, guns, cloak and beacons, 600 s, B1 (one run each, so a rough guide):**
+
+  | bots know | fuses in the door | team downs | hits taken |
+  |---|---|---|---|
+  | everything (`--omniscient`) | 1/3 | 12 | 31 |
+  | what they see and hear, plus cameras through the scout | 1/3 | 12 | 27 |
+  | what they see and hear, no cameras (`--nocams`) | 0/3 | 17 | 32 |
+
+  The scout learned of monsters through cameras alone for 356 s of the round. Fair bots with cameras did as well as all-knowing ones; without cameras they did worse. No team finished B1 in any of the runs, and one run each cannot separate a real effect from the spread (earlier runs ranged from 15 to 24 downs).
