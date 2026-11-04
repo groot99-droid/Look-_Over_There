@@ -119,6 +119,14 @@ try {
   check("the third hit downs you", three[0] === 0 && three[1] === true, JSON.stringify(three));
   await p.evaluate(() => { const g = window.__game; let n = 0; while (g.dead && n < 200) { g.update(0.05); n++; } });
   check("and you come back with full health", await p.evaluate(() => window.__game.HP.h.hp === 100));
+  // spawns: weighted toward the fuses still to find, never within 16 m of a monster, and different every time
+  const sp = await p.evaluate(() => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; } const goals = g.floorGoals(), near = c => Math.min(...goals.map(q => Math.hypot(c[0] - q[0], c[2] - q[1])));
+    const drawn = Array.from({length: 400}, () => g.spawnFor("B1")), tele = []; const cells = g.spawnFor.toString().length;
+    const uni = Array.from({length: 400}, () => { const w = g.NAV; let c; do { c = Math.floor(Math.random() * g.NW * g.NH); } while (!g.S.nav[c]); const [x, z] = g.cellXZ ? g.cellXZ(c) : [0, 0]; return [x, 0, z]; });
+    const med = a => a.sort((x, y) => x - y)[a.length >> 1], clear = drawn.every(c => g.monsters.every(m => Math.hypot(c[0] - m.pos.x, c[2] - m.pos.z) >= 16));
+    return {goals: goals.length, medSpawn: med(drawn.map(near)), medUniform: med(uni.map(near)), clear, distinct: new Set(drawn.map(c => c.join())).size}; });
+  check("spawns lean toward the fuses still to find (median distance under 0.7 of a uniform draw)", sp.goals === 3 && sp.medSpawn < 0.7 * sp.medUniform, JSON.stringify(sp));
+  check("no spawn is within 16 m of a monster, and they differ", sp.clear && sp.distinct > 100, JSON.stringify(sp));
   // a fuse carried off the floor goes back to where it started
   await go(await at(1)); await p.keyboard.press("KeyE");
   await until("a fuse picked up on B1", p, () => window.__game.myCarry() === 1);

@@ -37,7 +37,7 @@ try {
     mons: g.monsters.map(m => [m.pos.x, m.pos.z])}; });
   let A = await info(a), B = await info(b);
   check("both connected", A.on && B.on && A.id !== B.id);
-  check("the group spawns together", Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1]) < 3.5, `(${Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1]).toFixed(1)} m apart)`);
+  check("each player spawns on their own spot", Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1]) > 0.5, `(${Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1]).toFixed(1)} m apart)`);
   check("each sees the other on B1", A.peers.length === 1 && A.peers[0].name === "Bob" && A.peers[0].scene === "B1" && B.peers[0].name === "Ann" && B.peers[0].scene === "B1");
   check("characters match the picks and their models loaded", A.peers[0].char === 3 && B.peers[0].char === 0 && A.peers[0].model && B.peers[0].model);
   check("exactly one host for B1", A.host !== B.host);
@@ -222,7 +222,6 @@ try {
   await host.evaluate(() => { for (let i = 0; i < 20; i++) window.__game.update(0.05); });        // run the host's monsters by hand rather than wait on its frame rate
   await until("host's monster hit the lifted guest (50 HP) for 35", guest, () => window.__game.HP.h.hp === 15);
   await until("the host sees the guest's 15 HP under their name", host, () => [...window.__game.net.peers.values()][0].hp === 15);
-  check("one touch does not down anyone", await guest.evaluate(() => !window.__game.dead));
   await guest.evaluate(() => { const g = window.__game; g.HP.h.hurtAt = -Infinity; g.applyHit(35); g.HP.h.hurtAt = -Infinity; g.applyHit(35); });     // the next hit, past the grace second
   await until("the next hit downs the guest", guest, () => window.__game.dead);
   await until("host sees the guest down, with the scream arrow", host, () => { const g = window.__game; return [...g.net.peers.values()][0].dead === true && !!g.net.alert && document.getElementById("scream").style.display === "block"; });

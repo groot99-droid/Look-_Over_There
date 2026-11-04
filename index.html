@@ -105,6 +105,7 @@ import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as 
 import {LOOT, MAX_ROUNDS, GUN_ROUNDS, newLoot, takeLocker, takePack, roundsAfterPack} from "./shared/loot.js";
 import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as hpRevived, downed as hpDowned, mayHit} from "./shared/health.js";
+import {pick as pickSpawn} from "./shared/spawn.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
 const MON_URL = "world/monsters.json";
@@ -228,8 +229,7 @@ async function loadScene(id, arrival) {
     if (dr) { dr.p = dr.target = 1; dr.box.off = true; if (dr.leaf) dr.leaf.quaternion.copy(dr.qOpen); }
   }
   if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
-  else if (net.on && id === "B1") { teleport(groupSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }       // a room starts the round together
-  else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
+  else { teleport(spawnFor(id)); P.yaw = Math.random() * Math.PI * 2; }                      // everyone gets their own spot, leaning toward what the floor still needs
   S.arrive = [P.p.x, S.floor, P.p.z];
   armedFall = true; loading = false; net.t = 0;                 // tell the room which floor you are on right away
   fade.style.opacity = 0;
@@ -516,6 +516,20 @@ function randomSpawn(level) {
   return [s[0], S.floor, s[1]];
 }
 
+// Everyone gets their own random spot (each client draws its own): weighted toward what the floor still needs, at least 16 m from every monster.
+// B1 fuses not in the door, L1 switches still off, L2 notes not found; L3 and L4 have no such goal, so any spot.
+function floorGoals() {
+  const goals = [];
+  if (GATED.includes(S.id)) { const st = fz(), sp = fuseSpots(); (st || []).forEach((f, i) => { if (f.s === 2) return; if (f.s === 3) goals.push([f.x, f.z]); else if (f.s === 0 && sp[i]) goals.push(sp[i]); }); }
+  else if (SWITCH_FLOORS.includes(S.id)) { const st = sw(), sp = switchSpots(); (st || []).forEach((v, i) => { if (!v.on && sp[i]) goals.push(sp[i]); }); }
+  else if (KEYPAD_FLOORS.includes(S.id)) { const v = kp(), sp = keypadSpots(); (v ? v.found : []).forEach((d, i) => { if (d === null && sp[i]) goals.push(sp[i]); }); }
+  return goals;
+}
+function spawnFor(level) {
+  const here = S.id === level ? mainRegion().map(cellXZ) : [];
+  const c = pickSpawn(here, floorGoals(), monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]));
+  return c ? [c[0], S.floor, c[1]] : randomSpawn(level);
+}
 function groupSpawn(level) {
   const away = monsters.map(m => [m.pos.x, m.pos.z]);
   const s0 = pickSpots(level, 1, rng32(4242), away)[0] || pickSpots(level, 1, rng32(4242))[0];       // the same spot on every client: seeded, and monsters spawn from a seed too
@@ -1475,7 +1489,7 @@ function revived(by) {
   toast(by ? `${by.name} lifted you` : "You got up");
 }
 function respawn() {
-  dead = false; P.imm = net.on ? 4 : 0; teleport(net.on && S.arrive ? S.arrive : randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;   // in a room: back at the stairs you came up
+  dead = false; P.imm = net.on ? 4 : 0; teleport(spawnFor(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;   // a new random spot on this floor, as at the round start
   if (!net.on) for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }   // in a room the monsters belong to everyone, so they are not reset for you
   standUp(); HP.h = newHealth();
 }
@@ -1574,7 +1588,7 @@ FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
+window.__game = {spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>
