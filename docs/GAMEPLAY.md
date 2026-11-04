@@ -129,7 +129,7 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - Monster: a `banish(spot)` method and the placement rule above.
 - Bots: a bot with rounds fires at a chasing monster that is within 12 m, in sight, when its escape margin is under 2 s, and the bait uses it to pull a monster off the runner's way. Then rerun `tools/bots.mjs` and compare downs per floor with and without the gun: the first real test of the idea.
 
-**Build order.** 1. `shared/loot.js`, the server relay, lockers and packs: **built** (below). 2. The held gun, firing, hit and banish: **built** (below). 3. The bots' use of it and the comparison run. 4. Tuning, then scoring.
+**Build order.** 1. `shared/loot.js`, the server relay, lockers and packs: **built** (below). 2. The held gun, firing, hit and banish: **built** (below). 3. The bots' use of it and the comparison run: **built**; first result below (the gun cuts downs by about a third and does not by itself let a team finish B1). 4. Tuning, then scoring.
 
 **Settled (owner).** "Another location" means far away and out of sight (at least 35 m by path from every player, out of every player's view, at least 15 m from any player), as written above, not a fixed set of spots. The banished monster visibly flickers out and in (a 0.5 s glitch and cyan scanline). *Still open:* friendly fire is assumed off.
 
@@ -153,6 +153,18 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 - *Team* (the runner process relays a blackboard of every bot's position, role and claim every 0.4 s): the **runner** fetches what the floor needs (fuses, switches, notes) and claims one item so two bots do not go for the same; the **bait** goes to a visible spot 9 to 13 m from the monster that threatens the runner most and draws it off (and flees away from the runner); the **scout** waits at a safe spot near the stairs, types the code on L2 and throws the L3 power. With no runner left on a floor the others do the runner's work, and anyone lifts a downed teammate when the way is safe.
 
 **What the runs showed (3 bots, B1, 600 s each).** Nobody got off B1 in any of them. Downs per bot: plain bots 8 to 11 (and about the same with the new monster rules: they run straight at monsters and away in a straight line); team bots with margins and hiding 8 to 10; with the patient waiting and open-space fleeing 6, 6 and 8. A bot is down for 45 s each time, so six downs is most of a round, and a third of the rest was spent waiting for patrols. The harness is sound: the tick rate is a steady 50 ms with no stalls, and the measured speeds are exactly walk 4, run 7.5 and crouch 2.2 m/s.
+
+**The gun, with and without (step 3).** The bots now arm themselves (each opens a locker on B1, claiming one so two bots do not go for the same), pick up an ammo pack that is within about 22 m by path when they are down to 5 rounds or fewer, and fire at a chasing monster that has come within 13 m, aimed at its body, only when the ray would hit it (not through a wall, not at a monster that is still immune or glitching), while they keep fleeing. `node tools/bots.mjs 3 --nogun` is the control: the same team that never arms. Two pairs of 600 s rounds, 3 bots on B1 each (downs per bot, bait and scout and runner in that order of the log):
+
+| | gun | no gun |
+|---|---|---|
+| run 1 | 4, 6, 5 (15) | 9, 6, 8 (23) |
+| run 2 | 2, 7, 7 (16) | 7, 8, 9 (24) |
+
+- *The gun roughly cuts downs by a third* (31 against 47 over the four runs): 12 and 12 shots, every one a hit, every round spent (3 rounds each plus packs; each bot ended with none), so the three starting rounds are used up well inside the 10 minutes. Armed times were slow in the second pair (26, 67 and 74 s) because the lockers are spread out.
+- *It did not let anyone finish B1.* Fuses in the door: 0 of 3 in all four runs, with or without guns. Downs are only part of the cost: a bot downed 7 times is out for 7 x 45 s = about 5 of the 10 minutes, the team also waits for patrols (about 150 s each for the runner and the bait) and crosses about 80 m to the fuses.
+- *Run to run the spread is large* (a bot's downs ranged 2 to 9), so one pair of runs shows a direction, not a measurement.
+- *What to try next, in order:* a short down time (45 s is long for a bot team and probably for people), ammo for the whole trip (more packs or more rounds per pack on B1), and a spawn nearer the fuses or fuses nearer the spawn. The bots can run each of these changes in about 10 minutes.
 
 **What it says about the floor.** The room spawn on B1 is at the far east (about x 14, z -22) and the fuses are in the west, so a team has to cross the whole floor, about 80 m of path, through the corridor near x 0 to 9, z -10 to -15 where nearly every death happened, and where the monsters from (24, -8), (3, 6) and (-7, -1) all patrol. Dying twice within 0.2 m of the same spot says the route, not the bot, is the problem. Before blaming the bots, consider: moving the spawn nearer the fuses (or the fuses nearer the spawn), thinning B1's four monsters, and giving that corridor a way round.
 

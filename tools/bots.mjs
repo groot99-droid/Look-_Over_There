@@ -18,7 +18,7 @@ import {brain} from "./bot_brain.mjs";                                     // th
 const srv = await createServer({port: 0, countdownMs: 3000});
 const browser = await chromium.launch({args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]});
 const pages = [], room = "BOTS" + Math.floor(Math.random() * 1000);
-const report = () => Promise.all(pages.map(p => p.evaluate(() => { const g = window.__game, b = window.__bot; return {idx: b.idx, floor: g.S.id, downs: b.downs, revives: b.revives, stuck: b.stuck, role: b.role, waited: Math.round(b.waited || 0), perf: b.perf, fled: Math.round(b.fled || 0), deaths: b.deaths || [], trail: b.trail || [], floors: b.floors, out: g.FIN.out, alarm: g.FIN.alarmUntil ? Math.max(0, (g.FIN.alarmUntil - performance.now()) / 1000) : null, results: g.FIN.results, t: (performance.now() - g.FIN.t0) / 1000, dbg: {x: +g.P.p.x.toFixed(1), z: +g.P.p.z.toFixed(1), dead: g.dead, loading: g.loading, path: b.path.length, cur: b.cur, kw: !!g.keys.KeyW, carry: g.myCarry(), locked: g.upDoor() ? g.isLocked(g.upDoor()) : null, imm: g.P.imm}}; }).catch(() => null)));
+const report = () => Promise.all(pages.map(p => p.evaluate(() => { const g = window.__game, b = window.__bot; return {idx: b.idx, floor: g.S.id, downs: b.downs, revives: b.revives, stuck: b.stuck, role: b.role, shots: b.shots, hits: b.hits, armedAt: b.armedAt, rounds: g.LT.rounds, gun: g.LT.gun, slotted: ((g.FZ.st.B1 || []).filter(f => f && f.s === 2)).length, waited: Math.round(b.waited || 0), perf: b.perf, fled: Math.round(b.fled || 0), deaths: b.deaths || [], trail: b.trail || [], floors: b.floors, out: g.FIN.out, alarm: g.FIN.alarmUntil ? Math.max(0, (g.FIN.alarmUntil - performance.now()) / 1000) : null, results: g.FIN.results, t: (performance.now() - g.FIN.t0) / 1000, dbg: {x: +g.P.p.x.toFixed(1), z: +g.P.p.z.toFixed(1), dead: g.dead, loading: g.loading, path: b.path.length, cur: b.cur, kw: !!g.keys.KeyW, carry: g.myCarry(), locked: g.upDoor() ? g.isLocked(g.upDoor()) : null, imm: g.P.imm}}; }).catch(() => null)));
 let rows = [];
 try {
   for (let i = 0; i < N; i++) {
@@ -28,7 +28,7 @@ try {
     pages.push(page);
   }
   await Promise.all(pages.map(p => p.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000})));
-  await Promise.all(pages.map((p, i) => p.evaluate(`(${brain.toString()})(${i}, ${N})`)));
+  await Promise.all(pages.map((p, i) => p.evaluate(`(${brain.toString()})(${i}, ${N}, ${JSON.stringify({nogun: args.includes("--nogun")})})`)));
   const relay = setInterval(async () => {                                          // the team's blackboard: every bot's position, role and claim, shared with all of them
     try { const pubs = (await Promise.all(pages.map(p => p.evaluate(() => (window.__bot && window.__bot.pub) || null)))).filter(Boolean); await Promise.all(pages.map(p => p.evaluate(bb => { window.__bb = bb; }, pubs))); } catch (e) {}
   }, 400);
@@ -50,7 +50,7 @@ if (args.includes("--trail")) for (const r of rows) console.log(`Bot${r.idx + 1}
 if (args.includes("--deaths")) for (const r of rows) console.log(`Bot${r.idx + 1} first downs:`, JSON.stringify(r.deaths));
 for (const r of rows) {
   const fl = Object.entries(r.floors).map(([k, f]) => `${k} ${f.in.toFixed(0)}s${f.downs ? " (" + f.downs + " down)" : ""}`).join(", ");
-  console.log(`Bot${r.idx + 1} (${r.role}): ${r.out ? "OUT" : "stuck on " + r.floor}  downs ${r.downs}  revives ${r.revives}  stuck ${r.stuck}  fled ${r.fled}s  waited ${r.waited}s  alarm left ${r.alarm === null ? "-" : r.alarm.toFixed(0) + "s"}  floors: ${fl}`);
+  console.log(`Bot${r.idx + 1} (${r.role}): ${r.out ? "OUT" : "stuck on " + r.floor}  downs ${r.downs}  revives ${r.revives}  stuck ${r.stuck}  fled ${r.fled}s  waited ${r.waited}s  gun ${r.gun ? "yes" : "no"} (armed at ${r.armedAt === null ? "-" : r.armedAt.toFixed(0) + "s"}, shots ${r.shots}, rounds left ${r.rounds})  fuses in the door ${r.slotted}/3  alarm left ${r.alarm === null ? "-" : r.alarm.toFixed(0) + "s"}  floors: ${fl}`);
 }
 const res = rows.find(r => r.results)?.results;
 if (res) console.log("RESULTS " + res.map(x => `${x.place}.${x.name} ${Math.floor(x.ms / 60000)}:${String(Math.floor(x.ms / 1000) % 60).padStart(2, "0")}`).join("  "));

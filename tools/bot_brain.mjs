@@ -9,11 +9,11 @@
 //    the fields give. A lure spot for the bait is a visible cell 9 to 13 m from the monster that threatens the runner most, with a margin of at least 2 s.
 // Team (a blackboard the runner process relays between the pages every 0.4 s): the runner fetches what the floor needs, the bait draws the monster that is
 // closest to the runner's way off it, the scout waits by the stairs, types the code and throws the power. With no runner left on a floor the others work.
-export function brain(idx, N) {
+export function brain(idx, N, opts = {}) {
   const g = window.__game, NW = g.NW, NH = g.NH, NAV = g.NAV, NX0 = g.NX0, NZ0 = g.NZ0, CELLS = NW * NH;
   const ROLES = ["runner", "bait", "scout", "runner", "runner", "bait", "runner", "runner"];
   const B = window.__bot = {idx, role: N === 1 ? "runner" : N === 2 ? ["runner", "bait"][idx] : ROLES[idx % ROLES.length], floors: {}, downs: 0, revives: 0, stuck: 0, fled: 0, cur: null, path: [], pathAt: 0,
-    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
+    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, shots: 0, hits: 0, armedAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
   window.__bb = window.__bb || [];
   const now = () => performance.now() / 1000;
   const xz = c => [NX0 + ((c % NW) + 0.5) * NAV, NZ0 + (Math.floor(c / NW) + 0.5) * NAV];
@@ -97,7 +97,7 @@ export function brain(idx, N) {
   }
   function walkTo(x, z, close) {
     const key = x.toFixed(1) + "," + z.toFixed(1) + g.S.id;
-    if (B.cur !== key) B.waitT = 0;
+    if (B.goalKey !== key) { B.goalKey = key; B.waitT = 0; }                   // the patience budget belongs to the goal, so a flee does not refill it
     if (B.cur !== key || now() - B.pathAt > 1.2) { B.cur = key; B.pathAt = now(); B.path = plan(x, z); }
     if (B.tier >= 2 && (B.waitT || 0) < 25 && dist(x, z) > close + 1) {      // only a risky route is open: wait still and quiet while this spot is safe, as a patrol passes
       const F = fields(), here = cellOf(g.P.p.x, g.P.p.z);
@@ -140,6 +140,33 @@ export function brain(idx, N) {
     return true;
   }
 
+  // ---- the gun: open a locker on B1, pick up nearby ammo packs, and fire at a chaser that has closed to 12 m (aimed at its body; a hit sends it far away)
+  const eye = () => [g.P.p.x, g.P.p.y + g.P.eye, g.P.p.z];
+  function tryShoot() {
+    if (opts.nogun || !g.LT.gun || g.LT.rounds <= 0 || g.GUN.cool > 0 || g.myCarry() >= 0) return false;
+    let best = null;
+    for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y) || m.immuneT > 0 || m.glitchT > 0 || m.state !== "chase") continue; const d = dist(m.pos.x, m.pos.z); if (d <= 13 && (!best || d < best.d)) best = {m, d}; }
+    if (!best) return false;
+    const o = eye(), tx = best.m.pos.x - o[0], ty = best.m.fy + 0.5 * (best.m.cfg.height || 2.2) - o[1], tz = best.m.pos.z - o[2], L = Math.hypot(tx, ty, tz) || 1;
+    const keep = [g.P.yaw, g.P.pitch]; g.P.yaw = Math.atan2(-tx, -tz); g.P.pitch = Math.asin(ty / L);
+    const h = g.rayMonster(o, [-Math.sin(g.P.yaw) * Math.cos(g.P.pitch), Math.sin(g.P.pitch), -Math.cos(g.P.yaw) * Math.cos(g.P.pitch)]);
+    if (!h || h.m !== best.m) { [g.P.yaw, g.P.pitch] = keep; return false; }                   // a wall or another monster is in the way
+    const f = g.fire(); if (f) { B.shots++; B.hits++; }
+    g.P.pitch = 0; return f;
+  }
+  function wantLoot() {                                                        // true while the bot is on its way to a locker (no gun yet) or a close ammo pack (low on rounds)
+    if (opts.nogun) return false;
+    const v = g.LT.vis, st = g.LT.st[g.S.id]; if (!v || !st) return false;
+    const F = fields();
+    const free = (items, list, kind) => items.map((it, i) => list[i] === 0 ? {i, x: it.home[0], z: it.home[1]} : null).filter(Boolean).filter(it => !claimed(kind, it.i));
+    let kind = null, items = [];
+    if (!g.LT.gun && v.lockers.length) { kind = "locker"; items = free(v.lockers, st.lockers, kind); }
+    else if (g.LT.gun && g.LT.rounds < 6) { kind = "pack"; items = free(v.packs, st.packs, kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 22; }); }
+    if (!items.length) return false;
+    const it = pickNearest(items, kind); if (!it) return false;
+    if (walkTo(it.x, it.z, 1.2)) { face(it.x, it.z); g.tryLoot(); }
+    return true;
+  }
   // ---- the team
   const mates = () => (window.__bb || []).filter(b => b.idx !== idx && b.floor === g.S.id);
   const runnerPos = () => { const r = mates().find(b => b.role === "runner" && !b.dead); return r ? [r.x, r.z] : null; };
@@ -192,12 +219,13 @@ export function brain(idx, N) {
     for (const m of g.monsters) { if (!m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d < near) near = d; if (m.state === "chase" && d < 22 && (!chaser || d < dist(chaser.pos.x, chaser.pos.z))) chaser = m; }
     B.sneak = near < 12 && !chaser; B.runOk = near > 20 && g.P.stam > 0.5;
     const role = hasRunner() ? B.role : "runner";
-    if (chaser) { B.claim = null; if (flee(role === "bait" ? runnerPos() : null)) return; }
+    if (chaser) { B.claim = null; tryShoot(); if (flee(role === "bait" ? runnerPos() : null)) return; }
     else if (B.hide && now() < B.hide.until) { stop(); g.P.crouch = true; return; }          // out of sight: keep still and quiet until it gives up
     // a teammate is down: lift them if the way there is safe
     const down = mates().find(b => b.dead);
     if (down) { const F = fields(), c = cellOf(down.x, down.z); if (c >= 0 && F.bot.d[c] < 60 && margin(F, c) >= 0) { if (walkTo(down.x, down.z, 1.0)) { face(down.x, down.z); } return; } }
     B.claim = null;
+    if (wantLoot()) return;
     if (role === "bait") { const l = lureSpot(); if (l) { if (walkTo(l.x, l.z, 1.0)) { stop(); } return; } }
     if (role === "scout") {
       const d = g.upDoor(), locked = d && g.isLocked(d);
@@ -244,6 +272,7 @@ export function brain(idx, N) {
           mons: g.monsters.map(m => ({d: +Math.hypot(m.pos.x - g.P.p.x, m.pos.z - g.P.p.z).toFixed(1), s: m.state})).sort((p, q) => p.d - q.d).slice(0, 2)});
       }
       if (!g.dead && B.was) B.upAt = t;
+      if (g.LT.gun && B.armedAt === null) B.armedAt = (t - g.FIN.t0) / 1000;
       B.was = g.dead;
       if (g.dead) stop(); else decide();
       B.pub = {idx, role: B.role, floor: id, x: g.P.p.x, z: g.P.p.z, dead: g.dead, claim: B.claim};
