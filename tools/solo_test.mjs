@@ -149,6 +149,28 @@ try {
   check("a beacon rolls up to 12 m and one fewer is carried", !bc.err && bc.rolled > 1 && bc.rolled <= 12.6 && bc.have === 1, JSON.stringify(bc));
   check("a monster 10 to 24 m away, even one chasing, goes to the beacon and idles within 3.5 m of it", !bc.err && bc.lured && bc.gathered < 3.6 && bc.state === "search", JSON.stringify(bc));
   check("when the beacon ends the monster searches at it (then patrols)", !bc.err && bc.afterExpiry.lureId === null && bc.afterExpiry.state === "search" && bc.afterExpiry.at === true, JSON.stringify(bc));
+  // cameras: a monster in a camera's view is on the team map with a name and heading, "hot camera" finds it, and a close one buzzes
+  const cm = await p.evaluate(() => {
+    const g = window.__game, m = g.monsters[0]; for (const q of g.monsters) q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z);
+    let found = null;
+    for (let ci = 0; ci < g.S.cams.length && !found; ci++) for (const dd of [4, 6, 8]) {
+      const c = g.S.cams[ci], t = g.ctime(); g.aimFeed(c, t); const yaw = g.feedCam.rotation.y, x = g.feedCam.position.x - Math.sin(yaw) * dd, z = g.feedCam.position.z - Math.cos(yaw) * dd;
+      m.pos.set(x, m.fy, z); g.updateSeen(t);
+      if (g.CAMHOT.has(ci)) { found = {ci, x, z}; break; }
+    }
+    if (!found) return null;
+    g.BUZZ.at = {}; g.P.p.set(found.x + 3, g.S.floor + 0.02, found.z); g.updateSeen(g.ctime());                // someone 3 m from it: the buzz
+    const buzz = g.BUZZ.text, entry = g.MAPSEEN.get(m);
+    g.devOn.v = false; g.camIdx = 0; const hot = g.hotCam(), sel = g.CAMHOT.has(g.camIdxNow());
+    g.sim(0.05, performance.now() / 1000); const cap = document.getElementById("camhud").textContent;
+    g.devOn.v = true; g.toggleMode && 0; g.drawMapNow();
+    return {ci: found.ci, buzz, seen: !!entry && entry.name === m.cfg.name && Number.isFinite(entry.yaw), hot, sel, cap, held: performance.now() - entry.at < 1000, fade: g.MAP_FADE_MS};
+  });
+  check("a monster in a camera's view is marked with its name and heading", !!cm && cm.seen, JSON.stringify(cm));
+  check("the buzz names the camera, the monster and who it is near", !!cm && /^CAM \d+: \S+ near you$/.test(cm.buzz), JSON.stringify(cm));
+  check("hot camera jumps to a camera that sees it, and the caption says so", !!cm && cm.hot && cm.sel && /IN VIEW/.test(cm.cap), JSON.stringify(cm));
+  check("sightings stay on the map for 6 s", !!cm && cm.fade === 6000);
+  await p.evaluate(() => { const g = window.__game; g.devOn.v = false; for (const q of g.monsters) { q.state = "patrol"; q.path = []; q.pos.set(g.P.p.x + 90, q.fy, g.P.p.z); } });
   // health: 100 HP, 35 a hit, a second of grace, a hit from one monster at most every 1.2 s, regeneration after 10 s, three hits down you
   const hp1 = await p.evaluate(() => { const g = window.__game; return {hp: g.HP.h.hp, imm: g.P.imm}; });
   check("after the respawn you have full health", hp1.hp === 100);
