@@ -16,8 +16,8 @@ import {LOOT_FLOORS, MAX_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, tak
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models"]);            // nothing else in the repo is public
-const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript"};
+const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio"]);            // nothing else in the repo is public
+const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript", ".ogg": "audio/ogg"};
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
 
 export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random} = {}) {
@@ -30,7 +30,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
     if (!file.startsWith(root + path.sep) || !SERVE.has(rel.split("/")[0])) { res.writeHead(404); return res.end("not found"); }
     fs.readFile(file, (err, buf) => {
       if (err) { res.writeHead(404); return res.end("not found"); }
-      res.writeHead(200, {"content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-cache"});
+      res.writeHead(200, {"content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": file.endsWith(".ogg") ? "public, max-age=86400" : "no-cache"});
       res.end(buf);
     });
   });
