@@ -233,7 +233,7 @@ try {
 
   // leaving hands the floor over
   const leaverId = await guest.evaluate(() => window.__game.net.id);
-  await until("the host sees the guest holding the ray gun", host, () => { const p = [...window.__game.net.peers.values()][0]; return p.gun === true && !!p.gunObj && p.gunObj.visible === true; });
+  await until("the host knows the guest carries the ray gun and has its model ready", host, () => { const p = [...window.__game.net.peers.values()][0]; return p.gun === true && !!p.gunObj; });                    // (the guest is down by now, and a downed player's gun is hidden)
   check("before leaving, the guest holds a locker", srv.rooms.get("TEST").loot.B1.lockers.includes(leaverId));
   await guest.close();
   await sleep(500);

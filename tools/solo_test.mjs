@@ -21,7 +21,7 @@ const until = (name, page, fn, arg) => page.waitForFunction(fn, arg, {timeout: 6
 
 // a second root that has a models/fuse.glb (a stand-in model), made from symlinks so nothing in the repo changes
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lot-")); fs.mkdirSync(path.join(tmp, "models"));
-for (const n of ["index.html", "world", "monsters", "characters", "shared"]) fs.symlinkSync(path.join(here, n), path.join(tmp, n));
+for (const n of ["index.html", "world", "monsters", "characters", "shared", "audio"]) fs.symlinkSync(path.join(here, n), path.join(tmp, n));
 fs.copyFileSync(path.join(here, "characters", "shorts.glb"), path.join(tmp, "models", "fuse.glb"));
 const plain = await createServer({countdownMs: 60000}), withModel = await createServer({root: tmp, countdownMs: 60000});
 try {
