@@ -120,7 +120,7 @@ def encode(src, dst, cue):
 def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     index_path = out / "index.json"
-    index = json.loads(index_path.read_text()) if index_path.exists() else {}
+    index = {k: v for k, v in json.loads(index_path.read_text()).items() if not k.startswith("_")} if index_path.exists() else {}
     repo = lock.get("repo", ""); failed = []
     wanted = {k: dict(v, key=k) for k, v in cues["cues"].items() if not only or k in only}
     by_id = {}
@@ -144,7 +144,7 @@ def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print):
         except Exception as err:  # noqa: BLE001 - one failure must not stop the rest
             for k in keys: failed.append((k, str(err)))
             log(f"  FAILED {id_}: {err}")
-    index_path.write_text(json.dumps(index, indent=1, sort_keys=True))
+    index_path.write_text(json.dumps({**index, **({"_failed": [k for k, _ in failed]} if failed else {})}, indent=1, sort_keys=True))
     return index, failed
 
 

@@ -29,7 +29,7 @@ export function createAudio({base = "audio/files/", enabled = true} = {}) {
       reverb = c.createConvolver(); reverb.buffer = impulse(c); bus.rvIn.gain.value = 0.16; bus.rvIn.connect(reverb); reverb.connect(master);
       applyVolumes();
       try { const r = await fetch(base + "index.json"); A.index = r.ok ? await r.json() : null; } catch (e) { A.index = null; }
-      let failed = false; try { failed = (await fetch(base + "FAILED")).ok; } catch (e) { /* none */ }
+      const failed = !!(A.index && A.index._failed && A.index._failed.length); if (A.index) delete A.index._failed;           // the build notes cues it could not make inside index.json
       A.status = A.index && Object.keys(A.index).length && !failed ? "ok" : "silent";
     }
     if (A.ctx.state === "suspended") { try { await A.ctx.resume(); } catch (e) { /* needs another gesture */ } }

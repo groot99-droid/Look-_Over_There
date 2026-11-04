@@ -9,7 +9,7 @@ if (!fs.existsSync(new URL("../audio/files/index.json", import.meta.url))) { con
 const srv = await createServer({port: 0, countdownMs: 60000});
 const browser = await chromium.launch({args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"]});
 const page = await (await browser.newContext({viewport: {width: 960, height: 600}})).newPage();
-const errors = []; page.on("pageerror", e => errors.push(e.message)); page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+const errors = [], missing = []; page.on("pageerror", e => errors.push(e.message)); page.on("console", m => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); }); page.on("response", r => { if (r.status() >= 400 && !/favicon/.test(r.url())) missing.push(r.status() + " " + r.url()); });
 await page.goto(`http://localhost:${srv.port}/`); await page.click("#l-solo");
 await page.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000});
 const A = f => page.evaluate(f);
@@ -34,13 +34,13 @@ check("L3, the breather, has music but no danger layers", d.music.id === "L3" &&
 await A(() => window.__game.AUD.setLevel("L4")); await sleep(2500); d = await A(() => window.__game.AUD.debug());
 check("L4 has its own mix", d.music.id === "L4" && d.music.layers.length === 5);
 // voices
-const v = await A(async () => { const a = window.__game.AUD; a.setListener(0, 1.6, 0, 0); const base = a.debug().played; a.play("gun"); a.play("door_open", {pos: [3, 1, 2]}); a.play("mon_step", {pos: [500, 0, 500]}); await new Promise(r => setTimeout(r, 300)); return {played: a.debug().played - base, voices: a.debug().voices, dropped: a.debug().dropped}; });
+const v = await A(async () => { const a = window.__game.AUD; a.setListener(0, 1.6, 0, 0); window.__v0 = a.debug().voices; const base = a.debug().played; a.play("gun"); a.play("door_open", {pos: [3, 1, 2]}); a.play("mon_step", {pos: [500, 0, 500]}); await new Promise(r => setTimeout(r, 300)); return {played: a.debug().played - base, voices: a.debug().voices, dropped: a.debug().dropped}; });
 check("effects play, and a sound 500 m away is not started", v.played === 2 && v.dropped >= 1 && v.voices >= 1, JSON.stringify(v));
-check("voices are given back when sounds end", await A(async () => { await new Promise(r => setTimeout(r, 3500)); return window.__game.AUD.debug().voices === 0; }));
-const cap = await A(async () => { const a = window.__game.AUD; for (let i = 0; i < 60; i++) a.play("beacon_tick", {loop: true}); await new Promise(r => setTimeout(r, 300)); const n = a.debug().voices; return n; });
+check("voices are given back when sounds end", await A(async () => { await new Promise(r => setTimeout(r, 3500)); return window.__game.AUD.debug().voices <= window.__v0 + 1; }));          // (the running game keeps its own monster loops alive)
+const cap = await A(async () => { const a = window.__game.AUD, hs = []; for (let i = 0; i < 60; i++) hs.push(a.play("beacon_tick", {loop: true})); await new Promise(r => setTimeout(r, 300)); const n = a.debug().voices; hs.forEach(h => h.stop()); await new Promise(r => setTimeout(r, 300)); return n; });
 check("there is a cap on simultaneous voices", cap <= 34, `(${cap})`);
 // monsters in 3D
-const mon = await A(async () => { const a = window.__game.AUD; a.clearMonsters(); const base = a.debug().played; const m = {id: 3, x: 6, y: 0, z: 0, state: "patrol", speed: 2.7, blocked: false};
+const mon = await A(async () => { const a = window.__game.AUD; a.clearMonsters(); await new Promise(r => setTimeout(r, 300)); const base = a.debug().played; const m = {id: 3, x: 6, y: 0, z: 0, state: "patrol", speed: 2.7, blocked: false};
   for (let i = 0; i < 30; i++) a.monsters(0.1, [m], {x: 0, z: 0}); const idle = a.debug().played - base; m.state = "chase"; a.monsters(0.1, [m], {x: 0, z: 0}); await new Promise(r => setTimeout(r, 200)); return {idle, afterChase: a.debug().played - base}; });
 check("a patrolling monster is heard (breathing and footsteps) and a growl comes when it starts hunting", mon.idle >= 2 && mon.afterChase > mon.idle, JSON.stringify(mon));
 // alarm
@@ -53,7 +53,7 @@ await A(() => { const a = window.__game.AUD; a.set("mute", false); a.set("music"
 check("the music volume setting changes the music bus", Math.abs(d.musicGain - 0.3) < 0.05 && d.masterGain > 0.8, JSON.stringify({m: d.musicGain, master: d.masterGain}));
 // the game's own hooks ran without errors while playing
 await A(() => { const g = window.__game; g.AUD.set("music", 0.7); g.P.moving = true; g.P.ground = true; for (let i = 0; i < 80; i++) g.sim(0.05, performance.now() / 1000); g.applyHit(35); g.toggleCloak(); });
-check("a few seconds of game frames with sound on raise no errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+check("a few seconds of game frames with sound on raise no errors and fetch nothing that is missing", errors.length === 0 && missing.length === 0, errors.concat(missing).slice(0, 3).join(" | "));
 // silence without files, and for bots
 const silent = await A(async () => { const m = await import("/audio/engine.js"); const a = m.createAudio({base: "nothing-here/"}); await a.unlock(); a.setLevel("B1"); a.play("gun"); a.update(0.1, {chasers: [{d: 3}], hp: 5}); a.monsters(0.1, [{id: 1, x: 1, y: 0, z: 1, state: "chase", speed: 3}], {x: 0, z: 0}); return a.status; });
 check("with the files missing the engine is silent and does not throw", silent === "silent", silent);

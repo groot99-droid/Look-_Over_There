@@ -13,7 +13,7 @@ export function brain(idx, N, opts = {}) {
   const g = window.__game, NW = g.NW, NH = g.NH, NAV = g.NAV, NX0 = g.NX0, NZ0 = g.NZ0, CELLS = NW * NH;
   const ROLES = ["runner", "bait", "scout", "runner", "runner", "bait", "runner", "runner"];
   const B = window.__bot = {idx, role: N === 1 ? "runner" : N === 2 ? ["runner", "bait"][idx] : ROLES[idx % ROLES.length], floors: {}, downs: 0, revives: 0, stuck: 0, fled: 0, cur: null, path: [], pathAt: 0,
-    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, shots: 0, hits: 0, beacons: 0, cloakS: 0, hurts: 0, hp: 100, armedAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
+    last: performance.now(), prev: null, prevAt: 0, was: false, hold: 0, deaths: [], trail: [], upAt: null, shots: 0, hits: 0, beacons: 0, cloakS: 0, cloakWaste: 0, firstFuse: null, carryS: 0, hurts: 0, hp: 100, armedAt: null, fields: null, fieldsAt: -9, lure: null, lureAt: -9, claim: null, pub: {}};
   window.__bb = window.__bb || [];
   const now = () => performance.now() / 1000;
   const xz = c => [NX0 + ((c % NW) + 0.5) * NAV, NZ0 + (Math.floor(c / NW) + 0.5) * NAV];
@@ -177,18 +177,20 @@ export function brain(idx, N, opts = {}) {
     g.P.pitch = 0; return f;
   }
   // ---- the AFK Beacon: with a monster chasing from 7 to 22 m, roll a beacon at it (it and anything within 30 m of the can goes to the can); the cloak goes on when a monster is near and off when it is clear
-  function tryBeacon(m) {
+  function tryBeacon(m, proactive) {                                           // proactive: roll one at a monster that has not seen us (9 to 28 m), to pull it and its neighbours off the route
     if (opts.nobeacons || g.BC.have <= 0 || g.myCarry() >= 0 || g.BC.list.some(b => b.scene === g.S.id && performance.now() / 1000 < b.until)) return false;
-    const d = dist(m.pos.x, m.pos.z); if (d < 7 || d > 22 || !m.onFloorY(g.P.p.y)) return false;
+    const d = dist(m.pos.x, m.pos.z); if (d < (proactive ? 9 : 7) || d > (proactive ? 28 : 22) || !m.onFloorY(g.P.p.y)) return false;
     const keep = g.P.yaw; face(m.pos.x, m.pos.z);
     if (g.throwBeacon()) { B.beacons++; return true; }
     g.P.yaw = keep; return false;
   }
   function cloakLogic(near, chaser) {
     if (opts.nocloak || !g.CL.have) return;
-    const want = !!chaser || near < 14;
-    if (want && !g.CL.st.on && g.CL.st.b > 0.4) g.toggleCloak(); else if (!want && g.CL.st.on) g.toggleCloak();
-    if (g.CL.st.on) B.cloakS += 0.05;
+    if (opts.legacyItems) { const w = !!chaser || near < 14; if (w && !g.CL.st.on && g.CL.st.b > 0.4) g.toggleCloak(); else if (!w && g.CL.st.on) g.toggleCloak(); if (g.CL.st.on) B.cloakS += 0.05; return; }
+    // on only when a monster is close (9 m) or hunting, never below 40% battery, never when two teammates already have theirs on; off once it is clear (16 m) or flat
+    const others = mates().filter(b => b.cloak).length, want = !!chaser || near < 9, clear = !chaser && near > 16;
+    if (want && !g.CL.st.on && g.CL.st.b > 0.4 && others < 2) g.toggleCloak(); else if (g.CL.st.on && (clear || g.CL.st.b < 0.04)) g.toggleCloak();
+    if (g.CL.st.on) { B.cloakS += 0.05; if (near > 20) B.cloakWaste += 0.05; }
   }
   function wantLoot() {                                                        // true while the bot is on its way to a locker (no gun yet) or a close ammo pack (low on rounds)
     if (opts.nogun) return false;
@@ -198,7 +200,7 @@ export function brain(idx, N, opts = {}) {
     let kind = null, items = [];
     if (!g.LT.gun && v.lockers.length) { kind = "locker"; items = free(v.lockers, st.lockers, kind); }
     else {
-      if (!opts.nobeacons && g.BC.have < 2 && v.beacons) { kind = "beacon"; items = free(v.beacons, st.beacons || [], kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 20; }); }
+      if (!opts.nobeacons && g.BC.have < 2 && v.beacons) { kind = "beacon"; items = free(v.beacons, st.beacons || [], kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < (opts.legacyItems ? 20 : 28); }); }
       if (!items.length && g.LT.gun && g.LT.rounds < 6) { kind = "pack"; items = free(v.packs, st.packs, kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 22; }); }
     }
     if (!items.length) return false;
@@ -268,6 +270,7 @@ export function brain(idx, N, opts = {}) {
     const down = mates().find(b => b.dead);
     if (down) { const F = fields(), c = cellOf(down.x, down.z); if (c >= 0 && F.bot.d[c] < 60 && margin(F, c) >= 0) { if (walkTo(down.x, down.z, 1.0)) { face(down.x, down.z); } return; } }
     B.claim = null;
+    if (!opts.legacyItems && role !== "scout" && g.BC.have > 0) { let w = null, wd = 1e9; for (const m of known()) { if (m.ghost || m.state === "chase" || !m.onFloorY(g.P.p.y)) continue; const d = dist(m.pos.x, m.pos.z); if (d >= 9 && d <= 28 && d < wd) { wd = d; w = m; } } if (w) tryBeacon(w, true); }
     if (wantLoot()) return;
     if (role === "bait") { const l = lureSpot(); if (l) { if (walkTo(l.x, l.z, 1.0)) { stop(); } return; } }
     if (role === "scout") {
@@ -318,7 +321,8 @@ export function brain(idx, N, opts = {}) {
       if (g.LT.gun && B.armedAt === null) B.armedAt = (t - g.FIN.t0) / 1000;
       B.was = g.dead;
       if (g.dead) stop(); else decide();
-      B.pub = {seen: B.seenNow || [], idx, role: B.role, floor: id, x: g.P.p.x, z: g.P.p.z, dead: g.dead, claim: B.claim};
+      if (g.myCarry() >= 0) { B.carryS += 0.05; if (B.firstFuse === null) B.firstFuse = (performance.now() - g.FIN.t0) / 1000; }
+      B.pub = {cloak: g.CL.st.on, seen: B.seenNow || [], idx, role: B.role, floor: id, x: g.P.p.x, z: g.P.p.z, dead: g.dead, claim: B.claim};
     }
     g.sim(dt, t / 1000);
   }, 50);
