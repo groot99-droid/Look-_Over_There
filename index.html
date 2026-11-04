@@ -412,6 +412,13 @@ class Monster {
     if (d > 2.5 && ang > this.cfg.fov / 2) return false;
     return this.los(t);
   }
+  ringSpotOpen(lure) {                                                       // a spot of its own on the ring that is walkable and in line of sight of the can (not behind a wall)
+    for (let j = 0; j < 14; j++) {
+      const sp = ringSpot(lure, this.k + j * 5), c = cellOf(sp[0], sp[1]);
+      if (c >= 0 && this.walk[c] && segClear(lure.x, this.fy + 0.4, lure.z, sp[0], this.fy + 0.4, sp[1], 0.3)) return sp;
+    }
+    return [lure.x, lure.z];
+  }
   goTo(x, z) {
     const a = nearestWalk(this.walk, this.pos.x, this.pos.z), b = nearestWalk(this.walk, x, z);
     this.path = astar(this.walk, a, b) || []; this.path.shift(); this.target = [x, z];
@@ -449,7 +456,7 @@ class Monster {
     }
     if (lured) {
       this.lost = 0; if (this.state === "chase") this.state = "search"; this.state = "search";
-      if (this.lureId !== lure.id) { this.lureId = lure.id; this.lureAt = [lure.x, lure.z]; this.spot = ringSpot(lure, this.k); this.goTo(...this.spot); }
+      if (this.lureId !== lure.id) { this.lureId = lure.id; this.lureAt = [lure.x, lure.z]; this.spot = this.ringSpotOpen(lure); this.goTo(...this.spot); }
       else if (!this.path.length && this.spot && Math.hypot(this.spot[0] - this.pos.x, this.spot[1] - this.pos.z) > 0.9 && (this.repath -= dt) <= 0) { this.goTo(...this.spot); this.repath = 1; }
     } else if (this.lureId !== null) { this.lureId = null; this.state = "search"; this.lost = 0; this.last = this.lureAt; this.goTo(...this.lureAt); }
     const ct = seenT || targets.find(t => t.id === this.tgt) || null;               // whoever it is chasing
