@@ -1,4 +1,5 @@
 *.blend1
 *.blend@
 __pycache__/
+audio/files/
 node_modules/

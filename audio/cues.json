@@ -1,0 +1,352 @@
+{
+ "version": 1,
+ "note": "Every sound the game plays. id is the sound's id in the author's sound library; start/len trim (seconds); loop+xfade make a seamless loop; gain_db is applied at build time. Swap a sound by changing its id, run tools/make_lock.py, then tools/build_audio.py.",
+ "cues": {
+  "m_b1": {
+   "id": "dreamscore-2/endless-wandering",
+   "bus": "music",
+   "ch": 2,
+   "start": 8,
+   "len": 90,
+   "loop": true,
+   "xfade": 3,
+   "gain_db": -3,
+   "note": "B1 score; darkened in the engine"
+  },
+  "m_b1_bed": {
+   "id": "atmospheres/deep-slow-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "len": 64,
+   "loop": true,
+   "xfade": 3,
+   "note": "B1 drone"
+  },
+  "m_l1": {
+   "id": "dreamscore-2/lost-between-stars",
+   "bus": "music",
+   "ch": 2,
+   "start": 6,
+   "len": 90,
+   "loop": true,
+   "xfade": 3,
+   "gain_db": -3
+  },
+  "m_l1_bed": {
+   "id": "atmospheres/hollow-electric-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 3
+  },
+  "m_l2": {
+   "id": "dreamscore-2/through-silent-valleys",
+   "bus": "music",
+   "ch": 2,
+   "start": 6,
+   "len": 80,
+   "loop": true,
+   "xfade": 3,
+   "gain_db": -3
+  },
+  "m_l2_bed": {
+   "id": "atmospheres/high-cold-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 3
+  },
+  "m_l3": {
+   "id": "dreamscore-2/fragments-of-dawn",
+   "bus": "music",
+   "ch": 2,
+   "start": 4,
+   "len": 90,
+   "loop": true,
+   "xfade": 3,
+   "gain_db": -2,
+   "note": "the breather: the brightest piece"
+  },
+  "m_l3_bed": {
+   "id": "atmospheres/hopeful-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 3
+  },
+  "m_l4": {
+   "id": "atmospheres/cinematic-danger-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 3,
+   "note": "finale"
+  },
+  "m_l4_bed": {
+   "id": "atmospheres/distort-machine-atmosphere",
+   "bus": "music",
+   "ch": 2,
+   "len": 60,
+   "loop": true,
+   "xfade": 3
+  },
+  "m_result": {
+   "id": "dreamscore-2/veil-of-tomorrow",
+   "bus": "music",
+   "ch": 2,
+   "start": 0,
+   "len": 30,
+   "fade_out": 4
+  },
+  "t_1": {
+   "id": "dark-horror-sound-fx/ghostly-tension",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 1.5
+  },
+  "t_2": {
+   "id": "tension-builders/constant-bass-tension",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 1
+  },
+  "t_3": {
+   "id": "dark-horror-sound-fx/afraid-to-die-tension",
+   "bus": "music",
+   "ch": 2,
+   "loop": true,
+   "xfade": 2
+  },
+  "heart": {
+   "id": "dark-horror-sound-fx/heartbeat",
+   "bus": "music",
+   "ch": 1,
+   "loop": true,
+   "xfade": 0.3
+  },
+  "heart_fast": {
+   "id": "dark-horror-sound-fx/heartbeat-fast",
+   "bus": "music",
+   "ch": 1,
+   "loop": true,
+   "xfade": 0.3
+  },
+  "st_notice": {
+   "id": "braams/bass-braam",
+   "bus": "sfx",
+   "ch": 2,
+   "len": 2.5
+  },
+  "st_down": {
+   "id": "deep-impacts/deep-ominous-impact",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "st_lift": {
+   "id": "dark-horror-sound-fx/shimmering-light",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "st_fuse": {
+   "id": "hits/deep-metal-hit",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "st_power": {
+   "id": "science-fiction-risers/system-start-riser",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "st_finale": {
+   "id": "science-fiction-risers/tension-riser",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "st_exit": {
+   "id": "retro-arcade/arcade-end",
+   "bus": "sfx",
+   "ch": 2
+  },
+  "step_tile": {
+   "id": "blockbuster-footsteps/step-on-stones",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "step_floor": {
+   "id": "blockbuster-footsteps/wooden-floor-step",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "hurt": {
+   "id": "blockbuster-fighting/heavy-hit",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "pickup": {
+   "id": "retro-arcade/on-tone",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "ui": {
+   "id": "retro-arcade/bleep-tone",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "door_open": {
+   "id": "household-doors/opening-door",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "door_creak": {
+   "id": "household-doors/slow-creaking-door",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "door_close": {
+   "id": "household-doors/closing-door",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "lock": {
+   "id": "household-doors/closing-the-lock",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "unlock": {
+   "id": "household-doors/opening-the-lock",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "locker": {
+   "id": "dark-horror-sound-fx/steal-door-opening",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "fuse_take": {
+   "id": "electric-magnetic-energy/electric-impact-spark",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "fuse_slot": {
+   "id": "electric-magnetic-energy/electric-fold-up",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "fuse_drop": {
+   "id": "hits/deep-metal-hit",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "switch": {
+   "id": "mechanical-industrial-tension/mechanical-hit",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "power": {
+   "id": "retro-arcade/system-update",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "key_press": {
+   "id": "retro-phones/dial-one",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "key_ok": {
+   "id": "retro-arcade/level-up-tone",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "key_bad": {
+   "id": "retro-errors/short-error",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "key_lock": {
+   "id": "retro-errors/deep-error",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "gun": {
+   "id": "science-fiction-weapons/deep-sci-fi-shot",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "gun_dry": {
+   "id": "mechanical-industrial-tension/mechanical-clicks",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "zap": {
+   "id": "glitches/chaotic-glitch",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "beacon_roll": {
+   "id": "mechanical-industrial-tension/rolling-mechanical-machine",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "beacon_tick": {
+   "id": "retro-errors/ticking-digits",
+   "bus": "sfx",
+   "ch": 1,
+   "loop": true,
+   "xfade": 0.1
+  },
+  "beacon_end": {
+   "id": "retro-errors/tape-error",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "cloak_on": {
+   "id": "science-fiction-whooshes/laser-whoosh",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "cloak_off": {
+   "id": "science-fiction-whooshes/laser-change-whoosh",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "cloak_flat": {
+   "id": "retro-errors/soft-error",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "mon_growl_1": {
+   "id": "dark-horror-sound-fx/unknown-creature",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "mon_growl_2": {
+   "id": "dark-horror-sound-fx/strange-creature",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "mon_growl_3": {
+   "id": "dark-horror-sound-fx/mutated-dog",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "mon_roar": {
+   "id": "dark-horror-sound-fx/werewolf",
+   "bus": "sfx",
+   "ch": 1
+  },
+  "mon_idle": {
+   "id": "dark-horror-sound-fx/scary-chatter",
+   "bus": "sfx",
+   "ch": 1,
+   "loop": true,
+   "xfade": 0.5
+  },
+  "mon_step": {
+   "id": "blockbuster-footsteps/step-on-stones",
+   "bus": "sfx",
+   "ch": 1
+  }
+ }
+}
