@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {WebSocket} from "ws";
-import {createServer} from "./server_next.js";
+import {createServer} from "./server.js";
 import {segClear, mainRegion, cellXZ, FLOORS, rng32} from "../shared/world.js";
 
 function client(port) {

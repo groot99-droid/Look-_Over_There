@@ -225,6 +225,8 @@ try {
   check("both on: the door is powered", await p.evaluate(() => { const g = window.__game; g.step(0.016); return !g.isLocked(g.upDoor()) && /DOOR POWERED/.test(document.getElementById("fusehud").textContent); }));
   // L2 has a keypad: four notes, each with one digit of the code
   await load("L2");
+  const standBad = await p.evaluate(() => { const g = window.__game; let bad = 0; for (let i = 0; i < 300; i++) { const c = i % 2 ? g.spawnFor("L2") : g.randomSpawn("L2"); if (g.collide({x: c[0], y: g.S.floor + 0.05, z: c[2]})) bad++; } return bad; });
+  check("no spawn on L2 (many doors) overlaps a wall or a closed door, where a player would fall through the floor", standBad === 0, `(${standBad} of 300)`);
   check("L2: four notes and a panel, no fuses or switches, door locked", await p.evaluate(() => { const g = window.__game, v = g.FZ.vis; return v.notes.length === 4 && v.pan.length === 2 && v.items.length === 0 && v.sws.length === 0 && g.isLocked(g.upDoor()) && g.puzzle().kind === "CODE"; }));
   const notes = await p.evaluate(() => window.__game.FZ.vis.notes.map(n => n.home));
   let near = 1e9; for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) near = Math.min(near, Math.hypot(notes[i][0] - notes[j][0], notes[i][1] - notes[j][1]));

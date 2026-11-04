@@ -54,7 +54,7 @@ test("positions go only to players on the same floor", async () => {
   const a = await join(srv, "R3", "Ann"), b = await join(srv, "R3", "Bob"), c = await join(srv, "R3", "Cy");
   const at = {a: {t: "s", scene: "B1", x: 1, y: 0, z: 2, yaw: 0}};
   a.send(at.a); b.send({t: "s", scene: "B1", x: 3, y: 0, z: 4, yaw: 0}); c.send({t: "s", scene: "L1", x: 9, y: 9, z: 9, yaw: 0});
-  await b.next(kind("hosts")); await c.next(kind("hosts"));                  // everyone's floor is known now
+  await new Promise(r => setTimeout(r, 200));                                   // everyone's floor is known now
   const drained = await Promise.all([a, b, c].map(x => x.quiet(100)));
   a.send(at.a);
   await b.next(m => m.t === "s" && m.id === a.id);
@@ -65,23 +65,16 @@ test("positions go only to players on the same floor", async () => {
   await srv.close();
 });
 
-test("only a floor's host sends monsters or kills; revive needs the same floor", async () => {
+test("clients cannot send monsters, hits or zaps; revive needs the same floor, a downed target and a reach", async () => {
   const srv = await createServer();
   const a = await join(srv, "R4", "Ann"), b = await join(srv, "R4", "Bob"), c = await join(srv, "R4", "Cy");
-  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); c.send({t: "s", scene: "L1"});
-  await b.next(kind("hosts"));
-  await Promise.all([a, b, c].map(x => x.quiet(100)));
-  b.send({t: "m", scene: "B1", l: []}); b.send({t: "hit", to: a.id, dmg: 35});     // Bob is not B1's host (Ann joined first)
-  a.send({t: "m", scene: "B1", l: [[1, 1, 0, 0, 0]]});
-  await b.next(kind("m"));
-  assert.ok(!(await a.quiet(150)).some(m => m.t === "m" || m.t === "hit"), "Bob's monsters and hit were ignored");
-  a.send({t: "hit", to: b.id, dmg: 35}); assert.equal((await b.next(kind("hit"))).dmg, 35, "the host's hit arrives");
-  a.send({t: "hit", to: b.id, dmg: 9999}); assert.equal((await b.next(kind("hit"))).dmg, 50, "clamped");
-  a.send({t: "hit", to: b.id, dmg: "x"}); a.send({t: "hit", to: c.id, dmg: 35});
-  assert.ok(!(await b.quiet(150)).some(m => m.t === "hit") && !(await c.quiet(100)).some(m => m.t === "hit"), "junk and other floors are dropped");
-  b.send({t: "revive", to: a.id}); await a.next(kind("revived"));
-  c.send({t: "revive", to: a.id});
-  assert.ok(!(await a.quiet(150)).some(m => m.t === "revived"), "Cy is on another floor and cannot revive Ann");
+  a.send({t: "s", scene: "B1", x: 0, y: -3, z: 0}); b.send({t: "s", scene: "B1", x: 1, y: -3, z: 0}); c.send({t: "s", scene: "L1", x: 0, y: 0, z: 0});
+  await Promise.all([a, b, c].map(x => x.quiet(150)));
+  b.send({t: "m", scene: "B1", l: [[1, 1, 0, 0, 0]]}); b.send({t: "hit", to: a.id, dmg: 35}); b.send({t: "zap", scene: "B1", i: 0, from: [1, 2], to: [30, 40]});
+  const got = await a.quiet(200);
+  assert.ok(!got.some(m => m.t === "hit" || m.t === "zap" || (m.t === "m" && m.l.length === 1)), "the server runs the monsters: nothing a client sends counts");
+  b.send({t: "revive", to: a.id}); assert.ok(!(await a.quiet(150)).some(m => m.t === "revived"), "Ann is not down");
+  c.send({t: "revive", to: a.id}); assert.ok(!(await a.quiet(150)).some(m => m.t === "revived"), "Cy is on another floor");
   await srv.close();
 });
 
@@ -99,14 +92,17 @@ test("characters: a choice is kept (duplicates allowed), no choice gets one nobo
   await srv.close();
 });
 
-test("a door being shut is relayed as shut, not open", async () => {
+test("a door shut is relayed as shut, not open, only for a real door near the player; a stair door is never theirs", async () => {
   const srv = await createServer();
   const a = await join(srv, "R6", "Ann"), b = await join(srv, "R6", "Bob");
-  a.send({t: "s", scene: "L1"}); b.send({t: "s", scene: "L1"}); await b.next(kind("hosts"));
-  a.send({t: "door", scene: "L1", name: "D1", open: 0});
-  assert.equal((await b.next(kind("door"))).open, 0);
-  a.send({t: "door", scene: "L1", name: "D1", open: 1});
-  assert.equal((await b.next(kind("door"))).open, 1);
+  a.send({t: "s", scene: "L1", x: 0, y: 0, z: 0}); b.send({t: "s", scene: "L1", x: 1, y: 0, z: 0}); await Promise.all([a, b].map(x => x.quiet(200)));
+  const floor = srv.rooms.get("R6").floors.L1, dr = floor.W.doors.find(d => !d.link), link = floor.W.doors.find(d => d.link);
+  a.send({t: "door", scene: "L1", name: "D1", open: 1}); assert.ok(!(await b.quiet(150)).some(m => m.t === "door"), "no such door");
+  a.send({t: "s", scene: "L1", x: dr.cx + 2, y: 0, z: dr.cz}); await b.quiet(100);          // near, but not standing in the doorway
+  a.send({t: "door", scene: "L1", name: dr.d.name, open: 1}); assert.equal((await b.next(kind("door"))).open, 1);
+  a.send({t: "door", scene: "L1", name: dr.d.name, open: 0}); assert.equal((await b.next(kind("door"))).open, 0);
+  a.send({t: "s", scene: "L1", x: link.cx + 1, y: 0, z: link.cz}); await b.quiet(100);
+  a.send({t: "door", scene: "L1", name: link.d.name, open: 1}); assert.ok(!(await b.quiet(150)).some(m => m.t === "door"), "stair doors are not a player's to open");
   await srv.close();
 });
 
@@ -299,16 +295,19 @@ test("loot: the floor's state arrives with you; a pack is taken once and told to
   assert.equal((await late.next(kind("loot"))).st.packs[1], a.id, "a late joiner sees what is taken");
   await srv.close();
 });
-test("loot: a pack is refused when the player is full, and nothing happens off the loot floors", async () => {
+test("loot: the server counts the rounds: a pack is refused when the player is full (whatever they claim), and nothing happens off the loot floors", async () => {
   const srv = await createServer();
-  const a = await join(srv, "R21", "Ann"); a.send({t: "s", scene: "L3"}); await a.next(kind("loot"));
-  a.send({t: "loot", k: "pack", i: 0, rounds: 9}); a.send({t: "loot", k: "weird", i: 0}); a.send({t: "loot", k: "pack", i: 99, rounds: 0});
-  assert.ok(!(await a.quiet(200)).some(m => m.t === "loot"), "full, bad kind and bad index all do nothing");
-  a.send({t: "loot", k: "pack", i: 0, rounds: 8}); assert.equal((await a.next(kind("loot"))).st.packs[0], a.id);
-  a.send({t: "s", scene: null}); a.send({t: "loot", k: "pack", i: 1, rounds: 0});
+  const a = await join(srv, "R21", "Ann"); a.send({t: "s", scene: "B1"}); await a.next(kind("loot"));
+  a.send({t: "loot", k: "locker", i: 0}); await a.next(m => m.t === "me" && m.rounds === 3);
+  a.send({t: "loot", k: "pack", i: 0, rounds: 0}); await a.next(m => m.t === "me" && m.rounds === 6);
+  a.send({t: "loot", k: "pack", i: 1, rounds: 0}); await a.next(m => m.t === "me" && m.rounds === 9);
+  await a.quiet(100); a.send({t: "loot", k: "pack", i: 2, rounds: 0}); a.send({t: "loot", k: "weird", i: 0}); a.send({t: "loot", k: "pack", i: 99, rounds: 0});
+  assert.ok(!(await a.quiet(200)).some(m => m.t === "loot" || m.t === "me" && m.rounds !== 9), "full (the claim of 0 rounds is ignored), bad kind and bad index all do nothing");
+  a.send({t: "s", scene: null}); a.send({t: "loot", k: "pack", i: 2, rounds: 0});
   assert.ok(!(await a.quiet(150)).some(m => m.t === "loot"), "not on a floor");
   await srv.close();
 });
+
 test("loot: one gun each from the B1 lockers, and leaving puts the locker back", async () => {
   const srv = await createServer();
   const a = await join(srv, "R22", "Ann"), b = await join(srv, "R22", "Bob");
@@ -325,48 +324,33 @@ test("loot: one gun each from the B1 lockers, and leaving puts the locker back",
   await srv.close();
 });
 
-test("ray gun: a shot goes to the floor's host only, everyone else on the floor sees the beam", async () => {
+test("ray gun: a shot needs the gun and a round, everyone else on the floor sees the beam, other floors and the shooter do not", async () => {
   const srv = await createServer({countdownMs: 100});
-  const [a, b, c] = await round(srv, "R23", ["Ann", "Bob", "Cy"]);                  // Ann joined first: she hosts B1
-  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); c.send({t: "s", scene: "L1"}); await a.quiet(150);
-  const o = [1, 1.5, 2], d = [0, 0, -1];
-  b.send({t: "shot", o, d, e: [1, 1.5, -20]});
-  const shot = await a.next(kind("shot")); assert.deepEqual([shot.id, shot.o, shot.d], [b.id, o, d]);
-  const beam = await a.next(kind("beam")); assert.deepEqual(beam.e, [1, 1.5, -20]);
-  assert.ok(!(await b.quiet(150)).some(m => m.t === "shot" || m.t === "beam"), "the shooter is told nothing back");
-  assert.ok(!(await c.quiet(10)).some(m => m.t === "shot" || m.t === "beam"), "Cy is on another floor");
-  a.send({t: "shot", o, d});                                                        // the host's own shot: Bob sees the beam, nobody is sent a shot
-  const mine = await b.next(kind("beam")); assert.equal(mine.id, a.id); assert.deepEqual(mine.e, [1, 1.5, -23], "no end given: 25 m along the aim");
-  assert.ok(!(await a.quiet(100)).some(m => m.t === "shot"));
-  b.send({t: "shot", o: [1, 2], d}); b.send({t: "shot", o: ["x", 0, 0], d}); b.send({t: "shot", o});
-  assert.ok(!(await a.quiet(150)).some(m => m.t === "shot"), "bad aims are dropped");
-  await srv.close();
-});
-test("ray gun: only a floor's host can announce a banish", async () => {
-  const srv = await createServer({countdownMs: 100});
-  const [a, b] = await round(srv, "R24", ["Ann", "Bob"]);
-  a.send({t: "s", scene: "B1"}); b.send({t: "s", scene: "B1"}); await a.quiet(150);
-  b.send({t: "zap", scene: "B1", i: 0, from: [1, 2], to: [30, 40]});
-  assert.ok(!(await a.quiet(150)).some(m => m.t === "zap"), "Bob is not the host");
-  a.send({t: "zap", scene: "B1", i: 2, from: [1, 2], to: [30, 40]});
-  const z = await b.next(kind("zap")); assert.deepEqual([z.i, z.from, z.to], [2, [1, 2], [30, 40]]);
-  a.send({t: "zap", scene: "B1", i: "x", from: [1, 2], to: [3]}); assert.ok(!(await b.quiet(150)).some(m => m.t === "zap"), "junk is dropped");
+  const [a, b, c] = await round(srv, "R23", ["Ann", "Bob", "Cy"]);
+  a.send({t: "s", scene: "B1", x: 1, y: -3, z: 2}); b.send({t: "s", scene: "B1", x: 2, y: -3, z: 2}); c.send({t: "s", scene: "L1", x: 1, y: 0, z: 2}); await a.quiet(150);
+  const o = [1, -1.5, 2], d = [0, 0, -1];
+  a.send({t: "shot", o, d, e: [1, -1.5, -20]}); assert.ok(!(await b.quiet(200)).some(m => m.t === "beam"), "no gun, no shot");
+  a.send({t: "loot", k: "locker", i: 0}); await a.next(m => m.t === "me" && m.gun); await b.quiet(50);
+  a.send({t: "shot", o, d, e: [1, -1.5, -20]});
+  const beam = await b.next(kind("beam")); assert.deepEqual(beam.e, [1, -1.5, -20]);
+  assert.equal((await a.next(m => m.t === "me" && m.rounds === 2)).rounds, 2, "the server counted the round");
+  assert.ok(!(await a.quiet(150)).some(m => m.t === "beam"), "the shooter is told nothing back"); assert.ok(!(await c.quiet(10)).some(m => m.t === "beam"), "Cy is on another floor");
+  a.send({t: "shot", o: [1, 2], d}); a.send({t: "shot", o: ["x", 0, 0], d}); a.send({t: "shot", o}); assert.ok(!(await b.quiet(150)).some(m => m.t === "beam"), "bad aims are dropped");
   await srv.close();
 });
 
-test("a thrown beacon reaches the others on the floor only, junk is dropped; beacons are taken once and at most two carried", async () => {
+test("a thrown beacon needs one carried; the others on the floor learn where it lies; junk and other floors get nothing; beacons are taken once, two at most", async () => {
   const srv = await createServer();
   const a = await join(srv, "RB", "Ann"), b = await join(srv, "RB", "Bob"), c = await join(srv, "RB", "Cy");
-  a.send({t: "s", scene: "L1"}); b.send({t: "s", scene: "L1"}); c.send({t: "s", scene: "L2"});
-  await Promise.all([a, b, c].map(x => x.quiet(150)));
+  a.send({t: "s", scene: "L1", x: 0, y: 0, z: 0}); b.send({t: "s", scene: "L1", x: 1, y: 0, z: 0}); c.send({t: "s", scene: "L2", x: 0, y: 3.2, z: 0});
+  await Promise.all([a, b, c].map(x => x.quiet(200)));
+  a.send({t: "beacon", x: 3, z: 4}); assert.ok(!(await b.quiet(150)).some(m => m.t === "beacon"), "none carried");
+  a.send({t: "loot", k: "beacon", i: 0}); assert.equal((await a.next(m => m.t === "me" && m.beacons === 1)).beacons, 1);
+  a.send({t: "beacon", x: "x", z: 1}); a.send({t: "beacon", x: 1e9, z: 1}); assert.ok(!(await b.quiet(150)).some(m => m.t === "beacon"), "junk");
   a.send({t: "beacon", x: 3, z: 4});
   const got = await b.next(kind("beacon")); assert.deepEqual([got.x, got.z, got.from], [3, 4, a.id]);
-  a.send({t: "beacon", x: "x", z: 1}); a.send({t: "beacon", x: 1e9, z: 1});
-  assert.ok(!(await b.quiet(150)).some(m => m.t === "beacon") && !(await c.quiet(50)).some(m => m.t === "beacon"), "junk and other floors got nothing");
-  a.send({t: "loot", k: "beacon", i: 0, have: 0}); assert.equal((await a.next(kind("loot"))).by, a.id);
-  b.send({t: "loot", k: "beacon", i: 0, have: 0});
-  assert.ok(!(await b.quiet(150)).some(m => m.t === "loot" && m.by === b.id), "already taken");
-  b.send({t: "loot", k: "beacon", i: 1, have: 2});
-  assert.ok(!(await b.quiet(150)).some(m => m.t === "loot" && m.by === b.id), "carrying the most");
-  await srv.close();
+  assert.ok(!(await c.quiet(100)).some(m => m.t === "beacon"), "another floor");
+  b.send({t: "loot", k: "beacon", i: 0}); assert.ok(!(await b.quiet(150)).some(m => m.t === "loot" && m.by === b.id), "already taken");
+  b.send({t: "loot", k: "beacon", i: 1}); b.send({t: "loot", k: "beacon", i: 1});
+  await b.next(m => m.t === "me" && m.beacons === 1); await srv.close();
 });

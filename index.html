@@ -360,9 +360,12 @@ function spawnMonsters() {
 }
 
 // ---------------------------------------------------------------- spawning: everyone starts on the pool level; dying puts you back on that floor, somewhere random
+// a spot where a standing player overlaps nothing (the walkable grid counts a closed doorway as floor, but a player cannot stand inside a door)
+const standable = (x, z) => !collide({x, y: S.floor + 0.05, z});
 function randomSpawn(level) {
   const away = monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]);
-  const s = pickSpots(level, 1, Math.random, away)[0] || pickSpots(level, 1, Math.random)[0];
+  const spots = pickSpots(level, 12, Math.random, away, 3), all = spots.length ? spots : pickSpots(level, 12, Math.random, [], 3);
+  const s = all.find(q => standable(q[0], q[1])) || all[0];
   return [s[0], S.floor, s[1]];
 }
 
@@ -376,7 +379,7 @@ function floorGoals() {
   return goals;
 }
 function spawnFor(level) {
-  const here = S.id === level ? mainRegion().map(cellXZ).filter(([x, z]) => !doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4)) : [];       // not on top of a stair door
+  const here = S.id === level ? mainRegion().map(cellXZ).filter(([x, z]) => !doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4) && standable(x, z)) : [];       // not on top of a stair door
   const c = pickSpawn(here, floorGoals(), monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]));
   return c ? [c[0], S.floor, c[1]] : randomSpawn(level);
 }
@@ -748,7 +751,7 @@ function loadCloakModel() {                                                  // 
 function toggleCloak() {
   if (!CL.have || dead || loading) return;
   const n = cloakToggle(CL.st); if (n === CL.st) { toast("The cloak is flat"); AUD.play("cloak_flat"); return; }
-  AUD.play(n.on ? "cloak_on" : "cloak_off");
+  AUD.play(n.on ? "cloak_on" : "cloak_off"); if (net.on) net.send({t: "cloak"});
   CL.st = n; toast(n.on ? "Cloak on: monsters see you only from very close" : "Cloak off");
 }
 function animateCloak(dt) {
@@ -1146,8 +1149,8 @@ function showResults(rows) {
 // Everyone sees the same monsters because one client per scene (the host) simulates them and sends snapshots; the rest follow.
 const DOWNED_S = 45, REVIVE_S = 4;
 const CHARS = [{id: "plaid", name: "Plaid"}, {id: "suit", name: "Suit"}, {id: "shorts", name: "Shorts"}, {id: "red", name: "Red Dress"}, {id: "white", name: "White Suit"}];
-const net = {on: false, ws: null, id: 0, room: "", phase: "lobby", hosts: {}, peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null, started: null, startRes: null, lobby: null, alert: null,
-  host() { return !this.on || this.hosts[S.id] === this.id; },
+const net = {on: false, ws: null, id: 0, room: "", phase: "lobby", peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null, started: null, startRes: null, lobby: null, alert: null,
+  host() { return !this.on; },                                // alone, this page runs the monsters; in a room the server does, and everyone follows it
   send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }};
 let toastT = 0;
 function toast(msg, ms = 3200) { const el = $("toast"); el.textContent = msg; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { el.style.opacity = 0; }, ms); }
@@ -1208,7 +1211,7 @@ function onNet(m) {
   switch (m.t) {
     case "welcome":
       if (Number.isFinite(m.now)) net.off = m.now - Date.now();
-      net.id = m.id; net.room = m.room; net.hosts = m.hosts || {}; net.on = true; net.phase = m.phase;
+      net.id = m.id; net.room = m.room; net.on = true; net.phase = m.phase;
       for (const p of m.players) if (p.id !== m.id) addPeer(p);
       if (m.phase !== "lobby") net.startRes?.();
       if (m.power) setPower(true, null, true);
@@ -1218,7 +1221,6 @@ function onNet(m) {
       hud(); net.ready?.(); net.ready = null; break;
     case "join": addPeer(m); break;
     case "leave": removePeer(m.id); break;
-    case "hosts": net.hosts = m.hosts; break;
     case "lobby": net.lobby = m; renderWait(); break;
     case "start": net.phase = "playing"; clearInterval(net.cd); net.startRes?.(); break;
     case "p": { const p = net.peers.get(m.id); if (p) { p.scene = m.scene; p.fresh = true; } break; }       // someone changed floor: you only learn which
@@ -1240,7 +1242,15 @@ function onNet(m) {
       const dr = doors.find(x => x.d.name === m.name); if (dr && !dr.link) { const was = dr.target; dr.target = m.open === 0 ? 0 : 1; dr.at = performance.now(); if (was !== dr.target) AUD.play(dr.target ? "door_creak" : "door_close", {pos: [dr.cx, dr.cy + 1, dr.cz], loud: true}); }
       break;
     }
-    case "hit": applyHit(m.dmg); break;
+    case "me": {                                                      // the server's word on your health, rounds, cloak and beacons
+      const was = HP.h.hp; HP.h = {hp: m.hp, hurtAt: m.hp < was ? clk() : HP.h.hurtAt};
+      if (m.hp < was) { HP.flash = 1; rumble?.playEffect?.("dual-rumble", {duration: 250, strongMagnitude: 1, weakMagnitude: .8}); AUD.play("hurt", {priority: true, rate: .92 + Math.random() * .16}); }
+      LT.gun = !!m.gun; LT.rounds = m.rounds; BC.have = m.beacons; CL.have = !!m.cloak;
+      if (m.cloak) CL.st = {...CL.st, on: m.cloak.on, b: (m.cloak.on !== CL.st.on || Math.abs(CL.st.b - m.cloak.b) > 0.15) ? m.cloak.b : CL.st.b};
+      if (m.hp <= 0 && !dead && !loading) die();
+      if (m.respawn && dead) respawn();
+      break;
+    }
     case "beacon": if (m.scene === S.id && !loading) addBeacon(m.x, m.z, [m.x, m.z]); break;                       // someone rolled a beacon on this floor (it lands at once for us)
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
@@ -1299,12 +1309,6 @@ function netTick(dt) {
     net.t = 1 / 15;
     net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp), cloak: CL.st.on ? 1 : 0, gun: LT.gun ? 1 : 0});
   }
-  if (!loading && net.host() && (net.mt -= dt) <= 0) {
-    net.mt = 0.1;
-    const msg = {t: "m", scene: S.id, l: monsters.map(m => [r2(m.pos.x), r2(m.pos.z), r2(m.yaw), r2(m.speed), Math.max(0, MON_STATES.indexOf(m.state))])};
-    if (net.ticks++ % 10 === 0) msg.d = doors.filter(dr => !dr.link && dr.target === 1).map(dr => dr.d.name);          // late joiners learn which doors are open
-    net.send(msg);
-  }
 }
 function connect(name, room, char) {
   const q = new URLSearchParams(location.search);
@@ -1320,7 +1324,7 @@ function connect(name, room, char) {
     ws.onerror = () => { if (!net.on) fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."); };
     ws.onclose = () => {
       if (!net.on) return;
-      net.on = false; for (const id of [...net.peers.keys()]) removePeer(id); net.hosts = {}; net.snap = null;
+      net.on = false; for (const id of [...net.peers.keys()]) removePeer(id); net.snap = null;
       $("hud").textContent = "DISCONNECTED · playing solo";
     };
     net.ws = ws;
@@ -1430,7 +1434,7 @@ function update(dt) {
   if (dead) {
     deadT += dt;
     if (net.on) { simMonsters(dt); $("death").textContent = "DOWNED · " + Math.max(0, Math.ceil(DOWNED_S - deadT)); }
-    if (deadT > (net.on ? DOWNED_S : 3.2)) respawn();
+    if (deadT > (net.on ? DOWNED_S + 3 : 3.2)) respawn();                    // in a room the server ends the down time (a `me` message); this is only the fallback
     return;
   }
   P.imm = Math.max(0, (P.imm || 0) - dt);
