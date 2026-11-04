@@ -121,7 +121,7 @@ import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as
 import {pick as pickSpawn} from "./shared/spawn.js";
 import {createAudio} from "./audio/engine.js";
 import {near as nearW, buildNav as buildNavW, cellOf, cellXZ, nearestWalk, astar, segClear as segClearW, rayClear as rayClearW, mainRegion as mainRegionW, pickSpots as pickSpotsW, indexBoxes, rng32, NAV, NX0, NZ0, NW, NH} from "./shared/world.js";
-import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW} from "./shared/monsters.js";
+import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW, swarmApart} from "./shared/monsters.js";
 import {levelMix, stepInterval, stepGain} from "./shared/mix.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
@@ -1421,10 +1421,7 @@ function simMonsters(dt) {
     for (const m of monsters) {
       for (const id of m.update(dt, targets, lureList).caught) { if (id === net.id) applyHit(HIT_DMG); else net.send({t: "hit", to: id, dmg: HIT_DMG}); }
     }
-    for (const a of monsters) if (a.lureId !== null) for (const b of monsters) if (b !== a && b.lureId !== null) {            // swarming monsters bump into each other and shuffle apart
-      const dx = a.pos.x - b.pos.x, dz = a.pos.z - b.pos.z, d = Math.hypot(dx, dz);
-      if (d < 0.8 && d > 0.001) { const push = (0.8 - d) * 0.5 * Math.min(1, dt * 6); a.pos.x += dx / d * push; a.pos.z += dz / d * push; }
-    }
+    swarmApart(monsters, dt);
   } else monsters.forEach((m, i) => m.follow(dt, net.snap && net.snap.l[i]));
 }
 function update(dt) {

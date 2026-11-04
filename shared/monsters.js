@@ -137,6 +137,14 @@ export class MonsterSim {
   snapshot() { return [+this.pos.x.toFixed(2), +this.pos.z.toFixed(2), +this.yaw.toFixed(2), +this.speed.toFixed(1), Math.max(0, MON_STATES.indexOf(this.state))]; }
 }
 
+// monsters swarming a beacon bump into each other and shuffle apart (a gentle push, so they jostle round the can)
+export function swarmApart(monsters, dt) {
+  for (const a of monsters) if (a.lureId !== null) for (const b of monsters) if (b !== a && b.lureId !== null) {
+    const dx = a.pos.x - b.pos.x, dz = a.pos.z - b.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.8 && d > 0.001) { const push = (0.8 - d) * 0.5 * Math.min(1, dt * 6); a.pos.x += dx / d * push; a.pos.z += dz / d * push; }
+  }
+}
+
 // where each monster of a floor starts: every kind with a count for this level, in config order, at seeded spots (the same everywhere)
 export function spawnPlan(W, monCfg, level) {
   const rnd = rng32(1999), out = [];
