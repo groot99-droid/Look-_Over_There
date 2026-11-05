@@ -1,6 +1,6 @@
 // Bot players for tuning: N real game clients (headless browsers, the game's own code, no rendering) play whole rounds in one room on a local server,
 // and the run prints a report: time per floor, downs, revives, stuck moments, and each bot's place, time and the alarm left when it got out.
-//   node tools/bots.mjs [bots=4] [--timeout=900] [--json=file]
+//   node tools/bots.mjs [bots=4] [--timeout=900] [--json=file] [--start=L1]
 // The bots work as a team (runner, bait, scout) and plan with path-time maths: see tools/bot_brain.mjs. They know where every monster, fuse, switch and
 // door is (they read the game's state); they do not hide behind doors or read the monsters' minds, so "downs" is still a rough measure of a floor.
 // Needs Playwright + Chromium and internet for three.js from unpkg. Run locally; it is slow in software rendering.
@@ -28,6 +28,12 @@ try {
     pages.push(page);
   }
   await Promise.all(pages.map(p => p.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000})));
+  const START = opt("start", "");                                                                  // --start=L1: skip the floors below it (each bot is taken up its stair doors as soon as the round begins)
+  if (START) {
+    await Promise.all(pages.map(p => p.waitForFunction(() => window.__game.net.phase === "playing" && !window.__game.loading, null, {timeout: 120000})));
+    await Promise.all(pages.map(p => p.evaluate(async want => { const g = window.__game; for (let i = 0; i < 6 && g.S.id !== want; i++) { const d = g.upDoor(); if (!d) break; const l = d.d.link; await g.loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); } }, START)));
+    console.log(`bots start on ${START}`);
+  }
   await Promise.all(pages.map((p, i) => p.evaluate(`(${brain.toString()})(${i}, ${N}, ${JSON.stringify({nogun: args.includes("--nogun"), nocloak: args.includes("--nocloak"), nobeacons: args.includes("--nobeacons"), omniscient: args.includes("--omniscient"), legacyItems: args.includes("--legacy-items"), nocams: args.includes("--nocams")})})`)));
   const relay = setInterval(async () => {                                          // the team's blackboard: every bot's position, role and claim, shared with all of them
     try { const pubs = (await Promise.all(pages.map(p => p.evaluate(() => (window.__bot && window.__bot.pub) || null)))).filter(Boolean); await Promise.all(pages.map(p => p.evaluate(bb => { window.__bb = bb; }, pubs))); } catch (e) {}
