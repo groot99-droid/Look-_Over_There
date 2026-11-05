@@ -1,0 +1,9 @@
+{
+  "name": "look-over-there-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Serves the game and relays players, monsters and doors between everyone in a room.",
+  "scripts": { "start": "node server.js", "test": "node --test --test-force-exit --test-timeout=15000" },
+  "dependencies": { "ws": "8.18.0" }
+}

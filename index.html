@@ -10,9 +10,86 @@
   #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#8a8a7a;font:14px/1.4 system-ui,sans-serif;letter-spacing:.08em;z-index:5;transition:opacity .6s}
   #fear{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 35%,rgba(120,0,0,.85) 100%);z-index:2}
   #fade{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;z-index:3;transition:opacity .35s}
+  #lobby{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#050505;color:#b8b8a8;font:15px/1.5 system-ui,sans-serif;z-index:6}
+  #lobby form{display:flex;flex-direction:column;gap:12px;width:min(340px,86vw)}
+  #lobby h1{margin:0 0 6px;font:700 28px/1 Georgia,serif;letter-spacing:.18em;color:#cfcfbf}
+  #lobby input,#lobby button{font:inherit;padding:10px 12px;border:1px solid #3a3a32;background:#111;color:#e6e6d6;border-radius:3px}
+  #lobby button{cursor:pointer;letter-spacing:.06em}
+  #lobby button.go{background:#2b2a1c;border-color:#6d6a3d}
+  #lobby small{color:#7a7a6a}
+  #l-err{color:#d46a5a;min-height:1.4em}
+  #hud{position:fixed;left:12px;top:10px;color:#9a9a8a;font:12px/1.5 system-ui,sans-serif;letter-spacing:.06em;z-index:1;pointer-events:none;text-shadow:0 0 4px #000}
+  #kp{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:7;font-family:system-ui,sans-serif;color:#d8d8c4}
+  #kp-box{background:#15161a;border:1px solid #3a3a32;border-radius:6px;padding:18px 20px;width:min(300px,86vw);display:flex;flex-direction:column;gap:10px;text-align:center}
+  #kp-title{letter-spacing:.2em;font-weight:700;color:#e0a040}
+  #kp-code{font:700 30px/1.2 ui-monospace,monospace;letter-spacing:.25em;background:#0a1410;color:#7dff9a;border-radius:4px;padding:8px 0}
+  #kp-found{font-size:13px;color:#a8a898}
+  #kp-note{min-height:1.3em;color:#e0705a;font-weight:600}
+  #kp-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  #kp-pad button,#kp-close{font:700 18px system-ui,sans-serif;padding:12px 0;border:1px solid #3a3a32;background:#202127;color:#e6e6d6;border-radius:4px;cursor:pointer}
+  #kp-pad button:active{background:#2e3038}
+  #kp-close{font-size:13px;padding:8px 0;color:#9a9a8a}
+  #prompt{position:fixed;left:50%;bottom:22%;transform:translateX(-50%);color:#e6e6d0;font:600 15px/1.4 system-ui,sans-serif;letter-spacing:.05em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;text-align:center}
+  #fusehud{position:fixed;right:14px;top:10px;color:#e0c060;font:700 12px/1.5 system-ui,sans-serif;letter-spacing:.1em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 4px #000}
+  #help{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);z-index:6;color:#d8d8c4;font:500 14px/1.7 system-ui,sans-serif}
+  #help.on{display:flex}
+  #help .card{max-width:760px;width:92%;padding:22px 26px;border:1px solid #444;background:#0b0b0b}
+  #help h2{margin:0 0 10px;letter-spacing:.2em;font-size:15px}
+  #help .cols{display:grid;grid-template-columns:1fr 1fr;gap:6px 28px}
+  #help b{color:#fff;display:inline-block;min-width:92px}
+  #help small{display:block;margin-top:12px;opacity:.6}
+  #toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.06em;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s;text-shadow:0 0 6px #000;text-align:center}
+  #scream{position:fixed;left:50%;top:50%;z-index:2;pointer-events:none;display:none;color:#e24a3c;font:700 13px/1 system-ui,sans-serif;text-shadow:0 0 6px #000;transform:translate(-50%,-50%);text-align:center;animation:pulse .7s infinite alternate}
+  #scream i{display:block;font-style:normal;font-size:30px;line-height:1}
+  @keyframes pulse{from{opacity:.55}to{opacity:1}}
+  #revive{position:fixed;left:50%;bottom:18%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.05em;z-index:3;pointer-events:none;display:none;text-align:center;text-shadow:0 0 6px #000}
+  #revive b{display:block;margin:6px auto 0;height:5px;width:160px;background:#2a2a24;border-radius:3px;overflow:hidden}
+  #revive b span{display:block;height:100%;width:0;background:#9ccc65}
+  #l-chars{display:flex;gap:6px;justify-content:space-between}
+  #l-chars .ch{flex:1;padding:4px 2px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;letter-spacing:0}
+  #l-chars .ch img{width:100%;max-width:56px;height:auto;border-radius:2px}
+  #l-chars .ch.on{border-color:#e0a040;background:#2b2a1c}
+  #l-wait{display:none;flex-direction:column;gap:12px;width:min(340px,86vw)}
+  #l-players div{padding:5px 0;border-bottom:1px solid #22221c}
+  #l-players span{float:right;color:#7a7a6a}
+  #ammo{position:fixed;right:16px;bottom:18px;color:#6fe0ff;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 5px #000}
+  #hp{position:fixed;left:16px;bottom:18px;width:150px;height:8px;background:rgba(0,0,0,.5);z-index:1;pointer-events:none;box-shadow:0 0 4px #000}
+  #hp i{display:block;height:100%;width:100%;background:#c8504a}
+  #hp b{position:absolute;left:0;top:-15px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:#e8c8c0;text-shadow:0 0 4px #000}
+  #cloak{position:fixed;left:16px;bottom:44px;width:150px;height:6px;background:rgba(0,0,0,.5);z-index:1;pointer-events:none;box-shadow:0 0 4px #000;display:none}
+  #cloak i{display:block;height:100%;width:100%;background:#40d8ff}
+  #cloak b{position:absolute;left:0;top:-14px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:#9fe8ff;text-shadow:0 0 4px #000}
+  #cloakfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;box-shadow:inset 0 0 110px 25px rgba(64,216,255,.5);transition:opacity .25s}
+  #beacons{position:fixed;right:16px;bottom:40px;color:#ffb060;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 5px #000}
+  #camhud{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);font:700 13px/1.3 system-ui,sans-serif;letter-spacing:.16em;color:#bfe8d4;z-index:2;pointer-events:none;display:none;text-shadow:0 0 5px #000;text-align:center}
+  #camhud.hot{color:#ff6a5a}
+  #buzz{position:fixed;left:50%;top:76px;transform:translateX(-50%);font:700 13px/1 system-ui,sans-serif;letter-spacing:.14em;color:#ff7a6a;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000}
+  #l-snd{display:flex;gap:10px;align-items:center;font-size:11px;letter-spacing:.1em;color:#9a9a86}
+  #l-snd input{flex:1;accent-color:#e0a040;min-width:0}
+  #hurt{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:rgba(200,20,10,.38)}
+  #stam{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);width:120px;height:4px;background:rgba(0,0,0,.45);z-index:1;pointer-events:none;opacity:0;transition:opacity .3s}
+  #stam i{display:block;height:100%;width:100%;background:#cdb}
+  #alarm{position:fixed;left:50%;top:44px;transform:translateX(-50%);font:700 15px/1 system-ui,sans-serif;letter-spacing:.2em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;color:#ff5040}
+  #alarm.out{color:#9ccc65}
+  #redpulse{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;box-shadow:inset 0 0 120px 30px rgba(220,30,20,.75)}
+  #results{position:fixed;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);color:#d8d8c4;font:14px/1.5 system-ui,sans-serif}
+  #results div.card{width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
+  #results h1{margin:0;font:700 22px/1 Georgia,serif;letter-spacing:.2em;text-align:center}
+  #results table{width:100%;border-collapse:collapse}
+  #results td{padding:6px 4px;border-bottom:1px solid #22221c}
+  #results td:last-child{text-align:right}
+  #results tr.me td{color:#e0a040;font-weight:700}
+  #results #r-best{text-align:center;color:#9ccc65;letter-spacing:.08em}
   #gamemount{position:fixed;inset:0;display:none;z-index:2;background:#000}
   #gamemount canvas{position:absolute;inset:0;width:100%;height:100%}
   #gamefade{position:fixed;inset:0;pointer-events:none;opacity:1;background:#000;z-index:6;transition:opacity .6s}
+  #stunfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:radial-gradient(circle,rgba(160,210,255,0) 20%,rgba(160,210,255,.85) 100%)}
+  #held{position:fixed;left:50%;bottom:4.5%;transform:translateX(-50%);color:#d8d8c4;font:600 13px/1.4 system-ui,sans-serif;letter-spacing:.08em;text-align:center;z-index:3;pointer-events:none;text-shadow:0 1px 3px #000;display:none}
+  #held b{display:block;font-size:15px;letter-spacing:.2em;color:#fff}
+  #wheel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:none;gap:14px;z-index:5;pointer-events:none}
+  #wheel span{padding:12px 18px;border:2px solid #555;background:rgba(0,0,0,.72);color:#aaa;font:700 15px system-ui,sans-serif;letter-spacing:.14em}
+  #wheel span.on{border-color:#9ccc65;color:#fff;transform:scale(1.15)}
+  #reticle{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid rgba(255,255,255,.7);border-radius:50%;z-index:3;pointer-events:none;display:none}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
@@ -20,15 +97,57 @@
 <div id="load">LOADING</div>
 <div id="fear"></div>
 <div id="fade"></div>
+<div id="stunfx"></div><div id="held"></div><div id="wheel"></div><div id="reticle"></div>
 <div id="gamemount"></div>
 <div id="gamefade" style="opacity:0"></div>
 <div id="death">YOU DIED</div>
+<div id="hud"></div>
+<div id="camhud"></div><div id="buzz"></div><div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
+<div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
+<div id="help"><div class="card"><h2>CONTROLS</h2><div class="cols"><div>
+<div><b>WASD</b>move</div><div><b>Mouse</b>look</div><div><b>Space</b>jump</div><div><b>Shift</b>crouch (press again to walk)</div><div><b>R (hold)</b>run, loud</div><div><b>X / F</b>action: doors, fuses, switches, loot (hold to lift a teammate)</div><div><b>Y</b>take out what you carry; tap again to rotate; hold for the wheel (arrows or mouse wheel)</div><div><b>1 2 3</b>ray gun, cloak, beacon</div></div><div>
+<div><b>Left click</b>use what you hold: fire, cloak on/off, roll a beacon</div><div><b>Right click</b>gun: aim. Cloak: short circuit (stuns monsters near you, cloak dead 5 min). Beacon: reverse it (monsters run away, then group up)</div><div><b>Q / E</b>support / combat consumable (none yet)</div><div><b>Tab / M</b>handheld map</div><div><b>N</b>sound on / off</div><div><b>H</b>this list</div></div></div>
+<small>Controller: left stick move · right stick look · A jump · left-stick click crouch (click again to walk) · right-stick click run (hold) · X action · Y hold / rotate (hold for the wheel) · RT use what you hold · LT aim (gun) or secondary (cloak, beacon) · LB / RB support / combat consumables · D-pad up or View: map</small></div></div>
+<div id="toast"></div>
+<div id="prompt"></div>
+<div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
+<div id="fusehud"></div><div id="ammo"></div>
+<div id="scream"><i>▲</i><span></span></div>
+<div id="revive"><span></span><b><span></span></b></div>
+<div id="lobby"><form id="l-form" autocomplete="off">
+  <h1>LOOK OVER THERE</h1>
+  <div id="l-chars"></div>
+  <div id="l-snd"><span>MUSIC</span><input id="l-vm" type="range" min="0" max="1" step="0.05"><span>EFFECTS</span><input id="l-vs" type="range" min="0" max="1" step="0.05"></div>
+  <input id="l-name" placeholder="Your name" maxlength="16">
+  <input id="l-room" placeholder="Room code (share it with friends)" maxlength="8">
+  <button class="go" id="l-join" type="submit">JOIN ROOM</button>
+  <button id="l-solo" type="button">PLAY SOLO</button>
+  <div id="l-err"></div>
+  <small>Everyone in a room shares the building and its monsters. Doors you open stay open until someone closes them.</small>
+</form>
+<div id="l-wait"><h1>WAITING ROOM</h1><div id="l-roomcode"></div><div id="l-players"></div>
+  <button class="go" id="l-ready" type="button">READY</button><div id="l-count"></div>
+  <small>The round starts a few seconds after everyone is ready. Anyone who joins later drops straight in.</small></div></div>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from "three";
 import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
 import {DRACOLoader} from "three/addons/loaders/DRACOLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} from "./shared/fuses.js";
+import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
+import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
+import {LOOT, MAX_ROUNDS, GUN_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, takeBeacon, roundsAfterPack} from "./shared/loot.js";
+import {newCloak, toggle as cloakToggle, tick as cloakTick, SHORT_M, shortCircuit as cloakShort, broken as cloakBroken, STUN_S} from "./shared/cloak.js";
+import {LURE_S, SAFE_M, ROLL_M, lures as lureCovers, ringSpot, rollEnd, reverse as beaconReverse, REVERSE_S} from "./shared/beacon.js";
+import {ALARM_MS, fmtTime} from "./shared/finish.js";
+import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as hpRevived, downed as hpDowned, mayHit} from "./shared/health.js";
+import {pick as pickSpawn} from "./shared/spawn.js";
+import {createAudio} from "./audio/engine.js";
+import {near as nearW, buildNav as buildNavW, cellOf, cellXZ, nearestWalk, astar, segClear as segClearW, rayClear as rayClearW, mainRegion as mainRegionW, pickSpots as pickSpotsW, indexBoxes, rng32, NAV, NX0, NZ0, NW, NH} from "./shared/world.js";
+import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW, swarmApart, stunNear} from "./shared/monsters.js";
+import {levelMix, stepInterval, stepGain} from "./shared/mix.js";
+import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
 const MON_URL = "world/monsters.json";
 // one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
@@ -37,7 +156,11 @@ const SCENES = {
   L3: {glbs: ["world/L3.glb"], floor: 6.4}, L4: {glbs: ["world/L4.glb", "world/Exterior.glb"], floor: 9.6},
 };
 const $ = id => document.getElementById(id);
+// sound (audio/engine.js): built from the author's sound library at deploy time; silent if the files are missing, and off for bots
+const AUD = createAudio({enabled: !new URLSearchParams(location.search).has("bot")});
+{ const un = () => AUD.unlock().then(ok => { if (ok) for (const ev of ["pointerdown", "keydown", "touchstart"]) removeEventListener(ev, un, true); }); for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, un, true); }
 
+if (new URLSearchParams(location.search).has("sound")) import("./audio/audition.js").then(m => m.openAudition(AUD));          // ?sound=1: the audition page over the lobby
 const renderer = new THREE.WebGLRenderer({antialias: true, stencil: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -58,27 +181,37 @@ const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
 const S = {id: null, floor: 0, root: null, boxes: [], grid: new Map(), doors: [], cams: [], nav: null, mapLayer: null, markers: []};
 const boxes = S.boxes, doors = S.doors;                       // live arrays: emptied and refilled on every scene change
 const qy = a => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
-const CELL = 8, key = (i, k) => i + "," + k;
-function near(x, z, r) {
-  const out = new Set();
-  for (let i = Math.floor((x - r) / CELL); i <= Math.floor((x + r) / CELL); i++)
-    for (let k = Math.floor((z - r) / CELL); k <= Math.floor((z + r) / CELL); k++) (S.grid.get(key(i, k)) || []).forEach(id => out.add(id));
-  return out;
-}
+const near = (x, z, r) => nearW(S, x, z, r);                    // the shared world rules (shared/world.js) over this scene
 let pendingLink = null, loading = false;
 function openDoor(dr, byPlayer) {
   if (dr.target !== 0) return;
   if (dr.link && !byPlayer) return;                           // monsters do not use the stair doors
-  dr.target = 1;
-  if (dr.link && (dr.link.game || S.id === "T")) pendingLink = dr;              // the game gates still lead into a walkable passage
-  else if (dr.link) addPortal(dr, P.p.toArray());                              // a stair door opens onto its hallway
+  if (dr.link && dr.link.game && net.on) { toast("That door does not open in a room"); return; }          // the game gates are for solo play
+  if (dr.link && isLocked(dr)) { doorLocked(); return; }
+  dr.target = 1; dr.at = performance.now(); AUD.play(dr.link ? "door_open" : "door_creak", {pos: [dr.cx, dr.cy + 1, dr.cz], loud: true}); if (dr.link && !net.on && (dr.link.game || S.id === "T")) pendingLink = dr;                  // the game gates lead into a walkable passage (solo only)
+  else if (dr.link) addPortal(dr, P.p.toArray());                                                  // a stair door opens onto its hallway: step into the doorway to cross
+  else if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 1});
+}
+// X / E on an open door shuts it, unless someone is standing in the doorway. Monsters open doors (0.5 s each) but never shut them; the stair doors never shut.
+function doorBusy(dr) {
+  const inside = (x, y, z) => Math.abs(y - dr.cy) < 1.8 && Math.hypot(x - dr.cx, z - dr.cz) < 1.1;
+  if (!dead && inside(P.p.x, P.p.y, P.p.z)) return true;
+  for (const p of net.peers.values()) if (p.scene === S.id && inside(p.tx, p.ty, p.tz)) return true;
+  return monsters.some(m => inside(m.pos.x, m.fy, m.pos.z));
+}
+function closeDoor(dr) {
+  if (dr.target !== 1 || dr.link || doorBusy(dr)) return false;
+  dr.target = 0; dr.at = performance.now(); AUD.play("door_close", {pos: [dr.cx, dr.cy + 1, dr.cz], loud: true});
+  if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 0});
+  return true;
 }
 function updateDoors(dt) {
   for (const dr of doors) {
     if (dr.p === dr.target) continue;
-    dr.p = Math.min(dr.target, dr.p + dt * 2.8);
+    dr.p = dr.target > dr.p ? Math.min(dr.target, dr.p + dt * 2.8) : Math.max(dr.target, dr.p - dt * 2.8);
     if (dr.leaf) { const e = dr.p * dr.p * (3 - 2 * dr.p); dr.leaf.quaternion.slerpQuaternions(dr.qClosed, dr.qOpen, e); }
     dr.box.off = dr.p > 0.5;
+    if (dr.target === 0 && dr.p > 0 && dr.box.off && doorBusy(dr)) { dr.target = 1; dr.at = performance.now(); if (net.on) net.send({t: "door", scene: S.id, name: dr.d.name, open: 1}); }   // somebody stepped into a closing doorway
   }
   if (pendingLink && pendingLink.p > 0.7 && !loading) { const l = pendingLink; pendingLink = null; goLink(l); }
 }
@@ -183,18 +316,19 @@ function crossPortals() {                                   // stepping into an 
 }
 
 async function loadScene(id, arrival) {
-  loading = true; pendingLink = null; devOn.v = false;
+  if (!net.on && S.id && GATED.includes(S.id) && FZ.st[S.id]) { const n = fuseReduce(FZ.st[S.id], net.id, {a: "release"}); if (n) FZ.st[S.id] = n; }     // solo: a fuse you carry off the floor goes back (a room's server does this)
+  loading = true; pendingLink = null; devOn.v = false; net.snap = null; closeKeypad();
   const fade = $("fade"); fade.style.opacity = 1; await new Promise(r => setTimeout(r, 380));
-  clearPortals();
   if (S.root) { scene.remove(S.root); disposeTree(S.root); }
-  monsters.forEach(m => m.dispose()); monsters.length = 0;
+  clearPortals();
+  monsters.forEach(m => m.dispose()); monsters.length = 0; MAPSEEN.clear(); clearBeacons();
   const passage = arrival && arrival.passage ? buildPassage(arrival.passage) : null;
   const cfg = passage ? {glbs: [], floor: 0} : SCENES[id], doc = passage ? {colliders: passage.cols, doors: passage.doors, cameras: [], markers: []} : await (await fetch(`world/${id}.json`)).json();
   const root = passage ? passage.root : new THREE.Group();
   const gl = await Promise.all(cfg.glbs.map(loadGlb));
+  if (passage) id = "T";
   for (const g of gl) { g.scene.traverse(o => { if (o.isMesh) { o.matrixAutoUpdate = false; o.updateMatrix(); } }); root.add(g.scene); }
   scene.add(root);
-  if (passage) id = "T";
   Object.assign(S, {id, floor: cfg.floor, root, grid: new Map(), cams: doc.cameras || [], mapLayer: null, markers: doc.markers || [], colliders: doc.colliders});
   boxes.length = 0; doors.length = 0;
   for (const c of doc.colliders) boxes.push({n: c.min, x: c.max});
@@ -205,20 +339,25 @@ async function loadScene(id, arrival) {
                  x: [Math.max(hx, hx + dir[0] * w) + tx, hy + (d.height || 2.1), Math.max(hz, hz + dir[1] * w) + tz], door: true, off: false, link: !!d.link};
     const leaf = d._leaf || root.getObjectByName(d.name);
     const sign = d.swing_deg < 0 ? -1 : 1;
-    const dr = {d, box, leaf, p: 0, target: 0, link: d.link || null, cx: hx + dir[0] * w / 2, cz: hz + dir[1] * w / 2, cy: hy,
+    const dr = {d, box, leaf, p: 0, target: 0, link: d.link || null, cx: hx + dir[0] * w / 2, cz: hz + dir[1] * w / 2, cy: hy, dir, th,
                 qClosed: qy(th), qOpen: qy(th + sign * 95 * Math.PI / 180)};
     if (leaf) { leaf.matrixAutoUpdate = true; leaf.quaternion.copy(dr.qClosed); leaf.updateMatrix(); }
     boxes.push(box); doors.push(dr);
   }
-  boxes.forEach((b, i) => {
-    for (let a = Math.floor(b.n[0] / CELL); a <= Math.floor(b.x[0] / CELL); a++)
-      for (let k = Math.floor(b.n[2] / CELL); k <= Math.floor(b.x[2] / CELL); k++) {
-        const kk = key(a, k); if (!S.grid.has(kk)) S.grid.set(kk, []); S.grid.get(kk).push(i);
-      }
-  });
+  S.shutter = null;
+  if (id === "L4") { S.shutter = {n: [-2.7, 9.6, 27.0], x: [2.7, 13.0, 27.5], off: POWER.on}; boxes.push(S.shutter); }       // the store's glass doors: shut until the power is on (the opening has no collider in the model)
+  indexBoxes(S);
   S.nav = buildNav(cfg.floor);
   spawnMonsters();
   if (passage) arrival = {pos: [0, 0, -1.8], face: [0, -1], door: "T_entry"};
+  if (!net.on && GATED.includes(id)) FZ.st[id] ||= newFloor();
+  if (!net.on && SWITCH_FLOORS.includes(id)) SW.st[id] ||= newSwitches();
+  if (!net.on && KEYPAD_FLOORS.includes(id)) { KP.local[id] ||= newKeypad(); setKeypad(id, kpView(KP.local[id], Date.now())); }
+  if (net.on) { delete SW.st[id]; delete KP.st[id]; }                                              // in a room the server sends the floor's state on arrival; that first state is not news
+  if (!net.on) LT.st[id] ||= newLoot(id);
+  buildFuseVisuals();
+  buildPowerVisuals();
+  buildLootVisuals();
   if (arrival && arrival.door) {                              // the door you came through stays open behind you
     const dr = doors.find(x => x.d.name === arrival.door);
     if (dr) {
@@ -227,9 +366,11 @@ async function loadScene(id, arrival) {
     }
   }
   if (arrival && arrival.pos) { teleport(arrival.pos); P.yaw = arrival.face ? Math.atan2(-arrival.face[0], -arrival.face[1]) : P.yaw; P.pitch = 0; }
-  else { teleport(randomSpawn(id)); P.yaw = Math.random() * Math.PI * 2; }
-  armedFall = true; loading = false;
+  else { teleport(spawnFor(id)); P.yaw = Math.random() * Math.PI * 2; }                      // everyone gets their own spot, leaning toward what the floor still needs
+  S.arrive = [P.p.x, S.floor, P.p.z];
+  armedFall = true; loading = false; net.t = 0;                 // tell the room which floor you are on right away
   fade.style.opacity = 0;
+  AUD.clearMonsters(); AUD.setLevel(id);
 }
 function goLink(dr) {
   const l = dr.link;
@@ -285,7 +426,8 @@ const levelOfY = () => S.id;
 
 // ---------------------------------------------------------------- player
 const R = 0.28, H = 1.7, EYE = 1.55, STEP = 0.46;
-const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false, run: false};
+const WALK_SPEED = 4.0, RUN_SPEED = 7.5, CROUCH_SPEED = 2.2, RUN_S = 4, RECOVER_S = 6, RUN_RESUME = 0.3;       // m/s; run for RUN_S seconds, then a recovery: you can run again once the bar is back to RUN_RESUME
+const P = {p: new THREE.Vector3(), v: new THREE.Vector3(), yaw: 0, pitch: 0, ground: false, crouch: false, eye: EYE, moving: false, running: false, stam: 1, tired: false, shotT: 0};
 const overlap = (b, p) => !b.off && p.x + R > b.n[0] && p.x - R < b.x[0] && p.z + R > b.n[2] && p.z - R < b.x[2] && p.y + H > b.n[1] && p.y < b.x[1];
 function collide(p) { for (const id of near(p.x, p.z, 1.5)) if (overlap(boxes[id], p)) return boxes[id]; return null; }
 function move(dx, dy, dz) {
@@ -309,55 +451,12 @@ const teleport = pos => { P.p.set(pos[0], pos[1] + 0.02, pos[2]); P.v.set(0, 0, 
 let armedFall = true;
 function checkFall() { if (P.p.y < S.floor - 14 && !loading) { teleport(randomSpawn(S.id)); P.pitch = 0; } }
 
-// ---------------------------------------------------------------- navigation grid per floor (monsters walk the same colliders the player does; doors are passable for them)
-const NAV = 0.5, NX0 = -27, NZ0 = -24, NW = Math.ceil(54 / NAV), NH = Math.ceil(54 / NAV);
-function buildNav(fy) {
-  const walk = new Uint8Array(NW * NH);
-  for (let j = 0; j < NH; j++) for (let i = 0; i < NW; i++) {
-    const x = NX0 + (i + .5) * NAV, z = NZ0 + (j + .5) * NAV;
-    let ground = false, blocked = false;
-    for (const id of near(x, z, 0.6)) {
-      const b = boxes[id]; if (b.door && !b.link) continue;
-      if (x >= b.n[0] && x <= b.x[0] && z >= b.n[2] && z <= b.x[2] && b.x[1] >= fy - 0.15 && b.x[1] <= fy + 0.15 && b.n[1] < fy) ground = true;
-      if (x + 0.4 > b.n[0] && x - 0.4 < b.x[0] && z + 0.4 > b.n[2] && z - 0.4 < b.x[2] && b.n[1] < fy + 1.7 && b.x[1] > fy + 0.35) { blocked = true; break; }
-    }
-    walk[j * NW + i] = ground && !blocked ? 1 : 0;
-  }
-  return walk;
-}
-const cellOf = (x, z) => { const i = Math.floor((x - NX0) / NAV), j = Math.floor((z - NZ0) / NAV); return (i >= 0 && j >= 0 && i < NW && j < NH) ? j * NW + i : -1; };
-const cellXZ = c => [NX0 + ((c % NW) + .5) * NAV, NZ0 + (Math.floor(c / NW) + .5) * NAV];
-function nearestWalk(walk, x, z) {
-  let c = cellOf(x, z); if (c >= 0 && walk[c]) return c;
-  for (let r = 1; r < 8; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
-    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
-    const i = Math.floor((x - NX0) / NAV) + di, j = Math.floor((z - NZ0) / NAV) + dj;
-    if (i >= 0 && j >= 0 && i < NW && j < NH && walk[j * NW + i]) return j * NW + i;
-  }
-  return -1;
-}
-function astar(walk, a, b) {
-  if (a < 0 || b < 0) return null;
-  const open = [[0, a]], came = new Map([[a, -1]]), g = new Map([[a, 0]]);
-  const [bx, bz] = cellXZ(b);
-  const hx = c => { const [x, z] = cellXZ(c); return Math.hypot(x - bx, z - bz); };
-  let it = 0;
-  while (open.length && it++ < 9000) {
-    let mi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[mi][0]) mi = k;
-    const [, c] = open.splice(mi, 1)[0];
-    if (c === b) { const path = []; for (let q = c; q !== -1; q = came.get(q)) path.push(q); return path.reverse().map(cellXZ); }
-    const ci = c % NW, cj = Math.floor(c / NW);
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-      if (!di && !dj) continue;
-      const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= NW || j >= NH) continue;
-      const n = j * NW + i; if (!walk[n]) continue;
-      if (di && dj && (!walk[cj * NW + i] || !walk[j * NW + ci])) continue;
-      const ng = g.get(c) + (di && dj ? 1.414 : 1) * NAV;
-      if (!g.has(n) || ng < g.get(n)) { g.set(n, ng); came.set(n, c); open.push([ng + hx(n), n]); }
-    }
-  }
-  return null;
-}
+// ---------------------------------------------------------------- navigation: the grid, path-finding and rays are shared with the server (shared/world.js)
+const buildNav = fy => buildNavW(S, fy);
+const segClear = (ax, ay, az, bx, by, bz, skip = 1.0) => segClearW(S, ax, ay, az, bx, by, bz, skip);
+const rayClear = (o, d, t) => rayClearW(S, o, d, t);
+const mainRegion = () => mainRegionW(S);
+const pickSpots = (level, count, rnd, avoid = [], minGap = 9) => pickSpotsW(S, count, rnd, avoid, minGap);
 
 // ---------------------------------------------------------------- monsters: one kind per floor (config in world/monsters.json)
 const monCfg = await fetch(MON_URL).then(r => r.ok ? r.json() : null).catch(() => null) ||
@@ -379,24 +478,11 @@ function placeholderMonster(h) {
   return g;
 }
 const monsters = [];
-function rng32(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
-function pickSpots(level, count, rnd, avoid = [], minGap = 9) {
-  const walk = S.nav, out = []; let tries = 0;
-  while (out.length < count && tries++ < 6000) {
-    const c = Math.floor(rnd() * NW * NH); if (!walk[c]) continue;
-    const [x, z] = cellXZ(c);
-    if (doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4)) continue;
-    if (out.some(o => Math.hypot(x - o[0], z - o[1]) < minGap)) continue;
-    if (avoid.some(o => Math.hypot(x - o[0], z - o[1]) < 16)) continue;
-    out.push([x, z]);
-  }
-  return out;
-}
-class Monster {
+// what the shared monster rules (shared/monsters.js) need from this page: the scene's world, the clock, randomness, and what opening a door does here
+const MENV = {get W() { return S; }, now: () => performance.now() / 1000, rnd: Math.random, openDoor: dr => openDoor(dr)};
+class Monster extends MonsterSim {                                           // the rules from shared/monsters.js, plus a model and its animation
   constructor(cfg, level, x, z) {
-    this.cfg = cfg; this.level = level; this.fy = S.floor; this.walk = S.nav;
-    this.home = [x, z]; this.pos = new THREE.Vector3(x, this.fy, z); this.yaw = Math.random() * 6.28;
-    this.state = "patrol"; this.path = []; this.repath = 0; this.target = null; this.lost = 0; this.wait = 0; this.speed = 0; this.doorT = 0; this.last = null;
+    super(cfg, level, x, z, MENV);
     const asset = monsterAssets[cfg.name];
     if (asset) {
       this.obj = SkeletonUtils.clone(asset.scene);
@@ -424,102 +510,66 @@ class Monster {
     const n = this.clips[name]; n.reset(); n.setEffectiveTimeScale(name === "idle" && this.idleSlow ? 0.06 : 1); n.fadeIn(0.25).play();
     if (this.playing) this.playing.fadeOut(0.25); this.playing = n;
   }
-  onFloor() { return Math.abs(P.p.y - this.fy) < 1.6; }
-  los() {
-    const ex = this.pos.x, ez = this.pos.z, ey = this.fy + 1.6, px = P.p.x, pz = P.p.z, py = P.p.y + 1.4;
-    const d = Math.hypot(px - ex, pz - ez), steps = Math.ceil(d / 0.3);
-    for (let s = 1; s < steps; s++) {
-      const t = s / steps, x = ex + (px - ex) * t, z = ez + (pz - ez) * t, y = ey + (py - ey) * t;
-      for (const id of near(x, z, 0.2)) { const b = boxes[id]; if (!b.off && x > b.n[0] && x < b.x[0] && z > b.n[2] && z < b.x[2] && y > b.n[1] && y < b.x[1] && b.x[1] - b.n[1] > 0.6) return false; }
-    }
-    return true;
+  update(dt, targets, lureList = []) { const r = super.update(dt, targets, lureList); this.visual(dt); return r; }
+  // On every other client in the scene the monster only follows the host's snapshot: s = [x, z, yaw, speed, stateIndex].
+  follow(dt, s) {
+    this.glitchT = Math.max(0, this.glitchT - dt); this.immuneT = Math.max(0, this.immuneT - dt);
+    if (s) {
+      const k = Math.min(1, dt * 12), dx = s[0] - this.pos.x, dz = s[1] - this.pos.z;
+      if (Math.hypot(dx, dz) > 8) { this.pos.x = s[0]; this.pos.z = s[1]; } else { this.pos.x += dx * k; this.pos.z += dz * k; }
+      let da = s[2] - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); this.yaw += da * k;
+      this.speed = s[3]; this.state = MON_STATES[s[4]] || "patrol";
+    } else this.speed = 0;
+    this.visual(dt);
   }
-  sees() {
-    if (!this.onFloor()) return false;
-    const dx = P.p.x - this.pos.x, dz = P.p.z - this.pos.z, d = Math.hypot(dx, dz);
-    if (d > this.cfg.sight * (P.crouch ? 0.5 : 1)) return false;                  // crouching halves how far they can see you
-    const fwd = [-Math.sin(this.yaw), -Math.cos(this.yaw)];
-    const ang = Math.acos(Math.max(-1, Math.min(1, (fwd[0] * dx + fwd[1] * dz) / (d || 1)))) * 180 / Math.PI;
-    if (d > 2.5 && ang > this.cfg.fov / 2) return false;
-    return this.los();
-  }
-  goTo(x, z) {
-    const a = nearestWalk(this.walk, this.pos.x, this.pos.z), b = nearestWalk(this.walk, x, z);
-    this.path = astar(this.walk, a, b) || []; this.path.shift(); this.target = [x, z];
-  }
-  closedDoorAhead(dirx, dirz) {
-    for (const dr of doors) {
-      if (dr.target || Math.abs(dr.cy - this.fy) > 1.5) continue;
-      const dx = dr.cx - this.pos.x, dz = dr.cz - this.pos.z, d = Math.hypot(dx, dz);
-      if (d < 1.4 && (dx * dirx + dz * dirz) / (d || 1) > 0.2) return dr;
-    }
-    return null;
-  }
-  update(dt, noiseAt) {
-    const c = this.cfg, seen = this.sees();
-    const dist = Math.hypot(P.p.x - this.pos.x, P.p.z - this.pos.z);
-    if (seen) { this.state = "chase"; this.lost = 0; this.last = [P.p.x, P.p.z]; }
-    else if (this.state === "chase") { this.last = this.last || [P.p.x, P.p.z]; this.lost += dt; if (this.lost > 4.5) { this.state = "search"; this.lost = 0; this.goTo(...this.last); } }
-    else if (this.state === "search") { this.lost += dt; if (!this.path.length && this.lost > 7) { this.state = "patrol"; this.target = null; } }
-    if (noiseAt && this.onFloor() && this.state !== "chase" && dist < c.hear * (P.run ? 1 : 0.55)) { this.state = "search"; this.lost = 0; this.last = noiseAt; this.goTo(...noiseAt); }
-    this.repath -= dt;
-    let speed = c.patrol;
-    if (this.state === "chase") {
-      speed = c.chase;
-      if (this.repath <= 0) { this.goTo(P.p.x, P.p.z); this.repath = 0.35; }
-    } else if (this.state === "search") speed = c.alert;
-    else {
-      if (this.wait > 0) { this.wait -= dt; speed = 0; }
-      else if (!this.path.length) {
-        const spots = pickSpots(this.level, 1, Math.random);
-        if (spots.length) this.goTo(spots[0][0], spots[0][1]);
-        this.wait = 0.6 + Math.random() * 2.5;
-      }
-    }
-    this.speed = 0;
-    if (this.path.length && speed > 0) {
-      const [tx, tz] = this.path[0], dx = tx - this.pos.x, dz = tz - this.pos.z, dd = Math.hypot(dx, dz);
-      const door = this.closedDoorAhead(dx / (dd || 1), dz / (dd || 1));
-      if (door) { this.doorT += dt; if (this.doorT > 0.5) { openDoor(door); this.doorT = 0; } }       // they have to open doors too
-      else {
-        this.doorT = 0;
-        if (dd < 0.25) this.path.shift();
-        else {
-          const want = Math.atan2(-dx, -dz); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
-          this.yaw += Math.sign(da) * Math.min(Math.abs(da), (this.state === "chase" ? 7 : 3.5) * dt);
-          const step = Math.min(dd, speed * dt);
-          this.pos.x += (dx / dd) * step; this.pos.z += (dz / dd) * step; this.speed = speed;
-        }
-      }
-    } else if (this.state === "chase" && dist > 0.1) {
-      const want = Math.atan2(-(P.p.x - this.pos.x), -(P.p.z - this.pos.z)); let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
-      this.yaw += Math.sign(da) * Math.min(Math.abs(da), 7 * dt);
-    }
+  visual(dt) {
+    const c = this.cfg;
     this.root.position.set(this.pos.x, this.fy, this.pos.z); this.root.rotation.y = this.yaw + (this.mixer ? (c.yawOffset ?? Math.PI) : 0);
     if (this.mixer) { this.play(this.speed > c.alert + 0.3 ? "run" : this.speed > 0.1 ? "walk" : "idle"); this.mixer.update(dt); }
     else this.root.position.y = this.fy + Math.sin(performance.now() / 260 + this.home[0]) * 0.02;
-    return {dist, chasing: this.state === "chase" && this.onFloor(), catches: dist < 1.0 && this.onFloor() && this.los()};
+    this.root.visible = this.glitchT <= 0 || Math.floor(this.glitchT * 24) % 2 === 0;                    // flickers out and in while it is deleted
   }
   dispose() { scene.remove(this.root); }
 }
 function spawnMonsters() {
   monsters.forEach(m => m.dispose()); monsters.length = 0;
-  const rnd = rng32(1999);
-  for (const cfg of monCfg.monsters) for (const [level, n] of Object.entries(cfg.perLevel || {})) {
-    if (level !== S.id) continue;
-    for (const [x, z] of pickSpots(level, n, rnd)) monsters.push(new Monster(cfg, level, x, z));
-  }
+  for (const p of spawnPlan(S, monCfg, S.id)) monsters.push(new Monster(p.cfg, S.id, p.x, p.z));             // where they start is seeded in shared/monsters.js: the same everywhere
 }
 
 // ---------------------------------------------------------------- spawning: everyone starts on the pool level; dying puts you back on that floor, somewhere random
+// a spot where a standing player overlaps nothing (the walkable grid counts a closed doorway as floor, but a player cannot stand inside a door)
+const standable = (x, z) => !collide({x, y: S.floor + 0.05, z});
 function randomSpawn(level) {
   const away = monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]);
-  const s = pickSpots(level, 1, Math.random, away)[0] || pickSpots(level, 1, Math.random)[0];
+  const spots = pickSpots(level, 12, Math.random, away, 3), all = spots.length ? spots : pickSpots(level, 12, Math.random, [], 3);
+  const s = all.find(q => standable(q[0], q[1])) || all[0];
   return [s[0], S.floor, s[1]];
 }
 
+// Everyone gets their own random spot (each client draws its own): weighted toward what the floor still needs, at least 16 m from every monster.
+// B1 fuses not in the door, L1 switches still off, L2 notes not found; L3 and L4 have no such goal, so any spot.
+function floorGoals() {
+  const goals = [];
+  if (GATED.includes(S.id)) { const st = fz(), sp = fuseSpots(); (st || []).forEach((f, i) => { if (f.s === 2) return; if (f.s === 3) goals.push([f.x, f.z]); else if (f.s === 0 && sp[i]) goals.push(sp[i]); }); }
+  else if (SWITCH_FLOORS.includes(S.id)) { const st = sw(), sp = switchSpots(); (st || []).forEach((v, i) => { if (!v.on && sp[i]) goals.push(sp[i]); }); }
+  else if (KEYPAD_FLOORS.includes(S.id)) { const v = kp(), sp = keypadSpots(); (v ? v.found : []).forEach((d, i) => { if (d === null && sp[i]) goals.push(sp[i]); }); }
+  return goals;
+}
+function spawnFor(level) {
+  const here = S.id === level ? mainRegion().map(cellXZ).filter(([x, z]) => !doors.some(dr => dr.link && Math.hypot(x - dr.cx, z - dr.cz) < 4) && standable(x, z)) : [];       // not on top of a stair door
+  const c = pickSpawn(here, floorGoals(), monsters.filter(m => m.level === level).map(m => [m.pos.x, m.pos.z]));
+  return c ? [c[0], S.floor, c[1]] : randomSpawn(level);
+}
+function groupSpawn(level) {
+  const away = monsters.map(m => [m.pos.x, m.pos.z]);
+  const s0 = pickSpots(level, 1, rng32(4242), away)[0] || pickSpots(level, 1, rng32(4242))[0];       // the same spot on every client: seeded, and monsters spawn from a seed too
+  const ring = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]], o = ring[net.id % ring.length];
+  const x = s0[0] + o[0] * 0.9, z = s0[1] + o[1] * 0.9, c = cellOf(x, z);
+  return c >= 0 && S.nav[c] ? [x, S.floor, z] : [s0[0], S.floor, s0[1]];
+}
+
 // ---------------------------------------------------------------- the handheld device: security feeds for the floor you are on, and a map of it
-const devOn = {v: false}; let devMode = "cams", camIdx = 0, devSlide = 0;
+const devOn = {v: false}; let devMode = "map", camIdx = 0, devSlide = 0;          // the handheld shows the map; the camera feeds have no controls (a later item will bring them back as a full-screen ability)
 const rt = new THREE.WebGLRenderTarget(384, 240); rt.texture.colorSpace = THREE.SRGBColorSpace;
 const feedCam = new THREE.PerspectiveCamera(50, 384 / 240, 0.05, 80);
 const mapCanvas = document.createElement("canvas"); mapCanvas.width = 512; mapCanvas.height = 320;
@@ -542,6 +592,36 @@ const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.262), mapMat);
 screenMesh.position.z = 0.0125; device.add(screenMesh);
 device.visible = false; camera.add(device);
 
+// Monsters show on the handheld map only through the security cameras: every camera on the floor sweeps on its loop, and a monster inside a camera's
+// view (and not behind a wall) is marked; the mark stays at its last seen spot for MAP_FADE_MS. A floor with no cameras shows no monsters.
+const MAPSEEN = new Map(), CAMHOT = new Map(), BUZZ = {at: {}, until: 0, text: ""}, MAP_FADE_MS = 6000, CAM_RANGE = 40, camFrustum = new THREE.Frustum(), camM = new THREE.Matrix4(), camV = new THREE.Vector3();
+function camSees(c, t, x, y, z) {                                           // the camera's current aim and lens (as the feed shows it) against a point
+  aimFeed(c, t); feedCam.updateMatrixWorld(true);
+  camM.multiplyMatrices(feedCam.projectionMatrix, camM.copy(feedCam.matrixWorld).invert()); camFrustum.setFromProjectionMatrix(camM);
+  const p = feedCam.position;
+  return Math.hypot(x - p.x, z - p.z) < CAM_RANGE && camFrustum.containsPoint(camV.set(x, y, z)) && segClear(p.x, p.y, p.z, x, y, z);
+}
+// every client computes the cameras' sweeps from the same clock (the server's time, kept as an offset), so a camera shows everyone the same picture
+const ctime = () => (Date.now() + (net.off || 0)) / 1000;
+// who sees what: every 0.2 s each camera is tested against each monster on the floor; a sighting stays on the team map for 6 s, and CAMHOT keeps which cameras see one now
+function updateSeen(t) {
+  const now = performance.now(); CAMHOT.clear();
+  const who = [{name: "you", x: P.p.x, z: P.p.z, y: P.p.y, dead}]; if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) who.push({name: p.name, x: p.x, z: p.z, y: p.y, dead: p.dead});
+  S.cams.forEach((c, i) => {
+    for (const m of monsters) {
+      if (!camSees(c, t, m.pos.x, m.fy + 1.3, m.pos.z)) continue;
+      MAPSEEN.set(m, {at: now, x: m.pos.x, z: m.pos.z, yaw: m.yaw, name: m.cfg.name, cam: i});
+      (CAMHOT.get(i) || CAMHOT.set(i, []).get(i)).push(m);
+      const close = who.filter(w => !w.dead && Math.abs(w.y - m.fy) < 1.6).map(w => [Math.hypot(w.x - m.pos.x, w.z - m.pos.z), w.name]).sort((a, b) => a[0] - b[0])[0];
+      if (close && close[0] < 14 && now - (BUZZ.at[i] || -1e9) > 8000) { BUZZ.at[i] = now; BUZZ.until = now + 3000; BUZZ.text = `CAM ${i + 1}: ${m.cfg.name} near ${close[1]}`; rumble?.playEffect?.("dual-rumble", {duration: 90, strongMagnitude: .2, weakMagnitude: .4}); }
+    }
+  });
+}
+function hotCam() {                                                         // jump the feed to the nearest camera that sees a monster right now
+  let best = -1, bd = 1e9; for (const i of CAMHOT.keys()) { const c = S.cams[i], d = Math.hypot(c.position[0] - P.p.x, c.position[2] - P.p.z); if (d < bd) { bd = d; best = i; } }
+  if (best < 0) { toast("No camera sees a monster"); return false; }
+  camIdx = best; devMode = "cams"; devOn.v = true; device.visible = true; return true;
+}
 const mapXY = (x, z) => [256 + x * 5.6, 160 + (z - 2.5) * 5.6];
 function mapLayer(level) {
   if (S.mapLayer) return S.mapLayer;
@@ -562,11 +642,28 @@ function drawMap(t) {
   mctx.drawImage(mapLayer(level), 0, 0);
   mctx.strokeStyle = "#e0a040"; mctx.lineWidth = 2;
   for (const dr of doors) if (dr.level === level && dr.p < 0.5) { const [a, b] = mapXY(dr.cx, dr.cz); mctx.beginPath(); mctx.moveTo(a - 2, b); mctx.lineTo(a + 2, b); mctx.stroke(); }
-  for (const m of monsters) {                                               // monsters are pinged: pulsing rings
-    if (m.level !== level) continue;
-    const [a, b] = mapXY(m.pos.x, m.pos.z), ph = (((t * 0.9 + m.home[0]) % 1) + 1) % 1;
-    mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke();
-    mctx.fillStyle = "#ff4a3d"; mctx.beginPath(); mctx.arc(a, b, 3, 0, 7); mctx.fill();
+  const now = performance.now(), ct = ctime();
+  S.cams.forEach((c, i) => {                                                // each camera and the cone it covers right now: green, red while it sees a monster, the chosen one outlined
+    aimFeed(c, ct); const yaw = feedCam.rotation.y, half = Math.atan(Math.tan(feedCam.fov * Math.PI / 360) * 1.6), dirx = -Math.sin(yaw), dirz = -Math.cos(yaw), ang = Math.atan2(dirz, dirx), [a, b] = mapXY(c.position[0], c.position[2]), hot = CAMHOT.has(i);
+    mctx.fillStyle = hot ? "rgba(255,70,55,.30)" : "rgba(120,230,170,.11)"; mctx.beginPath(); mctx.moveTo(a, b); mctx.arc(a, b, 14 * 5.6, ang - half, ang + half); mctx.closePath(); mctx.fill();
+    mctx.fillStyle = hot ? "#ff6a5a" : "#9fe8c4"; mctx.fillRect(a - 2, b - 2, 4, 4);
+    if (i === camIdx) { mctx.strokeStyle = "#ffffff"; mctx.lineWidth = 1.2; mctx.strokeRect(a - 4, b - 4, 8, 8); }
+  });
+  mctx.font = "700 10px system-ui,sans-serif"; mctx.textAlign = "center";
+  for (const m of monsters) {                                               // a monster is on the map only while a camera sees it, then stays 6 s (fading) at the spot it was last seen, with its name and the way it was facing
+    const sn = MAPSEEN.get(m); if (!sn || m.level !== level) continue;
+    const age = now - sn.at; if (age > MAP_FADE_MS) continue;
+    const fresh = age < 400, [a, b] = mapXY(sn.x, sn.z), ph = (((t * 0.9 + m.home[0]) % 1) + 1) % 1, fade = fresh ? 1 : 1 - age / MAP_FADE_MS;
+    if (fresh) { mctx.strokeStyle = `rgba(255,60,50,${1 - ph})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(a, b, 3 + ph * 11, 0, 7); mctx.stroke(); }
+    mctx.fillStyle = `rgba(255,74,61,${0.25 + 0.75 * fade})`; mctx.beginPath(); mctx.arc(a, b, fresh ? 3.4 : 2.8, 0, 7); mctx.fill();
+    mctx.strokeStyle = `rgba(255,150,130,${0.3 + 0.7 * fade})`; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(a, b); mctx.lineTo(a - Math.sin(sn.yaw) * 11, b - Math.cos(sn.yaw) * 11); mctx.stroke();
+    mctx.fillStyle = `rgba(255,190,170,${0.35 + 0.65 * fade})`; mctx.fillText(sn.name, a, b - 7);
+  }
+  for (const p of net.peers.values()) {                                     // the others in the room, on this floor
+    if (p.scene !== S.id || p.dead) continue;
+    const [a, b] = mapXY(p.x, p.z);
+    mctx.save(); mctx.translate(a, b); mctx.rotate(-p.yaw); mctx.fillStyle = p.color;
+    mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4, 4); mctx.lineTo(-4, 4); mctx.closePath(); mctx.fill(); mctx.restore();
   }
   const [px, pz] = mapXY(P.p.x, P.p.z);
   mctx.save(); mctx.translate(px, pz); mctx.rotate(-P.yaw);
@@ -586,7 +683,12 @@ function aimFeed(c, t) {
   feedCam.rotation.set(tilt * Math.PI / 180, yaw + Math.PI + pan * Math.PI / 180, 0, "YXZ");
 }
 function toggleDevice() { devOn.v = !devOn.v; if (devOn.v) device.visible = true; }
-function toggleMode() { if (devOn.v) devMode = devMode === "cams" ? "map" : "cams"; else toggleDevice(); }
+function toggleMode() { toggleDevice(); }
+function camHud() {                                                         // the feed's caption, and the buzz line when a camera sees a monster close to someone
+  const el = $("camhud"), show = devOn.v && devMode === "cams" && S.cams.length && !loading;
+  if (show) { const hot = CAMHOT.get(camIdx % S.cams.length); el.style.display = "block"; el.className = hot ? "hot" : ""; el.textContent = `CAM ${camIdx % S.cams.length + 1} / ${S.cams.length}` + (hot ? ` · ${hot.map(m => m.cfg.name).join(", ")} IN VIEW` : "") + `   [Q/T switch · 1-9 pick · Z hot camera]`; } else el.style.display = "none";
+  const bz = $("buzz"); bz.style.display = performance.now() < BUZZ.until && !loading ? "block" : "none"; bz.textContent = BUZZ.text;
+}
 function cycleCam(d) { const n = S.cams.length; if (n) camIdx = (camIdx + d + n * 100) % n; }
 
 // ---------------------------------------------------------------- input: keyboard (WASD + arrows), mouse look, Xbox controller
@@ -595,73 +697,1034 @@ function useDoor() {
   const fwdx = -Math.sin(P.yaw), fwdz = -Math.cos(P.yaw);
   let best = null, bd = 1.9;
   for (const dr of doors) {
-    if (dr.target || Math.abs(dr.cy - P.p.y) > 1.5) continue;
+    if ((dr.link && dr.target) || Math.abs(dr.cy - P.p.y) > 1.5) continue;
     const dx = dr.cx - P.p.x, dz = dr.cz - P.p.z, d = Math.hypot(dx, dz);
     if (d < bd && (dx * fwdx + dz * fwdz) / (d || 1) > 0.25) { best = dr; bd = d; }
   }
-  if (best) openDoor(best, true);
+  if (best) { if (best.target === 0) openDoor(best, true); else closeDoor(best); }
 }
+// ---------------------------------------------------------------- what you hold, and the controls (the same on keyboard and controller)
+//   move: WASD / left stick · look: mouse / right stick · jump: Space / A · crouch (toggle): Shift / left-stick click · run (hold): R / right-stick click
+//   X (or F): the action button: doors, fuses, switches, notes, the power, the keypad, loot, lifting a teammate (hold)
+//   Y: tap to take out what you carry (tap again to rotate), hold for the wheel · RT / left click: use what you hold (fire / cloak on-off / roll a beacon)
+//   LT / right click: the gun aims; with the cloak or a beacon in hand it is the secondary ability · LB / RB (Q / E): support and combat/objective consumables (none yet)
+//   D-pad up / View / Tab / M: the handheld map (the camera feeds have no controls for now)
+const HELD = {item: null, yAt: 0, yDown: false, wheel: false, sel: 0, aimBtn: false, padAim: false};
+const AIM = {on: false, fov: 75, fovAim: 42};
+let crouchLatch = false;
+const ITEM_NAMES = {gun: "RAY GUN", cloak: "CLOAK", beacon: "AFK BEACON"};
+const ITEM_HINT = {gun: "RT / click: fire · LT / right click: aim", cloak: "RT / click: on/off · LT / right click: short circuit (5 min offline, stuns monsters near you)", beacon: "RT / click: roll it · LT / right click: reverse the frequency"};
+const owned = () => [LT.gun && "gun", CL.have && "cloak", BC.have > 0 && "beacon"].filter(Boolean);
+function setHeld(it) {
+  HELD.item = it || null; AIM.on = false;
+  toast(HELD.item ? `Holding: ${ITEM_NAMES[it]}   ${ITEM_HINT[it]}` : "Hands empty", 2600);
+}
+function rotateHeld() {
+  const o = owned(); if (!o.length) { toast("You have nothing to hold yet: the lockers on B1 hold a ray gun and a cloak"); return; }
+  const k = o.indexOf(HELD.item); setHeld(o[(k + 1) % o.length]);                                      // from empty hands (-1) this gives the first one
+}
+const wheelEntries = () => ["hands", ...owned()];
+function renderWheel() {
+  const el = $("wheel"), e = wheelEntries(); el.style.display = HELD.wheel ? "flex" : "none"; if (!HELD.wheel) return;
+  el.innerHTML = e.map((it, k) => `<span class="${k === HELD.sel ? "on" : ""}">${it === "hands" ? "HANDS" : ITEM_NAMES[it]}</span>`).join("");
+}
+function yPress() { HELD.yDown = true; HELD.yAt = performance.now(); HELD.wheel = false; }
+function yRelease() {
+  if (!HELD.yDown) return; HELD.yDown = false;
+  if (HELD.wheel) { const it = wheelEntries()[HELD.sel]; HELD.wheel = false; renderWheel(); setHeld(it === "hands" ? null : it); }
+  else rotateHeld();
+}
+function yTick() {
+  if (HELD.yDown && !HELD.wheel && performance.now() - HELD.yAt > 350) { HELD.wheel = true; const k = wheelEntries().indexOf(HELD.item || "hands"); HELD.sel = k < 0 ? 0 : k; renderWheel(); }
+}
+const wheelMove = d => { if (HELD.wheel) { const n = wheelEntries().length; HELD.sel = (HELD.sel + d + n) % n; renderWheel(); } };
+const usePrimary = () => HELD.item === "gun" ? fire() : HELD.item === "cloak" ? toggleCloak() : HELD.item === "beacon" ? throwBeacon() : (toast("Nothing in your hands: tap Y"), false);
+const useSecondary = () => HELD.item === "cloak" ? cloakShortCircuit() : HELD.item === "beacon" ? reverseBeacon() : false;
+const useConsumable = slot => toast(slot === 0 ? "Your support slot (LB / Q) is empty" : "Your combat / objective slot (RB / E) is empty");
+const doAction = () => { if (!reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor(); };
+const crouchToggle = () => { crouchLatch = !crouchLatch; };
 addEventListener("keydown", e => {
   if (inGame) return;
+  if (KPUI.open) {                                                           // the keypad takes the keyboard while it is up
+    e.preventDefault();
+    if (/^(Digit|Numpad)\d$/.test(e.code)) kpPress(e.code.slice(-1));
+    else if (e.code === "Backspace") { KPUI.buf = KPUI.buf.slice(0, -1); renderKp(); }
+    else if (e.code === "Enter" || e.code === "NumpadEnter") kpPress("OK");
+    else if (e.code === "Escape" || e.code === "KeyX" || e.code === "KeyF") closeKeypad();
+    return;
+  }
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
+  if (HELD.wheel && (e.code === "ArrowLeft" || e.code === "ArrowRight") && !e.repeat) wheelMove(e.code === "ArrowLeft" ? -1 : 1);
   if (e.repeat || dead) return;
-  if (e.code === "KeyE" || e.code === "KeyX") useDoor();
-  if (e.code === "Tab") toggleDevice();
-  if (e.code === "KeyM") toggleMode();
-  if (e.code === "KeyQ") cycleCam(-1);
-  if (e.code === "KeyR") cycleCam(1);
+  if (e.code === "KeyX" || e.code === "KeyF") doAction();
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight") crouchToggle();
+  if (e.code === "KeyY") yPress();
+  if (e.code === "Tab" || e.code === "KeyM") toggleDevice();
+  if (e.code === "KeyQ") useConsumable(0);
+  if (e.code === "KeyE") useConsumable(1);
+  if (/^Digit[1-3]$/.test(e.code)) { const it = ["gun", "cloak", "beacon"][+e.code.slice(5) - 1]; if (owned().includes(it)) setHeld(it); else toast(`You do not have the ${ITEM_NAMES[it].toLowerCase()}`); }
+  if (e.code === "KeyH") document.getElementById("help").classList.toggle("on");
+  if (e.code === "KeyN") toast(AUD.toggleMute() ? "Sound off" : "Sound on");
 });
-addEventListener("keyup", e => { keys[e.code] = false; });
-addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+addEventListener("wheel", e => { if (HELD.wheel) wheelMove(e.deltaY > 0 ? 1 : -1); }, {passive: true});
+addEventListener("keyup", e => { keys[e.code] = false; if (e.code === "KeyY") yRelease(); });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; HELD.aimBtn = false; HELD.yDown = false; });
+renderer.domElement.addEventListener("mousedown", e => {
+  if (document.pointerLockElement !== renderer.domElement || dead || inGame) return;
+  if (e.button === 0) usePrimary();
+  else if (e.button === 2) { if (HELD.item === "gun") HELD.aimBtn = true; else useSecondary(); }
+});
+addEventListener("mouseup", e => { if (e.button === 2) HELD.aimBtn = false; });
+renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
 renderer.domElement.addEventListener("click", () => { if (![...navigator.getGamepads()].some(g => g)) renderer.domElement.requestPointerLock?.(); });
 addEventListener("mousemove", e => {
   if (document.pointerLockElement !== renderer.domElement) return;
-  P.yaw -= e.movementX * 0.0024; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0024));
+  const k = AIM.on ? 0.45 : 1;
+  P.yaw -= e.movementX * 0.0024 * k; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0024 * k));
 });
 const dz = (v, t = 0.16) => Math.abs(v) < t ? 0 : Math.sign(v) * (Math.abs(v) - t) / (1 - t);
 let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
   rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
-  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, run: false};
-  const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
+  if (!gp) { HELD.padAim = false; return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, use: false, run: false}; }
+  const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && (b[i].pressed || b[i].value > 0.5));
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
+  const yNow = down(3), yWas = padPrev[3]; padPrev[3] = yNow;
   if (!dead) {
-    if (edge(2)) useDoor();                                   // X: open a door
-    if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
-    if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
-    if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
-    if (edge(5) || edge(15)) cycleCam(1);                     // RB / D-pad right: next camera
+    if (yNow && !yWas) yPress(); else if (!yNow && yWas) yRelease();                // Y: tap = take out / rotate, hold = the wheel
+    yTick();
+    if (HELD.wheel) { const wx = a[2] || 0, was = padPrev.wx || 0; padPrev.wx = Math.abs(wx) > 0.6 ? Math.sign(wx) : 0; if (padPrev.wx && padPrev.wx !== was) wheelMove(padPrev.wx); }
+    if (edge(2)) doAction();                                  // X: the action button
+    if (edge(10)) crouchToggle();                             // left-stick click: crouch, click again to walk
+    if (edge(8) || edge(12)) toggleDevice();                  // View / D-pad up: the handheld map
+    if (edge(4)) useConsumable(0);                            // LB: support consumable
+    if (edge(5)) useConsumable(1);                            // RB: combat / objective consumable
+    if (edge(7)) usePrimary();                                // RT: use what you hold
+    const lt = down(6), ltEdge = lt && !padPrev[6]; padPrev[6] = lt;
+    HELD.padAim = lt && HELD.item === "gun";                  // LT: the gun aims while it is held ...
+    if (ltEdge && HELD.item !== "gun") useSecondary();        // ... and with the cloak or a beacon it is the secondary ability
+  } else { HELD.padAim = false; HELD.yDown = false; }
+  const k = AIM.on ? 0.45 : 1, still = HELD.wheel;
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: still ? 0 : dz(a[2] || 0, 0.12) * k, ly: still ? 0 : dz(a[3] || 0, 0.12) * k, jump: down(0), use: down(2), run: down(11)};          // right-stick click runs (hold)
+}
+
+// ---------------------------------------------------------------- fuses: the stair door at the top of B1, L1 and L2 needs NEED of them (rules: shared/fuses.js; in a room the server holds the state)
+const FZ = {st: {}, vis: null};
+const fz = () => FZ.st[S.id] || (GATED.includes(S.id) ? newFloor() : null);
+const upDoor = () => doors.find(d => d.link && /_up$/.test(d.d.name));
+const SW = {st: {}};
+const KP = {st: {}, local: {}};                                           // st: what the floor shows (found digits, solved, fails, lock); local: the real code, solo only
+const KPUI = {open: false, buf: ""};
+const kp = () => KP.st[S.id] || (KEYPAD_FLOORS.includes(S.id) ? {found: Array(CODE_LEN).fill(null), solved: false, fails: 0, lockMs: 0, until: 0} : null);
+const sw = () => SW.st[S.id] || (SWITCH_FLOORS.includes(S.id) ? newSwitches() : null);
+const isLocked = dr => !!(dr.link && /_up$/.test(dr.d.name) && ((GATED.includes(S.id) && !unlocked(fz())) || (SWITCH_FLOORS.includes(S.id) && !swDone(sw())) || (KEYPAD_FLOORS.includes(S.id) && !kp().solved)));
+// what this floor asks for, if anything: fuses or switches, how many are needed and how many are done
+function puzzle() {
+  if (GATED.includes(S.id)) { const st = fz(); return {kind: "FUSES", need: NEED, count: slotted(st), done: unlocked(st)}; }
+  if (SWITCH_FLOORS.includes(S.id)) { const st = sw(); return {kind: "SWITCHES", need: NEED_SW, count: swCount(st), done: swDone(st)}; }
+  if (KEYPAD_FLOORS.includes(S.id)) { const v = kp(); return {kind: "CODE", need: CODE_LEN, count: v.solved ? CODE_LEN : foundCount(v), done: v.solved, label: "CODE " + v.found.map(d => d === null ? "_" : d).join(" ")}; }
+  return null;
+}
+const myCarry = () => { const st = fz(); return st ? carrying(st, net.id) : -1; };
+function setFuses(scene, st) {
+  const was = unlocked(FZ.st[scene]), prev = FZ.st[scene];
+  FZ.st[scene] = st;
+  if (scene === S.id && prev) st.forEach((f, i) => { const o = prev[i]; if (!o || o.s === f.s) return;            // what changed is the sound: taken, slotted into the door, dropped
+    if (f.s === 1) AUD.play("fuse_take"); else if (f.s === 2) { AUD.play("fuse_slot"); AUD.stinger("st_fuse"); } else if (f.s === 3) AUD.play("fuse_drop", {pos: [f.x, S.floor + .2, f.z]}); });
+  if (scene === S.id && unlocked(st) && !was) toast("The door hums. It has power.");
+}
+function fuseAct(msg) {
+  if (!GATED.includes(S.id)) return;
+  if (net.on) { net.send({t: "fuse", a: msg.a, i: msg.i, x: msg.x, z: msg.z}); return; }       // the server answers with the new state
+  const n = fuseReduce(fz(), net.id, msg); if (n) setFuses(S.id, n);
+}
+function doorLocked() {
+  if (KEYPAD_FLOORS.includes(S.id)) { openKeypad(); return; }
+  if (SWITCH_FLOORS.includes(S.id)) { toast(`The door has no power: ${swCount(sw())} of ${NEED_SW} switches flipped`); return; }
+  if (myCarry() >= 0) fuseAct({a: "slot"});
+  else toast(`The door has no power: ${slotted(fz())} of ${NEED} fuses`);
+}
+// where the fuses lie: in the floor's main walkable area (the stair door itself sits a storey up, off this grid), spread out, away from where monsters start.
+// Seeded, so every client picks the same spots.
+function floorSpots(count, seedBase, tiers) {
+  const dr = upDoor(); if (!S.nav) return [];                                      // the top floor has no stair door to keep clear
+  const cells = mainRegion(); if (!cells.length) return [];
+  const rnd = rng32(seedBase + Object.keys(SCENES).indexOf(S.id) * 37), out = [];
+  for (const [gap, fromDoor, fromMon] of tiers) {                                  // relax if the floor is too small for the first try
+    out.length = 0;
+    for (let tries = 0; tries < 6000 && out.length < count; tries++) {
+      const [x, z] = cellXZ(cells[Math.floor(rnd() * cells.length)]);
+      if (dr && Math.hypot(x - dr.cx, z - dr.cz) < fromDoor) continue;
+      if (monsters.some(m => Math.hypot(x - m.home[0], z - m.home[1]) < fromMon)) continue;
+      if (out.some(o => Math.hypot(x - o[0], z - o[1]) < gap)) continue;
+      out.push([x, z]);
+    }
+    if (out.length === count) break;
   }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), crouch: down(1), run: down(10) || (b[6] && (b[6].pressed || b[6].value > 0.5))};   // B crouches; LT / L-stick click runs
+  return out;
+}
+const fuseSpots = () => floorSpots(NEED, 9100, [[12, 10, 5], [7, 5, 3], [3, 2, 0]]);
+const keypadSpots = () => floorSpots(CODE_LEN, 9700, [[14, 8, 5], [8, 5, 3], [4, 2, 0]]);
+const switchSpots = () => floorSpots(NEED_SW, 9500, [[25, 8, 6], [14, 5, 3], [6, 2, 0]]);            // far apart, so reaching both is a trip
+
+// ---------------------------------------------------------------- guns and ammo: lockers on B1 (one gun each), ammo packs on every floor (rules in shared/loot.js)
+const LT = {st: {}, vis: null, gun: false, rounds: 0};
+const lt = () => LT.st[S.id] || newLoot(S.id);
+const myId = () => net.on ? net.id : 1;                                       // solo: the one player is 1
+const lockerSpots = () => LOOT[S.id] && LOOT[S.id].lockers ? floorSpots(LOOT[S.id].lockers, 9900, [[6, 4, 5], [3, 2, 3], [1.5, 1, 0]]) : [];
+const beaconSpots = () => LOOT[S.id] ? floorSpots(LOOT[S.id].beacons || 2, 9980, [[10, 6, 6], [6, 3, 3], [3, 1, 0]]) : [];
+const packSpots = () => LOOT[S.id] ? floorSpots(LOOT[S.id].packs, 9950, [[10, 6, 6], [6, 3, 3], [3, 1, 0]]) : [];
+const cyanGlow = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40d8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); return sp; };
+function lockerMesh() {
+  const o = new THREE.Group(), body = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.8, .45), new THREE.MeshBasicMaterial({color: 0x4b5a55}));
+  body.position.y = .9; o.add(body);
+  const door = new THREE.Group(); door.position.set(-.25, 0, .23); o.add(door);                       // hinged on its left edge; swings open when emptied
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(.46, 1.7, .03), new THREE.MeshBasicMaterial({color: 0x5d6e68})); leaf.position.set(.23, .92, 0); door.add(leaf);
+  for (let k = 0; k < 4; k++) { const v = new THREE.Mesh(new THREE.BoxGeometry(.3, .018, .01), new THREE.MeshBasicMaterial({color: 0x222a28})); v.position.set(.23, 1.5 - k * .07, .02); door.add(v); }
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, .03), new THREE.MeshBasicMaterial({color: 0x40d8ff})); lamp.position.set(.4, 1.55, .025); door.add(lamp);
+  const halo = cyanGlow(.9, .9, .6), beacon = cyanGlow(.3, 2.4, .3); halo.position.y = 1.0; beacon.position.y = 1.0; o.add(halo, beacon);
+  Object.assign(o.userData, {door, lamp, halo, beacon}); return o;
+}
+function packMesh() {
+  const o = new THREE.Group(), box = new THREE.Mesh(new THREE.BoxGeometry(.3, .15, .2), new THREE.MeshBasicMaterial({color: 0x5a5e3c}));
+  box.position.y = .08; const stripe = new THREE.Mesh(new THREE.BoxGeometry(.31, .04, .21), new THREE.MeshBasicMaterial({color: 0x40d8ff})); stripe.position.y = .09;
+  const halo = cyanGlow(.7, .7, .6), beacon = cyanGlow(.25, 1.8, .3); halo.position.y = .3; beacon.position.y = .9; o.add(box, stripe, halo, beacon);
+  Object.assign(o.userData, {halo, beacon}); return o;
+}
+function buildLootVisuals() {
+  LT.vis = null; if (!S.root || !LOOT[S.id]) return;
+  const g = new THREE.Group();
+  const lockers = lockerSpots().map((home, i) => { const o = lockerMesh(); o.position.set(home[0], S.floor, home[1]); o.rotation.y = (i * 2.1) % 6.28; g.add(o); return {home, o}; });
+  const packs = packSpots().map(home => { const o = packMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; });
+  const beacons = beaconSpots().map(home => { const o = beaconMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; });
+  S.root.add(g); LT.vis = {lockers, packs, beacons};
+}
+function animateLoot() {
+  const v = LT.vis, st = lt();
+  if (v) {
+    const fade = it => Math.min(1, Math.max(0, (Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z) - 0.5) / 1.5));
+    v.lockers.forEach((it, i) => { const taken = st.lockers[i] !== 0, u = it.o.userData, k = fade(it);
+      u.door.rotation.y += ((taken ? -1.7 : 0) - u.door.rotation.y) * 0.25; u.lamp.material.color.setHex(taken ? 0x2a3a3a : 0x40d8ff);
+      u.halo.material.opacity = (taken ? 0 : 0.6) * k; u.beacon.material.opacity = (taken ? 0 : 0.3) * k; });
+    v.beacons.forEach((it, i) => { const gone = (st.beacons || [])[i] !== 0; it.o.visible = !gone; if (gone) return; const k = fade(it); it.o.userData.halo.material.opacity = 0.6 * k; it.o.userData.beacon.material.opacity = 0.3 * k; it.o.rotation.y += 0.01; });
+    v.packs.forEach((it, i) => { const gone = st.packs[i] !== 0; it.o.visible = !gone; if (gone) return; const k = fade(it); it.o.userData.halo.material.opacity = 0.6 * k; it.o.userData.beacon.material.opacity = 0.3 * k; });
+  }
+  const eb = $("beacons"); eb.style.display = BC.have ? "block" : "none"; if (BC.have) eb.textContent = `BEACON ×${BC.have}  [G]`;
+  const el = $("ammo"); el.style.display = LT.gun ? "block" : "none"; if (LT.gun) el.textContent = `RAY  ${"● ".repeat(LT.rounds)}${"○ ".repeat(Math.max(0, 3 - LT.rounds))}${LT.rounds}/${MAX_ROUNDS}`;
+}
+// ---------------------------------------------------------------- the Error Deletion Ray (models/gun.glb): held bottom right, fired with the left mouse button, F or the right trigger.
+// A hit does not kill: the floor's host (it runs the monsters) deletes the monster and puts it somewhere far away and out of sight. A shot is as quiet as a run.
+const GUN = {cool: 0, kick: 0, pivot: new THREE.Group(), flash: cyanGlow(0.55, 0.55, 0), beams: [], fx: []};
+GUN.pivot.position.set(0.22, -0.3, -0.5); GUN.pivot.visible = false; GUN.flash.position.set(0, 0.07, -0.6); GUN.pivot.add(GUN.flash); camera.add(GUN.pivot);
+(async () => {                                                             // models/gun.glb, scaled to about 0.55 m with the muzzle (-X in the file) pointing forward; a plain block if it cannot be loaded
+  let obj;
+  try { obj = (await loadGlb("models/gun.glb")).scene; obj.scale.setScalar(0.14); obj.rotation.y = -Math.PI / 2; obj.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.material.side = THREE.DoubleSide; } }); }
+  catch (e) { obj = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.42), new THREE.MeshStandardMaterial({color: 0x6a6f66})); }
+  obj.position.set(0, 0, 0); GUN.pivot.add(obj); GUN.obj = obj;
+})();
+// is there a wall between o and the point t metres along d? (the same box test the monsters' sight uses)
+const rayLength = (o, d) => { let lo = 0, hi = SHOT_RANGE; if (rayClear(o, d, hi)) return hi; for (let k = 0; k < 7; k++) { const mid = (lo + hi) / 2; if (rayClear(o, d, mid)) lo = mid; else hi = mid; } return lo; };
+// the nearest monster on o's floor that the ray from o along d (unit) hits: {m, t} or null
+const rayMonster = (o, d) => rayMonsterW(S, monsters, o, d);
+const shotPlayers = () => { const out = []; if (!loading) out.push({x: P.p.x, y: P.p.y, z: P.p.z}); if (net.on) for (const p of net.peers.values()) if (p.scene === S.id) out.push({x: p.tx, y: p.ty, z: p.tz}); return out; };
+const banishSpot = () => banishSpotW(S, shotPlayers(), Math.random);                  // where a banished monster lands (rules in shared/monsters.js)
+// the host's side of a shot: o is the shooter's eye, d the unit direction
+function resolveShot(o, d) {
+  const r = resolveShotW(S, monsters, shotPlayers(), o, d, Math.random); if (!r) return null;
+  flashAt(r.from[0], r.from[1]); flashAt(r.to[0], r.to[1]);
+  if (net.on) net.send({t: "zap", scene: S.id, i: r.i, from: r.from, to: r.to});
+  return {m: r.m, from: r.from, to: r.to};
+}
+function flashAt(x, z) { const sp = cyanGlow(1, 1, 1); sp.position.set(x, S.floor + 1.2, z); scene.add(sp); GUN.fx.push({o: sp, t: 0}); }
+function beam(o, e) {                                                       // a thin cyan line from the gun (below and to the right of the eye, a little ahead) to where the ray ended
+  const dx = e[0] - o[0], dz = e[2] - o[2], L = Math.hypot(dx, dz) || 1, fx = dx / L, fz = dz / L;
+  const a = new THREE.Vector3(o[0] + fx * 0.45 - fz * 0.2, o[1] - 0.22, o[2] + fz * 0.45 + fx * 0.2), b = new THREE.Vector3(e[0], e[1], e[2]), len = a.distanceTo(b); if (len < 0.2) return;
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 6), new THREE.MeshBasicMaterial({color: 0x6fe8ff, transparent: true, opacity: 0.9, depthWrite: false}));
+  m.position.copy(a).lerp(b, 0.5); m.scale.y = len; m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); scene.add(m); GUN.beams.push({o: m, t: 0});
+}
+function fire() {
+  if (!LT.gun || dead || loading || KPUI.open || FIN.out || devOn.v || GUN.cool > 0) return false;
+  if (myCarry() >= 0) { toast("Your hands are full: put the fuse down first"); GUN.cool = 0.3; return false; }
+  if (LT.rounds <= 0) { toast("Out of rounds"); GUN.cool = 0.3; AUD.play("gun_dry"); return false; }
+  const o = [P.p.x, P.p.y + P.eye, P.p.z], cp = Math.cos(P.pitch), d = [-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp];
+  LT.rounds--; GUN.cool = SHOT_COOL; GUN.kick = 1; P.shotT = SHOT_NOISE_S;
+  const hit = rayMonster(o, d), t = hit ? hit.t : rayLength(o, d), e = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+  beam(o, e); AUD.play("gun", {rate: .96 + Math.random() * .08, priority: true});
+  if (net.on) net.send({t: "shot", o, d, e});                                // the server tells the floor's host (who decides the hit) and shows the others the beam
+  if (net.host()) resolveShot(o, d);
+  return true;
+}
+const heldSeen = new Set();
+function heldHud(dt) {
+  const o = owned();
+  for (const it of o) if (!heldSeen.has(it)) { heldSeen.add(it); if (!HELD.item) setHeld(it); }                  // the first time you pick something up it is in your hands
+  for (const it of [...heldSeen]) if (!o.includes(it)) heldSeen.delete(it);
+  if (HELD.item && !o.includes(HELD.item)) HELD.item = null;
+  const el = $("held"), show = !loading && !dead && !FIN.results && !!HELD.item;
+  el.style.display = show ? "block" : "none"; if (show) el.innerHTML = `<b>${ITEM_NAMES[HELD.item]}${HELD.item === "gun" ? " · " + LT.rounds : HELD.item === "beacon" ? " ×" + BC.have : ""}</b>${ITEM_HINT[HELD.item]}`;
+  $("reticle").style.display = AIM.on ? "block" : "none";
+  stunFx = Math.max(0, stunFx - dt * 1.6); $("stunfx").style.opacity = stunFx;
+}
+function animateGun(dt) {
+  heldHud(dt);
+  GUN.cool = Math.max(0, GUN.cool - dt); P.shotT = Math.max(0, P.shotT - dt); GUN.kick = Math.max(0, GUN.kick - dt * 7);
+  if (net.on) for (const p of net.peers.values()) if (p.shotT > 0) p.shotT -= dt;
+  GUN.pivot.visible = !!LT.gun && HELD.item === "gun" && !dead && !loading && !devOn.v && myCarry() < 0 && !FIN.results;
+  if (GUN.pivot.visible) { const bob = P.moving ? Math.sin(performance.now() / (P.running ? 90 : 160)) * (P.running ? 0.012 : 0.006) : 0; GUN.pivot.position.set(0.22, -0.3 + bob, -0.5 + GUN.kick * 0.07); GUN.pivot.rotation.x = GUN.kick * 0.12; }
+  GUN.flash.material.opacity = GUN.kick > 0.6 ? (GUN.kick - 0.6) * 2.5 : 0;
+  for (const list of [GUN.beams, GUN.fx]) for (let i = list.length - 1; i >= 0; i--) {
+    const f = list[i]; f.t += dt; const life = list === GUN.beams ? 0.15 : GLITCH_S, k = Math.min(1, f.t / life);
+    if (list === GUN.fx) { f.o.scale.setScalar(1 + k * 2.2); f.o.material.opacity = 1 - k; } else f.o.material.opacity = 0.9 * (1 - k);
+    if (k >= 1) { scene.remove(f.o); f.o.geometry?.dispose(); f.o.material.dispose(); list.splice(i, 1); }
+  }
+}
+// ---------------------------------------------------------------- the cloak (models/cloak.glb) and the AFK Beacon (models/beacon.glb)
+// Cloak: V (controller: left trigger) toggles it; on, monsters see you only from 1.5 m (they still hear you); a battery drains in 15 s and recharges slowly while off (shared/cloak.js).
+const CL = {have: false, st: newCloak(), pivot: new THREE.Group()};
+CL.pivot.position.set(-0.3, -0.3, -0.5); CL.pivot.visible = false; camera.add(CL.pivot);
+function loadCloakModel() {                                                  // once, when it is first needed (a plain block until the model arrives)
+  CL.loaded = true;
+  const stub = new THREE.Mesh(new THREE.BoxGeometry(.08, .2, .05), new THREE.MeshStandardMaterial({color: 0x20303a})); CL.pivot.add(stub);
+  loadModel("cloak").then(g => { if (!g) return; const m = SkeletonUtils.clone(g.scene); m.scale.setScalar(0.12); m.rotation.set(0.2, 0.5, 0.1); m.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); CL.pivot.remove(stub); CL.pivot.add(m); });
+}
+function toggleCloak() {
+  if (!CL.have || dead || loading) return;
+  const n = cloakToggle(CL.st); if (n === CL.st) { toast(cloakBroken(CL.st) ? `The cloak is dead for ${Math.ceil(CL.st.broken / 60)} more minute(s)` : "The cloak is flat"); AUD.play("cloak_flat"); return; }
+  AUD.play(n.on ? "cloak_on" : "cloak_off"); if (net.on) net.send({t: "cloak"});
+  CL.st = n; toast(n.on ? "Cloak on: monsters see you only from very close" : "Cloak off");
+}
+function animateCloak(dt) {
+  if (CL.have && !CL.loaded) loadCloakModel();
+  const wasOn = CL.st.on;
+  if (CL.have && !dead && !loading) CL.st = cloakTick(CL.st, dt); else if (CL.st.on) CL.st = {...CL.st, on: false};
+  if (wasOn && !CL.st.on && CL.st.b <= 0) { AUD.play("cloak_flat"); toast("The cloak is flat"); }
+  const bar = $("cloak"); bar.style.display = CL.have && !loading && !FIN.results ? "block" : "none"; bar.querySelector("i").style.width = CL.st.b * 100 + "%";
+  $("cloakfx").style.opacity = CL.st.on ? 0.55 + 0.25 * Math.sin(performance.now() / 120) : 0;
+  CL.pivot.visible = CL.have && HELD.item === "cloak" && !dead && !loading && !devOn.v && !FIN.results;
+  if (CL.pivot.visible) CL.pivot.position.set(-0.3, -0.3 + (CL.st.on ? 0.03 * Math.sin(performance.now() / 150) : 0), -0.5);
+}
+// AFK Beacon: pick up to 2 (two lie on every floor), G (controller: RB) rolls one 12 m ahead. For 25 s every monster within 30 m goes to it and idles round it.
+const BC = {have: 0, list: [], n: 0, tpl: null};
+function beaconMesh() {
+  const o = new THREE.Group(), can = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .22, 10), new THREE.MeshBasicMaterial({color: 0x8a7a55}));
+  can.rotation.z = Math.PI / 2; can.position.y = .08; const halo = cyanGlow(.7, .7, .6), beacon = cyanGlow(.25, 1.8, .3);
+  halo.material.color.setHex(0xffa040); beacon.material.color.setHex(0xffa040); halo.position.y = .3; beacon.position.y = .9; o.add(can, halo, beacon);
+  Object.assign(o.userData, {art: can, halo, beacon});
+  loadModel("beacon").then(g => { if (!g) return; const m = SkeletonUtils.clone(g.scene), bb = new THREE.Box3().setFromObject(m, true), k = 0.36 / (bb.getSize(new THREE.Vector3()).x || 1), c = bb.getCenter(new THREE.Vector3());
+    m.scale.setScalar(k); m.position.set(-c.x * k, -bb.min.y * k, -c.z * k); const w = new THREE.Group(); w.add(m); o.add(w); can.visible = false; o.userData.model = w; });
+  return o;
+}
+function beaconLures() {                                                    // what the monsters of this floor react to: beacons that have landed and are still running
+  const now = clk(); return BC.list.filter(b => b.scene === S.id && now >= b.land && now < b.until);
+}
+function addBeacon(x, z, from) {
+  const now = clk(), roll = Math.hypot(x - from[0], z - from[1]) / 4, o = beaconMesh();
+  const led = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xff2010, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true})); led.scale.set(.18, .18, 1); led.position.set(.1, .2, 0); o.add(led);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({color: 0xffa040, transparent: true, opacity: .35, side: THREE.DoubleSide, depthWrite: false})); ring.rotation.x = -Math.PI / 2; ring.position.y = .03; ring.visible = false; o.add(ring);
+  o.position.set(from[0], S.floor, from[1]); scene.add(o); if (roll > 0.05) AUD.play("beacon_roll", {pos: [from[0], S.floor + .2, from[1]], loud: true});
+  const b = {id: ++BC.n, x, z, from, scene: S.id, y: S.floor, t0: now, land: now + roll, until: now + roll + LURE_S, o, led, ring, roll};
+  BC.list.push(b); return b;
+}
+function clearBeacons() { for (const b of BC.list) { if (b.tick) b.tick.stop(); scene.remove(b.o); b.o.traverse(m => { if (m.geometry) m.geometry.dispose?.(); }); } BC.list.length = 0; }
+function throwBeacon() {
+  if (BC.have <= 0 || dead || loading || FIN.out || KPUI.open || devOn.v || myCarry() >= 0) return false;
+  const dx = -Math.sin(P.yaw), dz = -Math.cos(P.yaw), sx = P.p.x + dx * 0.5, sz = P.p.z + dz * 0.5;
+  const blocked = (x, z) => { const c = cellOf(x, z); return c < 0 || !S.nav[c] || !!collide({x, y: S.floor + 0.5, z}); };
+  const [ex, ez] = rollEnd(sx, sz, dx, dz, blocked);
+  BC.have--; addBeacon(ex, ez, [sx, sz]);
+  if (net.on) net.send({t: "beacon", x: ex, z: ez});
+  toast(BC.have ? `AFK Beacon rolled: ${BC.have} left` : "AFK Beacon rolled"); return true;
+}
+// the cloak's secondary: short-circuit it. It is dead for 5 minutes, and everything within 8 m is stunned for 5 s (it neither moves nor hits: run through it).
+function cloakShortCircuit() {
+  if (!CL.have || dead || loading || KPUI.open || FIN.out) return false;
+  if (cloakBroken(CL.st)) { toast(`The cloak is dead for ${Math.ceil(CL.st.broken / 60)} more minute(s)`); AUD.play("cloak_flat"); return false; }
+  CL.st = cloakShort(CL.st); AUD.play("zap", {priority: true, rate: 0.7});
+  if (net.on) net.send({t: "cloak2"}); else stunNear(monsters, P.p.x, P.p.y, P.p.z, STUN_S);
+  stunFlash(); toast("Short circuit: the monsters near you are stunned for 5 s. The cloak is dead for 5 minutes", 4200); return true;
+}
+let stunFx = 0;
+const stunFlash = () => { stunFx = 1; rumble?.playEffect?.("dual-rumble", {duration: 300, strongMagnitude: .6, weakMagnitude: 1}); };
+// the beacon's secondary: reverse the nearest running beacon within 30 m: for 12 s the monsters run from it, then they come back and group up round it
+function reverseBeacon() {
+  if (dead || loading || KPUI.open || FIN.out) return false;
+  const now = clk(); let best = null, bd = 30;
+  for (const b of BC.list) { if (b.scene !== S.id || now < b.land || now >= b.until || b.reversed) continue; const d = Math.hypot(b.x - P.p.x, b.z - P.p.z); if (d < bd) { bd = d; best = b; } }
+  if (!best) { toast("No running beacon within 30 m (or it was already reversed)"); return false; }
+  if (net.on) net.send({t: "beacon2"}); else markReversed(best, beaconReverse(best, now));
+  toast("Frequency reversed: the monsters run from the beacon for 12 s, then group up round it", 4200); return true;
+}
+function markReversed(b, r) { Object.assign(b, r); if (b.ring) b.ring.material.color.set(0x40a0ff); if (b.led) b.led.material.color.set(0x40a0ff); AUD.play("beacon_tick", {pos: [b.x, S.floor + .3, b.z], loud: true, rate: 0.6}); }
+function animateBeacons(dt) {
+  const now = clk();
+  for (let i = BC.list.length - 1; i >= 0; i--) {
+    const b = BC.list[i];
+    if (b.scene !== S.id || now > b.until + 0.3) { scene.remove(b.o); BC.list.splice(i, 1); continue; }
+    const u = Math.min(1, (now - b.t0) / Math.max(0.01, b.roll)), e = 1 - (1 - u) * (1 - u);
+    b.o.position.set(b.from[0] + (b.x - b.from[0]) * e, b.y, b.from[1] + (b.z - b.from[1]) * e);
+    if (u < 1) b.o.rotation.z = -e * 6 * Math.PI * (Math.hypot(b.x - b.from[0], b.z - b.from[1]) / 12);
+    const left = Math.max(0, b.until - now) / LURE_S;
+    b.led.material.opacity = now < b.until ? 0.5 + 0.5 * Math.sin(now * 9) : 0;
+    if (u >= 1 && !b.tick) b.tick = AUD.play("beacon_tick", {loop: true, pos: [b.x, S.floor + .3, b.z], loud: true});
+    if (now > b.until && b.tick && !b.ended) { b.ended = true; b.tick.stop(); AUD.play("beacon_end", {pos: [b.x, S.floor + .3, b.z]}); }
+    b.ring.visible = u >= 1 && now < b.until; b.ring.scale.setScalar(0.6 + 2.6 * left); b.ring.material.opacity = 0.15 + 0.3 * left;
+    if (now > b.until) b.o.visible = (Math.floor(now * 12) % 2) === 0;
+  }
+}
+// what is within reach: {k: "locker" | "pack" | "beacon", i} or null
+function nearLoot() {
+  const v = LT.vis; if (!v || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return null;
+  const st = lt(); let best = null, bd = 1.5;
+  const look = (items, k, list) => items.forEach((it, i) => { if (list[i] !== 0) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = {k, i}; } });
+  look(v.lockers, "locker", st.lockers); look(v.packs, "pack", st.packs); look(v.beacons, "beacon", st.beacons || []);
+  return best;
+}
+function lootAct(k, i) {
+  if (net.on) { net.send({t: "loot", k, i, rounds: LT.rounds, have: BC.have}); return; }                  // the server answers with the floor's new state
+  const st = lt(), next = k === "locker" ? takeLocker(st, i, myId(), LT.gun) : k === "beacon" ? takeBeacon(st, i, myId(), BC.have) : takePack(st, i, myId(), LT.rounds);
+  if (next) setLoot(S.id, next, myId(), k);
+}
+function tryLoot() {
+  const n = nearLoot(); if (!n) return false;
+  if (n.k === "locker" && LT.gun) { toast("You already carry a gun"); return true; }
+  if (n.k === "beacon" && BC.have >= MAX_BEACONS) { toast(`You cannot carry more than ${MAX_BEACONS} beacons`); return true; }
+  if (n.k === "pack" && LT.rounds >= MAX_ROUNDS) { toast(`You cannot carry more than ${MAX_ROUNDS} rounds`); return true; }
+  lootAct(n.k, n.i); return true;
+}
+function setLoot(scene, st, by, k) {
+  LT.st[scene] = st;
+  if (by !== undefined && by === myId()) {
+    AUD.play(k === "locker" ? "locker" : "pickup");
+    if (k === "locker") { LT.gun = true; LT.rounds = GUN_ROUNDS; CL.have = true; CL.st = newCloak(); toast(`You take the Error Deletion Ray (${GUN_ROUNDS} rounds) and a cloak: V toggles it`); }
+    else if (k === "beacon") { BC.have = Math.min(MAX_BEACONS, BC.have + 1); toast(`AFK Beacon ×${BC.have}: G rolls one ahead, monsters nearby swarm it for ${LURE_S} s`); }
+    else if (k === "pack") { LT.rounds = roundsAfterPack(LT.rounds); toast(`Ammo: ${LT.rounds} rounds`); }
+  }
+}
+function glowTexture() {
+  const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), r = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+  r.addColorStop(0, "rgba(255,230,140,1)"); r.addColorStop(.35, "rgba(255,190,60,.45)"); r.addColorStop(1, "rgba(255,160,0,0)");
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+// placeholder art, drawn in code: a yellow cartridge with a halo, three lamps over the door (red until a fuse is in). Meshy models can replace these later.
+const modelCache = {};
+const loadModel = id => modelCache[id] ||= new Promise(res => loader.load(`models/${id}.glb`, res, undefined, () => res(null)));       // optional: a missing file keeps the placeholder
+function useModel(o, id, height) {                                         // swap the code-made art for models/<id>.glb, scaled to `height` and centred
+  loadModel(id).then(g => {
+    if (!g) return;
+    const m = SkeletonUtils.clone(g.scene), bb = new THREE.Box3().setFromObject(m, true), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3()), k = height / (size.y || 1);
+    m.scale.setScalar(k); m.position.set(-c.x * k, -c.y * k, -c.z * k);
+    const w = new THREE.Group(); w.add(m); o.add(w); o.userData.art.visible = false; o.userData.model = true;
+  });
+}
+function fuseMesh(halo = true) {
+  const o = new THREE.Group(), art = new THREE.Group(), brass = new THREE.MeshBasicMaterial({color: 0x8c8068}); o.add(art); o.userData.art = art;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .26, 10), new THREE.MeshBasicMaterial({color: 0xffd24a}));
+  const c1 = new THREE.Mesh(new THREE.CylinderGeometry(.085, .085, .04, 10), brass); c1.position.y = .15;
+  const c2 = c1.clone(); c2.position.y = -.15; art.add(body, c1, c2); art.scale.setScalar(1.5);
+  if (halo) {
+    const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xffa21a, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); o.add(sp); return sp; };
+    o.userData.halo = mk(0.8, 0.8, 0.7); o.userData.beacon = mk(0.3, 2.2, 0.35);                     // a glow round it, and a faint tall one so it can be spotted along a corridor
+  }
+  useModel(o, "fuse", 0.4);
+  return o;
+}
+const carryMesh = fuseMesh(false); carryMesh.scale.setScalar(1.3); carryMesh.position.set(-0.28, -0.3, -0.55); carryMesh.rotation.z = 0.5; carryMesh.visible = false; camera.add(carryMesh);
+// a waist-high control post with a lever and a lamp (placeholder, drawn in code; models/switch.glb replaces it)
+function switchMesh(facing, mount = false) {
+  const o = new THREE.Group(), art = new THREE.Group(); o.add(art);
+  const post = new THREE.Mesh(new THREE.BoxGeometry(.34, 1.0, .34), new THREE.MeshBasicMaterial({color: 0x555a60})); post.position.y = .5;
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(.3, .38, .06), new THREE.MeshBasicMaterial({color: 0x2c2f33})); plate.position.set(0, 1.08, .19);
+  const lever = new THREE.Group(), stick = new THREE.Mesh(new THREE.BoxGeometry(.05, .24, .05), new THREE.MeshBasicMaterial({color: 0xe0e0e0})); stick.position.y = .12; lever.add(stick); lever.position.set(0, 1.0, .24); lever.rotation.x = -0.6;
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .05), new THREE.MeshBasicMaterial({color: 0xaa2020})); lamp.position.set(0, 1.2, .23);
+  art.add(...(mount ? [plate, lever, lamp] : [post, plate, lever, lamp])); o.rotation.y = facing; o.userData.art = art; o.userData.lever = lever; o.userData.lamp = lamp;
+  const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0x40c8ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); sp.position.y = 1.1; o.add(sp); return sp; };
+  o.userData.halo = mk(0.9, 0.9, 0.6); o.userData.beacon = mk(0.3, 2.4, 0.3);
+  if (!mount) useModel(o, "switch", 1.2);
+  return o;
+}
+// a memo on a stand (placeholder drawn in code)
+function noteMesh() {
+  const o = new THREE.Group(), art = new THREE.Group(); o.add(art);
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(.08, .7, .08), new THREE.MeshBasicMaterial({color: 0x4a4a46})); stand.position.y = .35;
+  const paper = new THREE.Mesh(new THREE.BoxGeometry(.3, .38, .02), new THREE.MeshBasicMaterial({color: 0xf2ecd8})); paper.position.y = .88; paper.rotation.x = -0.25;
+  const ink = new THREE.MeshBasicMaterial({color: 0x555048});
+  for (let k = 0; k < 4; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(.2 - (k % 2) * .05, .02, .005), ink); l.position.set(0, .95 - k * .07, .013); l.rotation.x = -0.25; art.add(l); }
+  art.add(stand, paper); o.userData.art = art; o.userData.paper = paper;
+  const mk = (w, h, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xcfe6ff, depthWrite: false, transparent: true, opacity: op})); sp.scale.set(w, h, 1); sp.position.y = .9; o.add(sp); return sp; };
+  o.userData.halo = mk(0.8, 0.8, 0.6); o.userData.beacon = mk(0.3, 2.2, 0.3);
+  return o;
+}
+function buildFuseVisuals() {
+  FZ.vis = null; const pz = puzzle(); if (!pz || !S.root) return;
+  const g = new THREE.Group(), dr = upDoor(), lamps = [];
+  const items = GATED.includes(S.id) ? fuseSpots().map(home => { const o = fuseMesh(); g.add(o); return {home, o}; }) : [];
+  const sws = SWITCH_FLOORS.includes(S.id) ? switchSpots().map(home => { const o = switchMesh(dr ? Math.atan2(dr.cx - home[0], dr.cz - home[1]) : 0); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; }) : [];
+  const notes = KEYPAD_FLOORS.includes(S.id) ? keypadSpots().map(home => { const o = noteMesh(); o.position.set(home[0], S.floor, home[1]); g.add(o); return {home, o}; }) : [], pan = [];
+  if (dr && KEYPAD_FLOORS.includes(S.id)) for (const side of [1, -1]) {                  // a keypad panel on each face of the wall, beside the door
+    const body = new THREE.Mesh(new THREE.BoxGeometry(.3, .46, .06), new THREE.MeshBasicMaterial({color: 0x2c2f33})), lcd = new THREE.Mesh(new THREE.BoxGeometry(.2, .09, .07), new THREE.MeshBasicMaterial({color: 0xe0a030}));
+    for (const m of [body, lcd]) { m.position.set(dr.cx + dr.dir[0] * .95 - dr.dir[1] * side * .16, dr.cy + 1.25, dr.cz + dr.dir[1] * .95 + dr.dir[0] * side * .16); m.rotation.y = dr.th; g.add(m); }
+    lcd.position.y += .12; lcd.position.x -= dr.dir[1] * side * .01; lcd.position.z += dr.dir[0] * side * .01; pan.push(lcd);
+  }
+  if (dr) for (let i = 0; i < pz.need; i++) for (const side of [1, -1]) {                     // on both faces of the door
+    const m = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, .08), new THREE.MeshBasicMaterial({color: 0xaa2020})), off = (i - (pz.need - 1) / 2) * .3;
+    m.position.set(dr.cx + dr.dir[0] * off - dr.dir[1] * side * .2, dr.cy + 1.8, dr.cz + dr.dir[1] * off + dr.dir[0] * side * .2); m.rotation.y = dr.th; m.userData.lamp = i; g.add(m); lamps.push(m);
+  }
+  S.root.add(g); FZ.vis = {items, lamps, sws, notes, pan};                                  // inside the scene's root, so it is disposed with the floor
+}
+function animateFuses(t) {
+  const v = FZ.vis, st = fz(), pz = puzzle(); if (!v || !pz) { carryMesh.visible = false; return; }
+  v.sws.forEach((it, i) => {                                               // switch posts: the lever and lamp show whether it is on, the glow fades as you come close
+    const on = !!(sw() && sw()[i] && sw()[i].on), u = it.o.userData, d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.lever.rotation.x = on ? 0.6 : -0.6; u.lamp.material.color.setHex(on ? 0x44dd55 : 0xaa2020);
+    u.halo.material.color.setHex(on ? 0x55ee66 : 0x40c8ff); u.beacon.material.color.setHex(on ? 0x55ee66 : 0x40c8ff);
+    u.halo.material.opacity = (on ? 0.25 : 0.6) * k; u.beacon.material.opacity = (on ? 0.1 : 0.3) * k;
+  });
+  const kv = kp();
+  v.notes.forEach((it, i) => {                                             // notes: dim once read, glow fades as you come close
+    const read = !!(kv && kv.found[i] !== null), u = it.o.userData, d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.paper.material.color.setHex(read ? 0x8a8678 : 0xf2ecd8); u.halo.material.opacity = (read ? 0 : 0.6) * k; u.beacon.material.opacity = (read ? 0 : 0.3) * k;
+  });
+  if (kv) v.pan.forEach(m => m.material.color.setHex(kv.solved ? 0x44dd55 : (kv.until > performance.now() ? 0xdd3030 : 0xe0a030)));
+  if (st) v.items.forEach((it, i) => {
+    const f = st[i], here = f && (f.s === 0 || f.s === 3); it.o.visible = !!here; if (!here) return;
+    const [x, z] = f.s === 3 ? [f.x, f.z] : it.home;
+    it.o.position.set(x, S.floor + 0.5 + Math.sin(t * 2 + i) * 0.05, z); it.o.rotation.y = t;
+    const d = Math.hypot(x - P.p.x, z - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    if (it.o.userData.halo) { it.o.userData.halo.material.opacity = 0.7 * k; it.o.userData.beacon.material.opacity = 0.35 * k; }
+  });
+  v.lamps.forEach(m => m.material.color.setHex(m.userData.lamp < pz.count ? 0x44dd55 : 0xaa2020));
+  carryMesh.visible = !!st && myCarry() >= 0 && !dead;
+}
+function nearFuse() {
+  const v = FZ.vis, st = fz(); if (!v || !st || dead || loading || myCarry() >= 0 || Math.abs(S.floor - P.p.y) > 1.5) return -1;
+  let best = -1, bd = 1.5;
+  v.items.forEach((it, i) => { const f = st[i]; if (!f || (f.s !== 0 && f.s !== 3)) return; const [x, z] = f.s === 3 ? [f.x, f.z] : it.home, d = Math.hypot(x - P.p.x, z - P.p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function nearSwitch() {
+  const v = FZ.vis, st = sw(); if (!v || !st || dead || loading || Math.abs(S.floor - P.p.y) > 1.5) return -1;
+  let best = -1, bd = 1.6;
+  v.sws.forEach((it, i) => { if (!st[i] || st[i].on) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function swAct(i) {
+  if (!SWITCH_FLOORS.includes(S.id)) return;
+  if (net.on) { net.send({t: "switch", i}); return; }                       // the server answers with the new state
+  const n = swFlip(sw(), i); if (n) setSwitches(S.id, n);
+}
+function trySwitch() { const i = nearSwitch(); if (i < 0) return false; swAct(i); return true; }
+function setSwitches(scene, st) {
+  const old = SW.st[scene]; SW.st[scene] = st;
+  if (scene !== S.id || !old) return;                                       // the first state you get on arriving is not news
+  st.forEach((s, k) => { if (s.on && !old[k].on) { const it = FZ.vis && FZ.vis.sws[k]; AUD.play("switch", it ? {pos: [it.home[0], S.floor + 1, it.home[1]], loud: true} : {}); switchFlipped(k); } });
+  if (swDone(st) && !swDone(old)) toast("The door hums. It has power.");
+  else if (!swDone(st)) toast(`Switch flipped: ${swCount(st)} of ${NEED_SW}`);
+}
+// the clunk carries: monsters on the floor go to look (the floor's host runs them; everyone else just follows)
+function switchFlipped(k) {
+  const it = FZ.vis && FZ.vis.sws[k]; if (!it || !net.host()) return;
+  for (const m of monsters) if (Math.hypot(m.pos.x - it.home[0], m.pos.z - it.home[1]) < 40) m.alert(it.home[0], it.home[1]);
+}
+function nearNote() {
+  const v = FZ.vis, k = kp(); if (!v || !k || k.solved || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return -1;
+  let best = -1, bd = 1.5;
+  v.notes.forEach((it, i) => { if (k.found[i] !== null) return; const d = Math.hypot(it.home[0] - P.p.x, it.home[1] - P.p.z); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function kpAct(msg) {
+  if (!KEYPAD_FLOORS.includes(S.id)) return;
+  if (net.on) { net.send({t: "keypad", a: msg.a, i: msg.i, code: msg.code}); return; }       // the server answers with what the floor may see
+  const st = KP.local[S.id] ||= newKeypad(), now = Date.now();
+  if (msg.a === "find") { const n = kpFind(st, msg.i); if (n) { KP.local[S.id] = n; setKeypad(S.id, kpView(n, now)); } }
+  else if (msg.a === "try") { const r = tryCode(st, msg.code, now); if (r.st) { KP.local[S.id] = r.st; setKeypad(S.id, kpView(r.st, now)); } else if (r.locked) setKeypad(S.id, kpView(st, now)); }
+}
+function tryNote() { const i = nearNote(); if (i < 0) return false; kpAct({a: "find", i}); return true; }
+function setKeypad(scene, v) {
+  const old = KP.st[scene]; v.until = performance.now() + v.lockMs; KP.st[scene] = v;       // `until`: when the lock ends, by this page's clock
+  if (scene === S.id && old) {                                                              // the first state you get on arriving is not news
+    v.found.forEach((d, i) => { if (d !== null && old.found[i] === null) toast(`Note ${i + 1} of ${CODE_LEN} says: ${d}`); });
+    if (v.fails > old.fails) { keypadFailed(); AUD.play("key_bad"); AUD.play("key_lock", {gain: .7}); }
+    if (v.solved && !old.solved) { toast("The keypad beeps. The door unlocks."); closeKeypad(); AUD.play("key_ok"); AUD.play("unlock"); }
+  }
+  if (scene === S.id) renderKp();
+}
+// a wrong code is loud: monsters near the door come to look (the floor's host runs them)
+function keypadFailed() {
+  toast("Wrong code. The keypad locks for a moment.");
+  const dr = upDoor(); if (!dr || !net.host()) return;
+  for (const m of monsters) if (Math.hypot(m.pos.x - dr.cx, m.pos.z - dr.cz) < 40) m.alert(dr.cx, dr.cz);
+}
+function openKeypad() {
+  if (!KEYPAD_FLOORS.includes(S.id) || KPUI.open || dead || loading || kp().solved) return;
+  KPUI.open = true; KPUI.buf = ""; for (const k in keys) keys[k] = false;
+  document.exitPointerLock?.(); $("kp").style.display = "flex"; renderKp();
+}
+function closeKeypad() { KPUI.open = false; $("kp").style.display = "none"; }
+function renderKp() {
+  if (!KPUI.open) return;
+  const v = kp(), lock = Math.max(0, Math.ceil((v.until - performance.now()) / 1000));
+  $("kp-found").textContent = "Notes found: " + v.found.map(d => d === null ? "_" : d).join(" ");
+  $("kp-code").textContent = Array.from({length: CODE_LEN}, (_, i) => KPUI.buf[i] ?? "•").join(" ");
+  $("kp-note").textContent = lock > 0 ? `Locked: ${lock} s` : "";
+}
+function kpPress(k) {
+  if (!KPUI.open) return;
+  if (k === "C") KPUI.buf = ""; else if (k === "OK") kpSubmit(); else if (KPUI.buf.length < CODE_LEN) { KPUI.buf += k; AUD.play("key_press", {rate: .9 + (+k || 0) * .03}); }
+  renderKp();
+}
+function kpSubmit() {
+  const v = kp();
+  if (KPUI.buf.length !== CODE_LEN) { toast(`The code has ${CODE_LEN} digits`); return; }
+  if (v.until > performance.now()) { toast("The keypad is still locked"); return; }
+  kpAct({a: "try", code: KPUI.buf}); KPUI.buf = "";
+}
+$("kp-pad").innerHTML = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "OK"].map(k => `<button type="button" data-k="${k}">${k}</button>`).join("");
+$("kp-pad").onclick = e => { const b = e.target.closest("button"); if (b) kpPress(b.dataset.k); };
+$("kp-close").onclick = closeKeypad;
+function tryFuse() { const i = nearFuse(); if (i < 0) return false; fuseAct({a: "take", i}); return true; }
+function updatePrompt() {
+  const el = $("prompt"), hud = $("fusehud"), pz = puzzle(); let msg = "";
+  if (pz && !dead && !loading && !reviveTarget()) {
+    if (nearFuse() >= 0) msg = "Press E to pick up the fuse";
+    else if (nearSwitch() >= 0) msg = "Press E to flip the switch";
+    else if (nearNote() >= 0) msg = "Press E to read the note";
+    else {
+      const dr = upDoor();
+      if (dr && isLocked(dr) && Math.hypot(dr.cx - P.p.x, dr.cz - P.p.z) < 2.4)
+        msg = pz.kind === "CODE" ? "Press E to use the keypad" : pz.kind === "FUSES" ? (myCarry() >= 0 ? "Press E to put the fuse in the door" : `The door has no power: ${pz.count} of ${pz.need} fuses`) : `The door has no power: ${pz.count} of ${pz.need} switches flipped`;
+    }
+  }
+  if (!pz && !dead && !loading && !reviveTarget() && nearPower()) msg = "Press E to switch on the power";
+  if (!msg && !dead && !loading && !reviveTarget()) { const n = nearLoot(); if (n) msg = n.k === "locker" ? (LT.gun ? "You already carry a gun" : "Press E to open the locker") : n.k === "beacon" ? (BC.have >= MAX_BEACONS ? "You cannot carry more beacons" : "Press E to take the AFK Beacon") : (LT.rounds >= MAX_ROUNDS ? "You cannot carry more ammo" : "Press E to take the ammo pack (+3)"); }
+  el.textContent = msg; el.style.display = msg ? "block" : "none";
+  if (!pz && POWER_SOURCES.includes(S.id)) { hud.style.display = "block"; hud.textContent = POWER.on ? "POWER ON" : "POWER OFF"; }
+  else if (pz) { hud.style.display = "block"; hud.textContent = pz.done ? "DOOR POWERED" : (pz.label || `${pz.kind} ${pz.count}/${pz.need}`) + (pz.kind === "FUSES" && myCarry() >= 0 ? " · CARRYING" : ""); } else hud.style.display = "none";
+}
+
+// ---------------------------------------------------------------- the building's power: one switch for the room (rules: shared/power.js)
+// Thrown from the box on L3 (a shortcut) or the far switch on L4. While it is off the L4 store's glass doors are shut; the L4 switch is loud.
+const POWER = newPower();
+const L4_ARRIVAL = [16, 7.7];                                              // where the stairs bring you into the store
+function farSwitchSpot() {                                                 // the walkable spot in the store furthest from the arrival: the far side of the room
+  let best = null, bd = -1;
+  for (const c of mainRegion()) { const [x, z] = cellXZ(c); if (Math.abs(x) > 24.5 || z < -21 || z > 25) continue; const d = Math.hypot(x - L4_ARRIVAL[0], z - L4_ARRIVAL[1]); if (d > bd) { bd = d; best = [x, z]; } }
+  return best;
+}
+function buildPowerVisuals() {
+  S.pw = null; S.glass = null; if (!POWER_SOURCES.includes(S.id) || !S.root) return;
+  const g = new THREE.Group(); let spot, o;
+  if (S.id === "L3") { spot = [0, -21.7]; o = switchMesh(0, true); o.position.set(0, S.floor - 0.33, -21.2); }           // a lever and lamp on the model's power box, which stands at the south wall
+  else { spot = farSwitchSpot(); if (spot) { o = switchMesh(Math.atan2(-spot[0], 3 - spot[1])); o.position.set(spot[0], S.floor, spot[1]); } }
+  if (o) g.add(o);
+  S.root.add(g); S.pw = spot ? {spot, o} : null;
+  if (S.id === "L4") {
+    S.glass = S.root.getObjectByName("Doors_L4_Store_glass");
+    if (S.glass) { S.glass.matrixAutoUpdate = true; S.glass.userData.y0 = S.glass.position.y; S.glass.userData.rise = POWER.on ? 1 : 0; S.glass.visible = !POWER.on; }
+  }
+}
+function animatePower(dt) {
+  const pw = S.pw;
+  if (pw && pw.o) {                                                         // lever and lamp show whether it is on; the glow fades as you come close
+    const u = pw.o.userData, on = POWER.on, d = Math.hypot(pw.spot[0] - P.p.x, pw.spot[1] - P.p.z), k = Math.min(1, Math.max(0, (d - 0.5) / 1.5));
+    u.lever.rotation.x = on ? 0.6 : -0.6; u.lamp.material.color.setHex(on ? 0x44dd55 : 0xaa2020);
+    u.halo.material.color.setHex(on ? 0x55ee66 : 0x40c8ff); u.beacon.material.color.setHex(on ? 0x55ee66 : 0x40c8ff);
+    u.halo.material.opacity = (on ? 0.25 : 0.6) * k; u.beacon.material.opacity = (on ? 0.1 : 0.3) * k;
+  }
+  const gl = S.glass;
+  if (gl) {                                                                 // the glass rolls up out of the opening
+    const target = POWER.on ? 1 : 0, r = gl.userData.rise;
+    gl.userData.rise = r + Math.sign(target - r) * Math.min(Math.abs(target - r), dt / 1.6);
+    gl.position.y = gl.userData.y0 + gl.userData.rise * 3.8; gl.visible = gl.userData.rise < 0.999;
+  }
+}
+function nearPower() {
+  const pw = S.pw; if (!pw || POWER.on || dead || loading || KPUI.open || Math.abs(S.floor - P.p.y) > 1.5) return false;
+  return Math.hypot(pw.spot[0] - P.p.x, pw.spot[1] - P.p.z) < 1.8;
+}
+function powerAct() {
+  if (net.on) { net.send({t: "power"}); return; }                           // the server tells the whole room
+  const n = throwPower(POWER, S.id); if (n) setPower(true, n.by);
+}
+function tryPower() { if (!nearPower()) return false; powerAct(); return true; }
+function setPower(on, by, quiet) {
+  const was = POWER.on; POWER.on = on; if (!on || was) return;
+  POWER.by = by;
+  if (S.shutter) { S.shutter.off = true; S.nav = buildNav(S.floor); }      // the opening is a way through now, for monsters too
+  if (quiet) return;
+  AUD.play("power"); AUD.stinger("st_power");
+  toast(S.id === "L4" ? "The doors hum open." : S.id === "L3" ? "Somewhere below, a generator starts." : "Far away, a generator starts.");
+  if (by === "L4" && S.id === "L4" && S.pw && net.host()) for (const m of monsters) if (Math.hypot(m.pos.x - S.pw.spot[0], m.pos.z - S.pw.spot[1]) < 40) m.alert(S.pw.spot[0], S.pw.spot[1]);      // the L4 switch is loud
+}
+
+// ---------------------------------------------------------------- the finale: the alarm, the way out, the results
+// The alarm starts once the doors are open and someone is in the store (the server says when in a room). Walking out onto the parking lot is the finish
+// for you; the lot is safe and is the lobby. The round is over when everyone in the room is out, then everyone sees places, times and their best.
+const FIN = {t0: performance.now(), alarmUntil: 0, out: false, exited: new Map(), results: null, hunt: 0};
+const EXIT_Z = 28.8, EXIT_HALF_X = 5;                                      // the store's glass opening is at z 27.0-27.5; past this line you are on the lot
+function startAlarm(ms) { if (FIN.alarmUntil) return; FIN.alarmUntil = performance.now() + ms; if (S.id === "L4") AUD.stinger("st_finale"); if (S.id === "L4") toast("The alarm goes off. They are coming for the doors."); }
+const alarmLeft = () => Math.max(0, FIN.alarmUntil - performance.now());
+function exitCheck() {
+  if (FIN.out || dead || loading || S.id !== "L4" || !POWER.on) return;
+  if (P.p.z > EXIT_Z && Math.abs(P.p.x) < EXIT_HALF_X && Math.abs(S.floor - P.p.y) < 2) goOut();
+}
+function goOut() {
+  FIN.out = true; closeKeypad(); AUD.stinger("st_exit");
+  if (net.on) net.send({t: "exit"});
+  else { const ms = performance.now() - FIN.t0; FIN.exited.set(0, {id: 0, name: "You", place: 1, ms}); showResults([{id: 0, name: "You", place: 1, ms}]); }
+}
+function animateAlarm(dt) {
+  const el = $("alarm"), pulse = $("redpulse"), left = alarmLeft();
+  if (FIN.results) { el.style.display = "none"; pulse.style.opacity = 0; return; }
+  if (FIN.out) {
+    const total = net.on ? net.peers.size + 1 : 1;
+    el.className = "out"; el.style.display = "block"; el.textContent = `YOU'RE OUT · ${FIN.exited.size}/${total} out`; pulse.style.opacity = 0; return;
+  }
+  if (left > 0 && S.id === "L4") {
+    el.className = ""; el.style.display = "block"; el.textContent = `ALARM ${fmtTime(left)}`;
+    pulse.style.opacity = (0.35 + 0.35 * Math.sin(performance.now() / 180)) * Math.min(1, left / 4000 + 0.4);
+    if (net.host() && (FIN.hunt -= dt) <= 0) { FIN.hunt = 2; for (const m of monsters) m.alert(0, 24.5); }          // every monster on the floor heads for the doors
+  } else { el.style.display = "none"; pulse.style.opacity = 0; }
+  if (!net.on && POWER.on && S.id === "L4" && !FIN.alarmUntil && !loading) startAlarm(ALARM_MS);
+}
+function bestTime(ms) {                                                    // best (lowest) time on this browser
+  let best = 0;
+  try { best = parseInt(localStorage.getItem("lot-best") || "0", 10) || 0; } catch (e) {}
+  const isNew = !best || ms < best;
+  if (isNew) { best = ms; try { localStorage.setItem("lot-best", String(ms)); } catch (e) {} }
+  return {best, isNew};
+}
+function showResults(rows) {
+  if (FIN.results) return;
+  FIN.results = rows; document.exitPointerLock?.(); AUD.resultMusic();
+  const me = rows.find(r => r.id === (net.on ? net.id : 0));
+  $("r-rows").innerHTML = rows.map(r => `<tr class="${r === me ? "me" : ""}"><td>${r.place}</td><td>${String(r.name).replace(/[<>&]/g, "")}</td><td>${fmtTime(r.ms)}</td></tr>`).join("");
+  const b = me ? bestTime(me.ms) : null;
+  $("r-best").textContent = b ? (b.isNew ? `NEW RECORD ${fmtTime(b.best)}` : `BEST ${fmtTime(b.best)}`) : "";
+  $("r-again").onclick = () => location.reload();
+  $("results").style.display = "flex";
+}
+
+// ---------------------------------------------------------------- multiplayer: a room of up to 8; server/server.js relays everything and only picks each scene's host
+// Everyone sees the same monsters because one client per scene (the host) simulates them and sends snapshots; the rest follow.
+const DOWNED_S = 45, REVIVE_S = 4;
+const CHARS = [{id: "plaid", name: "Plaid"}, {id: "suit", name: "Suit"}, {id: "shorts", name: "Shorts"}, {id: "red", name: "Red Dress"}, {id: "white", name: "White Suit"}];
+const net = {on: false, ws: null, id: 0, room: "", phase: "lobby", peers: new Map(), snap: null, t: 0, mt: 0, ticks: 0, ready: null, started: null, startRes: null, lobby: null, alert: null,
+  host() { return !this.on; },                                // alone, this page runs the monsters; in a room the server does, and everyone follows it
+  send(m) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }};
+let toastT = 0;
+function toast(msg, ms = 3200) { const el = $("toast"); el.textContent = msg; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { el.style.opacity = 0; }, ms); }
+const r2 = v => Math.round(v * 100) / 100;
+// each player is one of the characters (characters/<id>.glb: Walking and Running clips). Until the model arrives, or if it fails, a capsule stands in.
+const charAssets = {};
+const loadChar = id => charAssets[id] ||= new Promise((res, rej) => loader.load(`characters/${id}.glb`, res, undefined, rej));
+function peerTag(p) {                                                           // the name above a teammate, with a thin health bar under it
+  const g = p.cv.getContext("2d"); g.clearRect(0, 0, 256, 64);
+  g.font = "700 34px system-ui,sans-serif"; g.textAlign = "center"; g.fillStyle = p.color; g.strokeStyle = "#000"; g.lineWidth = 5;
+  g.strokeText(p.name, 128, 40); g.fillText(p.name, 128, 40);
+  g.fillStyle = "rgba(0,0,0,.65)"; g.fillRect(56, 50, 144, 9);
+  g.fillStyle = p.hp <= 35 ? "#e03a30" : "#c8504a"; g.fillRect(57, 51, 142 * p.hp / MAX_HP, 7);
+  p.tex.needsUpdate = true;
+}
+function addPeer(info) {
+  if (net.peers.has(info.id)) return;
+  const col = new THREE.Color(info.color), mat = new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: .35, roughness: .7});
+  const obj = new THREE.Group(), pivot = new THREE.Group(), stand = new THREE.Group(); obj.add(pivot); pivot.add(stand);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.24, .85, 4, 10), mat); body.position.y = .75; stand.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.17, 12, 10), mat); head.position.y = 1.45; stand.add(head);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(.08, .06, .16), new THREE.MeshBasicMaterial({color: 0xffffff})); nose.position.set(0, 1.47, -.2); stand.add(nose);
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true})); label.scale.set(1.2, .3, 1); label.position.y = 1.95; obj.add(label);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTexture(), color: 0xffc040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true}));      // lit while they carry a fuse
+  halo.scale.set(1.6, 1.6, 1); halo.position.y = 1.0; halo.visible = false; obj.add(halo);
+  obj.visible = false; scene.add(obj);
+  const peer = {halo, id: info.id, name: info.name, color: info.color, char: info.char, scene: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, tyaw: 0, crouch: false, moving: false, dead: false, imm: false, fresh: true,
+    obj, pivot, stand, mixer: null, acts: null, playing: null, lie: [.6, .25], cv, tex, hp: MAX_HP};
+  peerTag(peer); net.peers.set(info.id, peer);
+  loadModel("gun").then(g => { if (!g || !net.peers.has(info.id)) return; const m = SkeletonUtils.clone(g.scene); m.scale.setScalar(0.12); m.rotation.y = -Math.PI / 2; m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });         // the ray gun in a teammate's hand
+    const w = new THREE.Group(); w.add(m); w.position.set(0.2, 1.0, -0.32); w.visible = false; pivot.add(w); peer.gunObj = w; });
+  const c = CHARS[info.char];
+  if (c) loadChar(c.id).then(gl => {
+    if (!net.peers.has(peer.id)) return;
+    const m = SkeletonUtils.clone(gl.scene); m.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
+    const face = new THREE.Group(); face.rotation.y = Math.PI; face.add(m);                      // the models face +Z; the game's forward is -Z
+    stand.clear(); stand.add(face); peer.lie = [.85, .2];
+    peer.mixer = new THREE.AnimationMixer(m);
+    peer.acts = {walk: peer.mixer.clipAction(gl.animations.find(a => a.name === "Walking")), run: peer.mixer.clipAction(gl.animations.find(a => a.name === "Running"))};
+  }).catch(e => console.warn("character model missing, keeping the capsule:", c.id, e));
+  hud();
+}
+function peerPlay(p, name, speed) {
+  const a = p.acts[name]; if (!a) return;
+  if (p.playing !== a) { a.reset().fadeIn(0.2).play(); if (p.playing) p.playing.fadeOut(0.2); p.playing = a; }
+  a.setEffectiveTimeScale(speed);
+}
+function removePeer(id) {
+  const p = net.peers.get(id); if (!p) return;
+  scene.remove(p.obj); disposeTree(p.obj); net.peers.delete(id); hud();
+}
+function hud() {
+  $("hud").textContent = net.on ? `ROOM ${net.room} · ${net.peers.size + 1} in the building · ${[...net.peers.values()].map(p => p.name).join(", ")}` : "";
+}
+function onNet(m) {
+  switch (m.t) {
+    case "welcome":
+      if (Number.isFinite(m.now)) net.off = m.now - Date.now();
+      net.id = m.id; net.room = m.room; net.on = true; net.phase = m.phase;
+      for (const p of m.players) if (p.id !== m.id) addPeer(p);
+      if (m.phase !== "lobby") net.startRes?.();
+      if (m.power) setPower(true, null, true);
+      for (const e of m.exited || []) FIN.exited.set(e.id, e);
+      if (m.alarmMs > 0) startAlarm(m.alarmMs);
+      if (m.results) showResults(m.results);
+      hud(); net.ready?.(); net.ready = null; break;
+    case "join": addPeer(m); break;
+    case "leave": removePeer(m.id); break;
+    case "lobby": net.lobby = m; renderWait(); break;
+    case "start": net.phase = "playing"; clearInterval(net.cd); net.startRes?.(); break;
+    case "p": { const p = net.peers.get(m.id); if (p) { p.scene = m.scene; p.fresh = true; } break; }       // someone changed floor: you only learn which
+    case "s": {
+      const p = net.peers.get(m.id); if (!p) break;
+      const moved = p.scene !== m.scene, wasDead = p.dead;
+      p.scene = m.scene; p.tx = m.x; p.ty = m.y; p.tz = m.z; p.tyaw = m.yaw; p.crouch = !!m.crouch; p.moving = !!m.moving; p.run = !!m.run; p.dead = !!m.dead; p.imm = !!m.imm; p.carry = !!m.carry; p.cloak = !!m.cloak; p.gun = !!m.gun; if (Number.isFinite(m.hp)) { const hp = Math.max(0, Math.min(MAX_HP, Math.round(m.hp / 5) * 5)); if (hp !== p.hp) { p.hp = hp; peerTag(p); } }
+      if (p.fresh || moved || Math.hypot(p.tx - p.x, p.tz - p.z) > 6) { p.x = p.tx; p.y = p.ty; p.z = p.tz; p.yaw = p.tyaw; p.fresh = false; }
+      if (!wasDead && p.dead && m.scene === S.id) { net.alert = {id: p.id, until: performance.now() + 8000}; toast(`${p.name} was caught`); }     // the scream: an arrow toward the body
+      break;
+    }
+    case "m":
+      if (m.scene !== S.id || net.host()) break;
+      net.snap = m;
+      if (m.d) { const now = performance.now(); for (const dr of doors) if (!dr.link && now - (dr.at || 0) > 1500) dr.target = m.d.includes(dr.d.name) ? 1 : 0; }
+      break;
+    case "door": {
+      if (m.scene !== S.id) break;
+      const dr = doors.find(x => x.d.name === m.name); if (dr && !dr.link) { const was = dr.target; dr.target = m.open === 0 ? 0 : 1; dr.at = performance.now(); if (was !== dr.target) AUD.play(dr.target ? "door_creak" : "door_close", {pos: [dr.cx, dr.cy + 1, dr.cz], loud: true}); }
+      break;
+    }
+    case "me": {                                                      // the server's word on your health, rounds, cloak and beacons
+      const was = HP.h.hp; HP.h = {hp: m.hp, hurtAt: m.hp < was ? clk() : HP.h.hurtAt};
+      if (m.hp < was) { HP.flash = 1; rumble?.playEffect?.("dual-rumble", {duration: 250, strongMagnitude: 1, weakMagnitude: .8}); AUD.play("hurt", {priority: true, rate: .92 + Math.random() * .16}); }
+      LT.gun = !!m.gun; LT.rounds = m.rounds; BC.have = m.beacons; CL.have = !!m.cloak;
+      if (m.cloak) CL.st = {...CL.st, on: m.cloak.on, b: (m.cloak.on !== CL.st.on || Math.abs(CL.st.b - m.cloak.b) > 0.15) ? m.cloak.b : CL.st.b, broken: Math.abs((CL.st.broken || 0) - (m.cloak.x || 0)) > 3 ? (m.cloak.x || 0) : (CL.st.broken || 0)};
+      if (m.hp <= 0 && !dead && !loading) die();
+      if (m.respawn && dead) respawn();
+      break;
+    }
+    case "beacon": if (m.scene === S.id && !loading) addBeacon(m.x, m.z, [m.x, m.z]); break;                       // someone rolled a beacon on this floor (it lands at once for us)
+    case "stun": if (m.scene === S.id && !loading && m.from !== net.id) { stunFx = Math.max(stunFx, 0.6); AUD.play("zap", {pos: [m.x, S.floor + 1, m.z], loud: true, rate: 0.7}); } break;          // someone short-circuited their cloak: a flash, and the monsters round them stop
+    case "reverse": if (m.scene === S.id && !loading) { const b = BC.list.filter(q => q.scene === S.id).sort((p, q) => Math.hypot(p.x - m.x, p.z - m.z) - Math.hypot(q.x - m.x, q.z - m.z))[0]; if (b && Math.hypot(b.x - m.x, b.z - m.z) < 2) markReversed(b, {reversed: true}); } break;
+    case "revived": revived(net.peers.get(m.by)); break;
+    case "fuses": setFuses(m.scene, m.st); break;
+    case "switches": setSwitches(m.scene, m.st); break;
+    case "power": setPower(true, m.by); break;
+    case "loot": setLoot(m.scene, m.st, m.by, m.k); break;
+    case "shot": { const p = net.peers.get(m.id); if (p) p.shotT = SHOT_NOISE_S; if (net.host() && m.id !== net.id) { const L = Math.hypot(...m.d) || 1; resolveShot(m.o, m.d.map(v => v / L)); } break; }      // only the floor's host is sent these
+    case "beam": beam(m.o, m.e); AUD.play("gun", {pos: m.o, loud: true, rate: .96 + Math.random() * .08}); break;
+    case "zap": { const mo = monsters[m.i]; if (m.scene !== S.id || !mo) break; if (!net.host()) { mo.pos.set(m.to[0], mo.fy, m.to[1]); mo.glitchT = GLITCH_S; } flashAt(m.from[0], m.from[1]); flashAt(m.to[0], m.to[1]); AUD.play("zap", {pos: [m.to[0], S.floor + 1.2, m.to[1]], loud: true}); break; }
+    case "alarm": startAlarm(m.ms); break;
+    case "exited": FIN.exited.set(m.id, m); if (m.id !== net.id) toast(`${m.name} is out (place ${m.place})`); break;
+    case "results": showResults(m.rows); break;
+    case "keypad": setKeypad(m.scene, {found: m.found, solved: m.solved, fails: m.fails, lockMs: m.lockMs}); break;
+  }
+}
+// the nearest downed teammate within reach on your floor
+function reviveTarget() {
+  if (!net.on || dead || loading) return null;
+  let best = null, bd = 1.7;
+  for (const p of net.peers.values()) if (p.scene === S.id && p.dead && Math.abs(p.ty - P.p.y) < 1.5) { const d = Math.hypot(p.tx - P.p.x, p.tz - P.p.z); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function drawAlert() {
+  const el = $("scream"), al = net.alert, p = al && net.peers.get(al.id);
+  if (!al || !p || !p.dead || p.scene !== S.id || performance.now() > al.until || dead || loading) { el.style.display = "none"; return; }
+  const dx = p.x - P.p.x, dz = p.z - P.p.z, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+  const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
+  el.style.display = "block"; el.style.left = 50 + Math.sin(a) * 42 + "%"; el.style.top = 50 - Math.cos(a) * 38 + "%";
+  el.firstChild.style.transform = `rotate(${a}rad)`; el.lastChild.textContent = p.name;
+}
+function updatePeers(dt) {
+  const k = Math.min(1, dt * 14);
+  for (const p of net.peers.values()) {
+    const here = p.scene === S.id && !loading;
+    p.obj.visible = here; if (!here) continue;
+    p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.z += (p.tz - p.z) * k;
+    let da = p.tyaw - p.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); p.yaw += da * k;
+    if (p.gunObj) p.gunObj.visible = !!p.gun && !p.dead && !p.carry;
+    p.halo.visible = !!p.carry && !p.dead; if (p.cloak && !p.dead) p.obj.visible = Math.floor(performance.now() / 90 + p.id) % 3 !== 0;       // a cloaked teammate shimmers
+    p.obj.position.set(p.x, p.y, p.z); p.obj.rotation.y = p.yaw;
+    p.pivot.scale.y += ((p.crouch ? .7 : 1) - p.pivot.scale.y) * k;
+    p.pivot.rotation.z = p.dead ? 1.45 : 0; p.pivot.position.set(p.dead ? p.lie[0] : 0, p.dead ? p.lie[1] : 0, 0);
+    if (p.mixer) {
+      if (p.dead) peerPlay(p, "walk", 0);
+      else if (!p.moving) peerPlay(p, "walk", 0.04);                       // standing still: the walk, almost frozen (the models have no idle clip)
+      else if (p.crouch) peerPlay(p, "walk", 0.6);
+      else if (p.run) peerPlay(p, "run", 1);
+      else peerPlay(p, "walk", 1.15);
+      p.mixer.update(dt);
+    }
+  }
+}
+function netTick(dt) {
+  if (!net.on) return;
+  if ((net.t -= dt) <= 0) {
+    net.t = 1 / 15;
+    net.send({t: "s", scene: loading ? null : S.id, x: r2(P.p.x), y: r2(P.p.y), z: r2(P.p.z), yaw: r2(P.yaw), crouch: P.crouch ? 1 : 0, moving: P.moving ? 1 : 0, run: P.running ? 1 : 0, dead: dead ? 1 : 0, imm: P.imm > 0 ? 1 : 0, carry: myCarry() >= 0 ? 1 : 0, hp: Math.round(HP.h.hp), cloak: CL.st.on ? 1 : 0, gun: LT.gun ? 1 : 0});
+  }
+}
+function connect(name, room, char) {
+  const q = new URLSearchParams(location.search);
+  const url = q.get("server") || ((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  return new Promise((resolve, reject) => {
+    let ws; try { ws = new WebSocket(url); } catch (e) { return reject(new Error("That server address is not valid.")); }
+    const fail = msg => { clearTimeout(timer); net.ready = null; try { ws.close(); } catch (e) {} reject(new Error(msg)); };
+    const timer = setTimeout(() => fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."), 5000);
+    net.ready = () => { clearTimeout(timer); resolve(); };
+    net.started = new Promise(r => { net.startRes = r; });
+    ws.onopen = () => ws.send(JSON.stringify({t: "join", room, name, char}));
+    ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === "full") fail("That room is full (8 players)."); else onNet(m); };
+    ws.onerror = () => { if (!net.on) fail("Could not reach the server. Play solo, or run server/server.js and open the game from it."); };
+    ws.onclose = () => {
+      if (!net.on) return;
+      net.on = false; for (const id of [...net.peers.keys()]) removePeer(id); net.snap = null;
+      $("hud").textContent = "DISCONNECTED · playing solo";
+    };
+    net.ws = ws;
+  });
+}
+// the waiting room: pick a character, then everyone readies and the round starts after a short countdown
+function renderWait() {
+  const m = net.lobby; if (!m || !$("l-wait")) return;
+  $("l-players").innerHTML = m.players.map(p => `<div><img src="characters/${CHARS[p.char]?.id}.jpg" width="20" height="30" style="vertical-align:middle;margin-right:8px"><span style="color:${p.ready ? "#9ccc65" : "#7a7a6a"}">${p.ready ? "READY" : "…"}</span>${p.name.replace(/[<>&]/g, "")}</div>`).join("");
+  const mine = m.players.find(p => p.id === net.id);
+  $("l-ready").textContent = mine && mine.ready ? "NOT READY" : "READY";
+  clearInterval(net.cd); const end = performance.now() + (m.countdownMs || 0);
+  const tick = () => { if (!$("l-count")) return clearInterval(net.cd); $("l-count").textContent = m.countdownMs ? `Starting in ${Math.max(0, Math.ceil((end - performance.now()) / 1000))}` : "Waiting for everyone to be ready"; };
+  tick(); if (m.countdownMs) net.cd = setInterval(tick, 200);
+  if (new URLSearchParams(location.search).get("ready") && mine && !mine.ready && !net.autoReady) { net.autoReady = true; net.send({t: "ready", ready: true}); }
+}
+function waitingRoom() {
+  if (net.phase !== "lobby") return net.started;                         // joined a round already under way: straight in
+  $("l-form").style.display = "none"; $("l-wait").style.display = "flex";
+  $("l-roomcode").textContent = `Room ${net.room}: share the code, or this page's address with ?room=${net.room}`;
+  $("l-ready").onclick = () => { const mine = net.lobby?.players.find(p => p.id === net.id); net.send({t: "ready", ready: !(mine && mine.ready)}); };
+  renderWait();
+  return net.started;
+}
+function lobby() {
+  const q = new URLSearchParams(location.search), el = $("lobby");
+  const store = {get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+  let char = Math.min(CHARS.length - 1, Math.max(0, parseInt(q.get("char") ?? store.get("lot-char") ?? "0", 10) || 0));
+  for (const [id, k] of [["l-vm", "music"], ["l-vs", "sfx"]]) { const r = $(id); r.value = AUD.settings[k]; r.oninput = () => AUD.set(k, +r.value); }
+  const box = $("l-chars");
+  box.innerHTML = CHARS.map((c, i) => `<button type="button" class="ch" data-i="${i}"><img src="characters/${c.id}.jpg" alt=""><span>${c.name}</span></button>`).join("");
+  const mark = () => box.querySelectorAll(".ch").forEach(b => b.classList.toggle("on", +b.dataset.i === char));
+  box.onclick = e => { const b = e.target.closest(".ch"); if (b) { char = +b.dataset.i; mark(); } };
+  mark();
+  $("l-name").value = q.get("name") || store.get("lot-name");
+  $("l-room").value = (q.get("room") || store.get("lot-room")).toUpperCase();
+  el.style.display = "flex";
+  return new Promise(resolve => {
+    $("l-solo").onclick = () => { el.remove(); resolve(); };
+    $("l-form").onsubmit = async e => {
+      e.preventDefault();
+      const name = $("l-name").value.trim() || "Player", room = $("l-room").value.trim().toUpperCase() || "MAIN";
+      $("l-err").textContent = "Connecting…"; $("l-join").disabled = true;
+      try { await connect(name, room, char); store.set("lot-name", name); store.set("lot-room", room); store.set("lot-char", String(char)); await waitingRoom(); el.remove(); resolve(); }
+      catch (err) { $("l-err").textContent = err.message; $("l-join").disabled = false; }
+    };
+    if (q.get("room") && q.get("auto")) $("l-form").requestSubmit();
+  });
 }
 
 // ---------------------------------------------------------------- game loop
-let dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
+let seenT = 0, dead = false, deadT = 0, rumbleT = 0, deathLevel = "B1";
+const HP = {h: newHealth(), flash: 0};
+const clk = () => performance.now() / 1000;
+function applyHit(dmg) {                                                       // a monster touched you (the floor's host decides; solo that is you)
+  if (dead || loading || FIN.out || P.imm > 0) return;
+  const n = hpHurt(HP.h, dmg, clk()); if (!n) return;
+  HP.h = n; HP.flash = 1; AUD.play("hurt", {priority: true, rate: .92 + Math.random() * .16}); rumble?.playEffect?.("dual-rumble", {duration: 250, strongMagnitude: 1, weakMagnitude: .8});
+  if (hpDowned(n)) die();
+}
+function hpHud(dt) {
+  HP.flash = Math.max(0, HP.flash - dt * 2.2);
+  $("hurt").style.opacity = HP.flash;
+  const bar = $("hp").querySelector("i");
+  bar.style.width = HP.h.hp / MAX_HP * 100 + "%"; bar.style.background = HP.h.hp <= 35 ? "#e03a30" : "#c8504a";
+  $("hp").style.display = loading || FIN.results ? "none" : "block";
+}
 function die() {
-  dead = true; deadT = 0; deathLevel = S.id; devOn.v = false;
+  closeKeypad();
+  if (myCarry() >= 0) fuseAct({a: "drop", x: P.p.x, z: P.p.z});                      // it stays where you fell
+  AUD.stinger("st_down"); dead = true; deadT = 0; deathLevel = S.id; devOn.v = false; P.reviveT = 0; $("revive").style.display = "none";
   $("death").style.opacity = 1; $("fear").style.opacity = 1;
+  if (net.on) { $("death").textContent = "DOWNED"; $("death").style.background = "rgba(0,0,0,.55)"; }       // in a room you can be lifted, so you may still look around
   rumble?.playEffect?.("dual-rumble", {duration: 700, strongMagnitude: 1, weakMagnitude: 1});
 }
+function standUp() { $("death").style.opacity = 0; $("fear").style.opacity = 0; $("death").textContent = "YOU DIED"; $("death").style.background = ""; }
+function revived(by) {
+  if (!dead) return;
+  dead = false; P.crouch = false; crouchLatch = false; P.imm = 4; P.v.set(0, 0, 0); standUp(); HP.h = hpRevived(clk()); AUD.stinger("st_lift");
+  toast(by ? `${by.name} lifted you` : "You got up");
+}
 function respawn() {
-  dead = false; teleport(randomSpawn(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;
-  for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }
-  $("death").style.opacity = 0; $("fear").style.opacity = 0;
+  dead = false; P.imm = net.on ? 4 : 0; teleport(spawnFor(deathLevel)); P.yaw = Math.random() * 6.28; P.pitch = 0; P.crouch = false;   // a new random spot on this floor, as at the round start
+  if (!net.on) for (const m of monsters) { m.state = "patrol"; m.path = []; m.lost = 0; m.last = null; }   // in a room the monsters belong to everyone, so they are not reset for you
+  standUp(); HP.h = newHealth();
+}
+// the host runs the scene's monsters against everyone on the floor; the others follow its snapshots. Alone (or offline) you are always the host.
+function targetList() {
+  const out = [];
+  if (!dead && !loading && !FIN.out && !(P.imm > 0)) out.push({id: net.id, x: P.p.x, y: P.p.y, z: P.p.z, crouch: P.crouch && !(P.shotT > 0), moving: P.moving || P.shotT > 0, run: P.running || P.shotT > 0, carry: myCarry() >= 0, cloak: CL.st.on});
+  if (net.on) for (const p of net.peers.values()) if (p.scene === S.id && !p.dead && !p.imm && !FIN.exited.has(p.id)) out.push({cloak: !!p.cloak, id: p.id, x: p.tx, y: p.ty, z: p.tz, crouch: !!p.crouch && !(p.shotT > 0), moving: !!p.moving || p.shotT > 0, run: !!p.run || p.shotT > 0, carry: !!p.carry});
+  return out;
+}
+function simMonsters(dt) {
+  if (net.host()) {
+    const targets = targetList();
+    const lureList = beaconLures();
+    for (const m of monsters) {
+      for (const id of m.update(dt, targets, lureList).caught) { if (id === net.id) applyHit(HIT_DMG); else net.send({t: "hit", to: id, dmg: HIT_DMG}); }
+    }
+    swarmApart(monsters, dt);
+  } else monsters.forEach((m, i) => m.follow(dt, net.snap && net.snap.l[i]));
 }
 function update(dt) {
   if (loading) return;
-  if (dead) { deadT += dt; if (deadT > 3.2) respawn(); return; }
   updateDoors(dt);
+  if (dead) {
+    deadT += dt;
+    if (net.on) { simMonsters(dt); $("death").textContent = "DOWNED · " + Math.max(0, Math.ceil(DOWNED_S - deadT)); }
+    if (deadT > (net.on ? DOWNED_S + 3 : 3.2)) respawn();                    // in a room the server ends the down time (a `me` message); this is only the fallback
+    return;
+  }
+  P.imm = Math.max(0, (P.imm || 0) - dt);
+  HP.h = hpRegen(HP.h, clk(), dt);
   const g = pad();
   P.yaw += (((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.9 - g.lx * 2.6) * dt;
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
-  const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
-  const side = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
-  P.crouch = !!(keys.KeyC || keys.ControlLeft || keys.ControlRight || g.crouch);
-  P.run = !!(keys.ShiftLeft || keys.ShiftRight || g.run) && !P.crouch;
+  const rv = reviveTarget(), reviving = !!(rv && (keys.KeyX || keys.KeyF || g.use));            // hold X beside a downed teammate for 4 s
+  P.reviveT = reviving ? (P.reviveT || 0) + dt : 0;
+  const rp = $("revive");
+  if (rv) { rp.style.display = "block"; rp.querySelector("span").textContent = reviving ? `Lifting ${rv.name}…` : `Hold X to lift ${rv.name}`; rp.querySelector("b span").style.width = Math.min(1, P.reviveT / REVIVE_S) * 100 + "%"; }
+  else rp.style.display = "none";
+  if (reviving && P.reviveT >= REVIVE_S) { net.send({t: "revive", to: rv.id}); rv.dead = false; P.reviveT = 0; }
+  const fwd = (reviving || KPUI.open) ? 0 : (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
+  const side = (reviving || KPUI.open) ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
+  P.crouch = crouchLatch;                                                                       // Shift / left-stick click toggles it
   P.moving = Math.hypot(fwd, side) > 0.2;
-  const sp = (P.crouch ? 1.6 : P.run ? 5.6 : 3.2) * dt;                 // crouch / walk / run: the same three paces in every game
+  const runKey = !reviving && !KPUI.open && (keys.KeyR || g.run);                                // hold R (or the right stick) to run: faster than any monster, and loud; running stands you up
+  if (P.tired && P.stam >= RUN_RESUME) P.tired = false;
+  P.running = !!(runKey && P.moving && !P.tired && P.stam > 0);
+  if (P.running) { crouchLatch = false; P.crouch = false; }
+  AIM.on = HELD.item === "gun" && (HELD.aimBtn || HELD.padAim) && !dead && !loading;
+  { const target = AIM.on ? AIM.fovAim : AIM.fov; if (Math.abs(camera.fov - target) > 0.05) { camera.fov += (target - camera.fov) * Math.min(1, dt * 12); camera.updateProjectionMatrix(); } }
+  P.stam = Math.max(0, Math.min(1, P.stam + (P.running ? -dt / RUN_S : dt / RECOVER_S)));
+  if (P.running && P.stam <= 0) { P.tired = true; P.running = false; }
+  $("stam").style.opacity = P.stam < 0.999 ? 1 : 0; $("stam").firstElementChild.style.width = P.stam * 100 + "%"; $("stam").firstElementChild.style.background = P.tired ? "#a55" : "#cdb";
+  const sp = (P.crouch ? CROUCH_SPEED : P.running ? RUN_SPEED : WALK_SPEED) * dt;
   let wx = -Math.sin(P.yaw) * fwd + Math.cos(P.yaw) * side, wz = -Math.cos(P.yaw) * fwd - Math.sin(P.yaw) * side;
   const mag = Math.min(1, Math.hypot(wx, wz)), l = Math.hypot(wx, wz) || 1;
   wx = wx / l * mag * sp; wz = wz / l * mag * sp;
@@ -671,21 +1734,41 @@ function update(dt) {
   crossPortals(); if (loading) return;
   checkFall();
   P.eye += ((P.crouch ? 0.95 : EYE) - P.eye) * Math.min(1, dt * 10);
-  const noise = P.moving && !P.crouch ? [P.p.x, P.p.z] : null;           // moving about is loud, crouching is silent
-  let closest = 99, caught = false;
-  for (const m of monsters) {
-    const r = m.update(dt, noise);
-    if (r.chasing) closest = Math.min(closest, r.dist);
-    if (r.catches) caught = true;
-  }
-  const fear = Math.max(0, 1 - closest / 16);
+  simMonsters(dt);
+  let closest = 99;                                                        // fear: the nearest monster that is chasing and on your floor, whoever it chases
+  for (const m of monsters) if (m.state === "chase" && m.onFloorY(P.p.y)) closest = Math.min(closest, Math.hypot(P.p.x - m.pos.x, P.p.z - m.pos.z));
+  const fear = Math.max(Math.max(0, 1 - closest / 16), HP.h.hp < 36 ? (36 - HP.h.hp) / 36 * 0.7 : 0);
   $("fear").style.opacity = fear * 0.9;
   if (rumble && closest < 8 && (rumbleT -= dt) <= 0) { rumble.playEffect?.("dual-rumble", {duration: 120, strongMagnitude: .5 * fear, weakMagnitude: .7 * fear}); rumbleT = 0.15; }
-  if (caught) die();
 }
+// everything a frame does except drawing, so a bot (tools/bots.mjs, ?bot=1) can run the game without rendering it
+// sound each frame: the listener, your footsteps, the music's danger layers, the monsters and teammates placed in 3D (a wall between you and a source muffles it)
+let stepT = 0, blockT = 0;
+function audioTick(dt) {
+  if (BOT || AUD.status === "off") return;
+  AUD.setListener(P.p.x, P.p.y + P.eye, P.p.z, P.yaw);
+  if (P.moving && P.ground && !dead && !loading && !FIN.results) {
+    const mode = P.crouch ? "crouch" : P.running ? "run" : "walk"; stepT -= dt;
+    if (stepT <= 0) { stepT = stepInterval(mode); AUD.play(levelMix(S.id).step, {gain: stepGain(mode), rate: .92 + Math.random() * .16}); }
+  } else stepT = 0.1;
+  if (loading) return;
+  const eye = P.p.y + P.eye, here = monsters.filter(m => m.onFloorY(P.p.y) && !(m.glitchT > 0));
+  const recheck = (blockT -= dt) <= 0; if (recheck) blockT = 0.2;
+  if (recheck) for (const m of here) m.audBlocked = !segClear(P.p.x, eye, P.p.z, m.pos.x, m.fy + 1.3, m.pos.z, 0.5);
+  const chasers = here.filter(m => m.state === "chase").map(m => ({d: Math.hypot(m.pos.x - P.p.x, m.pos.z - P.p.z)}));
+  AUD.update(dt, {chasers, hp: dead ? 100 : HP.h.hp, alarmMsLeft: S.id === "L4" && FIN.alarmUntil && !FIN.out && !FIN.results ? alarmLeft() : null});
+  AUD.monsters(dt, here.map(m => ({id: monsters.indexOf(m), name: m.cfg.name, x: m.pos.x, y: m.fy, z: m.pos.z, state: m.state, speed: m.speed || 0, blocked: !!m.audBlocked})), P.p);
+  if (net.on) AUD.peers(dt, [...net.peers.values()].filter(p => p.scene === S.id && !p.dead).map(p => {
+    if (recheck) p.audBlocked = !segClear(P.p.x, eye, P.p.z, p.x, p.y + 1.2, p.z, 0.5);
+    return {id: p.id, x: p.x, y: p.y, z: p.z, moving: p.moving, run: p.run, crouch: p.crouch, blocked: !!p.audBlocked}; }), levelMix(S.id).step);
+}
+function sim(dt, t) {
+  update(dt); hpHud(dt); audioTick(dt); exitCheck(); if ((seenT -= dt) <= 0) { seenT = 0.2; updateSeen(ctime()); } updatePeers(dt); drawAlert(); animateAlarm(dt); animateFuses(t); animateLoot(); camHud(); animateGun(dt); animateCloak(dt); animateBeacons(dt); animatePower(dt); updatePrompt(); renderKp(); netTick(dt);
+}
+const BOT = new URLSearchParams(location.search).has("bot");
 function step(dtOverride) {
   const dt = dtOverride ?? Math.min(clock.getDelta(), 0.05), t = performance.now() / 1000;
-  update(dt);
+  sim(dt, t);
   camera.position.set(P.p.x, P.p.y + P.eye - (dead ? Math.min(deadT, 0.6) * 1.0 : 0), P.p.z);
   camera.rotation.set(dead ? Math.max(P.pitch - deadT * 0.8, -1.2) : P.pitch, P.yaw, dead ? Math.min(deadT, 1) * 0.6 : 0, "YXZ");
   // the device slides up into view and shows either the camera feed or the map
@@ -697,7 +1780,7 @@ function step(dtOverride) {
     else {
       const cams = S.cams;
       if (cams.length) {
-        camIdx %= cams.length; aimFeed(cams[camIdx], t);
+        camIdx %= cams.length; aimFeed(cams[camIdx], ctime());
         device.visible = false; renderer.setRenderTarget(rt); renderer.render(scene, feedCam); renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); device.visible = true;
         feedMat.uniforms.time.value = t % 100; screenMesh.material = feedMat;
       } else { mctx.fillStyle = "#050806"; mctx.fillRect(0, 0, 512, 320); mapTex.needsUpdate = true; screenMesh.material = mapMat; }
@@ -706,12 +1789,14 @@ function step(dtOverride) {
   renderer.render(scene, camera);
   renderPortals();
 }
-function frame() { if (!inGame) step(); requestAnimationFrame(frame); }
+function frame() { if (!BOT && !inGame) step(); requestAnimationFrame(frame); }
 const clock = new THREE.Clock();
+await lobby();
+FIN.t0 = performance.now();
 await loadScene("B1");
 $("fade").style.transition = "opacity .35s";
 $("load").style.opacity = 0; setTimeout(() => $("load").remove(), 700);
-window.__game = {step, P, monsters, doors, portals, addPortal, update, teleport, move, collide, boxes, S, loadScene, enterGame, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get mode() { return devMode; }};
+window.__game = {HELD, AIM, owned, portals, addPortal, crossPortals, enterGame, AUD, camIdxNow: () => camIdx, set camIdx(v) { camIdx = v; }, drawMapNow: () => drawMap(performance.now() / 1000), MAP_FADE_MS, feedCam, CAMHOT, hotCam, ctime, camHud, BUZZ, CL, BC, toggleCloak, throwBeacon, addBeacon, beaconLures, beaconSpots, spawnFor, floorGoals, HP, applyHit, GUN, fire, rayMonster, banishSpot, resolveShot, rayClear, LT, lockerSpots, packSpots, nearLoot, tryLoot, lootAct, NAV, NX0, NZ0, NW, NH, segClear, sim, astar, nearestWalk, cellOf, aimFeed, feedCam, MAPSEEN, camSees, updateSeen, MAP_FADE_MS, cellXZ, FIN, startAlarm, exitCheck, showResults, EXIT_Z, POWER, powerAct, farSwitchSpot, nearPower, tryPower, KP, KPUI, kpAct, kpPress, keypadSpots, nearNote, tryNote, openKeypad, SW, swAct, switchSpots, nearSwitch, trySwitch, puzzle, FZ, fuseAct, fuseSpots, isLocked, upDoor, tryFuse, nearFuse, myCarry, keys, net, CHARS, reviveTarget, closeDoor, groupSpawn, doorBusy, revived, step, P, monsters, doors, update, teleport, move, collide, boxes, S, loadScene, die, respawn, useDoor, toggleDevice, toggleMode, cycleCam, levelOfY, randomSpawn, openDoor, devOn, get dead() { return dead; }, get loading() { return loading; }, get mode() { return devMode; }};
 frame();
 </script>
 </body>

@@ -27,6 +27,9 @@ jobs:
           mkdir _site
           cp index.html _site/
           cp -r monsters _site/monsters
+          cp -r characters _site/characters
+          cp -r shared _site/shared
+          cp -r models _site/models
           cp -r world _site/world
           cp -r games _site/games
           touch _site/.nojekyll
