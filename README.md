@@ -12,8 +12,14 @@ Run it locally by serving the folder (`python -m http.server`) and opening `inde
 ## The game
 
 You start on the pool level (B1) and work upwards. Every door is shut: you open one with X (controller) or X / E (keyboard) and the monsters have to open them too.
-Move with WASD / arrow keys / left stick; look with the mouse, left-right arrows or right stick; you walk by default; hold R (or press in the left stick) to run, which is faster than any monster but loud and lasts about 4 s before a short recovery; Shift, B or a push of the right stick crouches (monsters see you from half as far and cannot hear you).
-Tab or Y takes the handheld device out: it shows the security cameras on your floor (Q / T, or LB / D-pad right, to switch; Z or D-pad down jumps to a camera that sees a monster) and, toggled with M or View, a map of the floor with the monsters pinged.
+**Controls** (the same on keyboard and controller; `H` in game lists them):
+- Move WASD / left stick; look mouse / right stick; jump Space / A.
+- Crouch (toggle) Shift / left-stick click: press again to walk normally. Run (hold) R / right-stick click: faster than any monster, but loud and it tires you; running stands you up.
+- X (keyboard X or F) is the action button: doors, fuses, switches, notes, the power, the keypad, loot, and (held beside a downed teammate) lifting them.
+- Y takes out what you carry (tap again to rotate through the ray gun, the cloak and the beacon; hold for the wheel). Keyboard: Y, or 1 / 2 / 3.
+- RT / left click uses what you hold: the gun fires, the cloak switches on or off, a beacon is rolled. LT / right click: the gun aims; the cloak's secondary is a **short circuit** (it goes dead for 5 minutes and every monster within 8 m is stunned for 5 s, so you can run through them); a beacon's secondary **reverses its frequency** (for 12 s the monsters run from it, then they come back and group up round it).
+- LB / RB (Q / E): the support and the combat/objective consumable slots (empty for now).
+- D-pad up / View / Tab / M: the handheld map. The camera feeds have no controls for now.
 If a monster sees you it chases; if it catches you, you die and come back on the same floor in a random spot.
 
 Monsters (config in `world/monsters.json`): Sinew of the Abyss on B1, The Pale Traveler on L1, a clawed creature on L2, the first creature in the showroom (L4).
