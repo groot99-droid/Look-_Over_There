@@ -19,7 +19,7 @@ await page.goto(`http://localhost:${srv.port}/`); await page.click("#l-solo");
 await page.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000});
 const G = f => page.evaluate(f);
 const tick = async (n = 6) => { await G(`(() => { const g = window.__game; for (let i = 0; i < ${n}; i++) g.sim(0.05, performance.now() / 1000); })()`); await sleep(60); };
-const tap = async (i, ms = 80) => { await G(`window.__press(${i}, true)`); await tick(2); await sleep(ms); await G(`window.__press(${i}, false)`); await tick(2); };
+const tap = async i => { await G(`(() => { const g = window.__game; window.__press(${i}, true); g.update(0.01); window.__press(${i}, false); g.update(0.01); })()`); await tick(1); };          // press and release inside one frame pair: a tap, however slow the browser is
 const NAMES = {gun: "RAY GUN", cloak: "CLOAK", beacon: "AFK BEACON"};
 const heldNow = () => G(() => window.__game.HELD.item).then(it => it ? NAMES[it] : null);
 await G(() => { const g = window.__game; g.P.imm = 999; for (const m of g.monsters) { m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0, sight: 0}; m.pos.set(900, m.fy, 900); } });
