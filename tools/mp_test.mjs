@@ -98,14 +98,14 @@ try {
   const fuseAt = (page, i) => page.evaluate(i => { const g = window.__game, f = g.FZ.st.B1[i], it = g.FZ.vis.items[i]; return f.s === 3 ? [f.x, f.z] : it.home; }, i);
   const goTo = (page, xz) => page.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);
   // Bob takes fuse 1 and goes down with it: it drops where he fell
-  await goTo(b, spotsB[1]); await b.keyboard.press("KeyE");
+  await goTo(b, spotsB[1]); await b.keyboard.press("KeyX");
   await until("Bob carries fuse 1 (and Ann sees the glow)", a, () => { const g = window.__game, f = g.FZ.st.B1[1]; return f.s === 1 && [...g.net.peers.values()][0].carry === true; });
   await b.evaluate(() => window.__game.die());
   await until("a downed carrier drops the fuse where he fell", a, () => { const f = window.__game.FZ.st.B1[1]; return f.s === 3 && Number.isFinite(f.x); });
   await b.evaluate(() => window.__game.revived());
   // Ann carries all three to the door, one at a time
   for (let i = 0; i < 3; i++) {
-    await goTo(a, await fuseAt(a, i)); await a.keyboard.press("KeyE");
+    await goTo(a, await fuseAt(a, i)); await a.keyboard.press("KeyX");
     await until(`Ann picks up fuse ${i + 1}`, a, n => window.__game.FZ.st.B1[n].s === 1, i);
     if (i === 0) { await until("a second client sees who carries it", b, () => window.__game.FZ.st.B1[0].s === 1);
       check("a carrier cannot take a second fuse", await a.evaluate(() => { const g = window.__game; g.tryFuse(); return g.FZ.st.B1.filter(f => f.s === 1).length === 1; })); }
@@ -115,8 +115,10 @@ try {
   }
   await until("Bob sees the door powered", b, () => window.__game.FZ.st.B1.every(f => f.s === 2));
   // Ann takes the real stair door to L1; Bob is moved there
-  await a.evaluate(() => { const g = window.__game; g.openDoor(g.upDoor(), true); });
-  await a.evaluate(async () => { const g = window.__game; for (let i = 0; i < 40 && g.S.id === "B1"; i++) { g.update(0.05); await new Promise(r => setTimeout(r, 30)); } });
+  // a stair door opens onto a hallway; stepping into the doorway crosses to the other floor
+  await a.evaluate(async () => { const g = window.__game, d = g.upDoor(); g.openDoor(d, true); for (let i = 0; i < 30 && d.p < 0.7; i++) g.update(0.05);
+    g.teleport([d.hallC[0] + d.hallN[0] * 0.3, g.P.p.y, d.hallC[1] + d.hallN[1] * 0.3]);
+    for (let i = 0; i < 40 && g.S.id === "B1"; i++) { g.update(0.05); await new Promise(r => setTimeout(r, 30)); } });
   await Promise.all([a.waitForFunction(() => window.__game.S.id === "L1" && !window.__game.loading, null, {timeout: 60000}), b.evaluate(() => window.__game.loadScene("L1"))]);
   check("the powered stair door took Ann to L1", await a.evaluate(() => window.__game.S.id === "L1"));
   await Promise.all([a, b].map(p => p.waitForFunction(() => { const g = window.__game; return g.S.id === "L1" && !g.loading && [...g.net.peers.values()].every(q => q.scene === "L1"); }, null, {timeout: 60000})));
@@ -132,11 +134,11 @@ try {
   check("the L1 stair door starts locked", await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
   const goSw = (page, xz) => page.evaluate(t => { const g = window.__game; g.P.p.set(t[0], g.S.floor + 0.02, t[1]); g.P.v.set(0, 0, 0); }, xz);
   parkMonsters(floorOf("L1"), 0); { const m = floorOf("L1").monsters[0]; m.pos.set(swSpots[1][0] + 8, m.fy, swSpots[1][1]); m.state = "patrol"; m.path = []; }     // a monster within earshot of switch 1
-  await goSw(guest, swSpots[1]); await guest.keyboard.press("KeyE");
+  await goSw(guest, swSpots[1]); await guest.keyboard.press("KeyX");
   await until("the guest flips switch 2 (the host sees it)", host, () => { const st = window.__game.SW.st.L1; return !!st && st[1].on && !st[0].on; });
   check("one switch is not enough", await host.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
   await serverUntil("the server's monster went to look at the clunk", () => { const m = floorOf("L1").monsters[0]; return m.state === "search" || m.state === "chase"; });
-  await goSw(host, swSpots[0]); await host.keyboard.press("KeyE");
+  await goSw(host, swSpots[0]); await host.keyboard.press("KeyX");
   await until("the host flips the other switch; the guest sees the door powered", guest, () => { const st = window.__game.SW.st.L1; return !!st && st.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor()); });
 
   // ---- L2 keypad: notes read by different players are shared; the code stays on the server; a wrong code locks it for everyone
@@ -148,8 +150,8 @@ try {
   check("the L2 stair door starts locked", await a.evaluate(() => window.__game.isLocked(window.__game.upDoor())));
   const kpRoom = srv.rooms.get("TEST").keypads.L2, code = kpRoom.code;                  // the test peeks at the server; no client has the code
   check("no client holds the code", await a.evaluate(() => !window.__game.KP.local.L2) && await b.evaluate(() => !window.__game.KP.local.L2));
-  await goSw(guest, noteSpotsA[0]); await guest.keyboard.press("KeyE");
-  await goSw(host, noteSpotsA[3]); await host.keyboard.press("KeyE");
+  await goSw(guest, noteSpotsA[0]); await guest.keyboard.press("KeyX");
+  await goSw(host, noteSpotsA[3]); await host.keyboard.press("KeyX");
   await until("each player sees both notes that were read", host, c => { const f = window.__game.KP.st.L2.found; return f[0] === c[0] && f[3] === c[3] && f[1] === null && f[2] === null; }, code);
   await until("the other player sees them too (and still not the rest)", guest, c => { const f = window.__game.KP.st.L2.found; return f[0] === c[0] && f[3] === c[3] && f[1] === null && f[2] === null; }, code);
   const wrongCode = code.map(d => (d + 1) % 10).join("");
@@ -174,7 +176,7 @@ try {
   A = await info(a); B = await info(b);
   check("the power starts off for both players", await a.evaluate(() => !window.__game.POWER.on) && await b.evaluate(() => !window.__game.POWER.on));
   await host.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0], g.S.floor + 0.02, sp[1] + 1.4); g.P.v.set(0, 0, 0); });
-  await host.keyboard.press("KeyE");
+  await host.keyboard.press("KeyX");
   await until("the host throws the L3 box: both hear of it", guest, () => window.__game.POWER.on && window.__game.POWER.by === "L3");
   await until("and the host", host, () => window.__game.POWER.on);
   check("the server holds it for the room", srv.rooms.get("TEST").power.on === true && srv.rooms.get("TEST").power.by === "L3");
@@ -207,7 +209,7 @@ try {
     await host.evaluate(b => { const g = window.__game; g.P.p.set(b.x, g.S.floor + 0.02, b.z); g.P.v.set(0, 0, 0); g.P.yaw = Math.PI / 2; }, body);
     await until("host is offered the revive", host, () => !!window.__game.reviveTarget());
     // hold E and advance the host's game clock by hand (software rendering is too slow to wait for 4 s of frames)
-    steps = await host.evaluate(() => { const g = window.__game; g.keys.KeyE = true; let n = 0; while (g.reviveTarget() && n < 400) { g.update(0.05); n++; } g.keys.KeyE = false; return n; });
+    steps = await host.evaluate(() => { const g = window.__game; g.keys.KeyX = true; let n = 0; while (g.reviveTarget() && n < 400) { g.update(0.05); n++; } g.keys.KeyX = false; return n; });
     if (steps < 78) console.log(`WARN revive attempt ${attempt} ended after ${steps} steps`, JSON.stringify(await host.evaluate(() => { const g = window.__game; return {dead: g.dead, loading: g.loading, scene: g.S.id, me: [g.P.p.x, g.P.p.y, g.P.p.z], peers: [...g.net.peers.values()].map(q => [q.scene, q.dead, q.tx, q.ty, q.tz])}; })));
   }
   check("lifting takes a 4 s hold, not a tap", steps >= 78 && steps <= 90, `(${steps} steps of 0.05 s)`);
@@ -247,7 +249,7 @@ try {
   check("a room that did not use the L3 box finds L4 shut", await solo2.evaluate(() => { const g = window.__game; return !g.POWER.on && !g.S.shutter.off && !!g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}); }));
   await serverUntil("the server runs L4 for the other room", () => !!floorOf("L4", "OTHER")); parkMonsters(floorOf("L4", "OTHER"));
   await solo2.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); g.P.v.set(0, 0, 0); });
-  await solo2.keyboard.press("KeyE");
+  await solo2.keyboard.press("KeyX");
   await until("the L4 far switch powers it through the server", solo2, () => window.__game.POWER.on && window.__game.POWER.by === "L4" && !window.__game.S.shutter.off === false);
   check("the room's state is its own", srv.rooms.get("OTHER").power.by === "L4" && srv.rooms.get("TEST").power.by === "L3");
 
@@ -260,7 +262,7 @@ try {
   await toL4(x); await toL4(y);
   await serverUntil("the server runs L4 for the finale room", () => !!floorOf("L4", "FIN") && roomOf("FIN").players.size === 2); parkMonsters(floorOf("L4", "FIN"));
   await x.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.imm = 99; g.P.p.set(sp[0] + 1.2, g.S.floor + 0.02, sp[1]); g.P.v.set(0, 0, 0); });
-  await x.keyboard.press("KeyE");
+  await x.keyboard.press("KeyX");
   await until("the L4 switch sets off the alarm for both players", y, () => window.__game.POWER.on && window.__game.FIN.alarmUntil > 0);
   await until("and for the one who threw it", x, () => window.__game.FIN.alarmUntil > 0);
   await y.evaluate(() => { const g = window.__game; g.P.imm = 99; g.step(0.05); });

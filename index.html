@@ -83,6 +83,13 @@
   #gamemount{position:fixed;inset:0;display:none;z-index:2;background:#000}
   #gamemount canvas{position:absolute;inset:0;width:100%;height:100%}
   #gamefade{position:fixed;inset:0;pointer-events:none;opacity:1;background:#000;z-index:6;transition:opacity .6s}
+  #stunfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:radial-gradient(circle,rgba(160,210,255,0) 20%,rgba(160,210,255,.85) 100%)}
+  #held{position:fixed;left:50%;bottom:4.5%;transform:translateX(-50%);color:#d8d8c4;font:600 13px/1.4 system-ui,sans-serif;letter-spacing:.08em;text-align:center;z-index:3;pointer-events:none;text-shadow:0 1px 3px #000;display:none}
+  #held b{display:block;font-size:15px;letter-spacing:.2em;color:#fff}
+  #wheel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:none;gap:14px;z-index:5;pointer-events:none}
+  #wheel span{padding:12px 18px;border:2px solid #555;background:rgba(0,0,0,.72);color:#aaa;font:700 15px system-ui,sans-serif;letter-spacing:.14em}
+  #wheel span.on{border-color:#9ccc65;color:#fff;transform:scale(1.15)}
+  #reticle{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid rgba(255,255,255,.7);border-radius:50%;z-index:3;pointer-events:none;display:none}
   #death{position:fixed;inset:0;pointer-events:none;opacity:0;background:#000;display:flex;align-items:center;justify-content:center;color:#a00;font:700 clamp(28px,6vw,64px)/1 Georgia,serif;letter-spacing:.2em;z-index:4;transition:opacity 1.1s}
 </style>
 </head>
@@ -90,6 +97,7 @@
 <div id="load">LOADING</div>
 <div id="fear"></div>
 <div id="fade"></div>
+<div id="stunfx"></div><div id="held"></div><div id="wheel"></div><div id="reticle"></div>
 <div id="gamemount"></div>
 <div id="gamefade" style="opacity:0"></div>
 <div id="death">YOU DIED</div>
@@ -97,9 +105,9 @@
 <div id="camhud"></div><div id="buzz"></div><div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
 <div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
 <div id="help"><div class="card"><h2>CONTROLS</h2><div class="cols"><div>
-<div><b>WASD</b>move</div><div><b>Mouse</b>look</div><div><b>Space</b>jump</div><div><b>R (hold)</b>run, loud</div><div><b>Shift</b>crouch, quiet</div><div><b>E / X</b>use, door, loot (hold to revive)</div><div><b>F / click</b>ray gun</div><div><b>V</b>cloak</div><div><b>G</b>roll an AFK Beacon</div></div><div>
-<div><b>Tab</b>device out / away</div><div><b>M</b>feeds / map</div><div><b>Q / T</b>previous / next camera</div><div><b>1-9</b>pick a camera</div><div><b>Z</b>camera that sees a monster</div><div><b>N</b>sound on / off</div><div><b>H</b>this list</div></div></div>
-<small>Controller: left stick move · right stick look · A jump · B / right-stick click crouch · left-stick click run · X use · Y device · RT fire · LT cloak · RB beacon · LB / D-pad left previous camera · D-pad right next · D-pad down camera with a monster · View / D-pad up map</small></div></div>
+<div><b>WASD</b>move</div><div><b>Mouse</b>look</div><div><b>Space</b>jump</div><div><b>Shift</b>crouch (press again to walk)</div><div><b>R (hold)</b>run, loud</div><div><b>X / F</b>action: doors, fuses, switches, loot (hold to lift a teammate)</div><div><b>Y</b>take out what you carry; tap again to rotate; hold for the wheel (arrows or mouse wheel)</div><div><b>1 2 3</b>ray gun, cloak, beacon</div></div><div>
+<div><b>Left click</b>use what you hold: fire, cloak on/off, roll a beacon</div><div><b>Right click</b>gun: aim. Cloak: short circuit (stuns monsters near you, cloak dead 5 min). Beacon: reverse it (monsters run away, then group up)</div><div><b>Q / E</b>support / combat consumable (none yet)</div><div><b>Tab / M</b>handheld map</div><div><b>N</b>sound on / off</div><div><b>H</b>this list</div></div></div>
+<small>Controller: left stick move · right stick look · A jump · left-stick click crouch (click again to walk) · right-stick click run (hold) · X action · Y hold / rotate (hold for the wheel) · RT use what you hold · LT aim (gun) or secondary (cloak, beacon) · LB / RB support / combat consumables · D-pad up or View: map</small></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
 <div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
@@ -130,14 +138,14 @@ import {GATED, NEED, newFloor, act as fuseReduce, carrying, unlocked, slotted} f
 import {SWITCH_FLOORS, NEED_SW, newSwitches, flip as swFlip, swCount, swDone} from "./shared/switches.js";
 import {KEYPAD_FLOORS, CODE_LEN, newKeypad, view as kpView, foundCount, find as kpFind, tryCode} from "./shared/keypad.js";
 import {LOOT, MAX_ROUNDS, GUN_ROUNDS, MAX_BEACONS, newLoot, takeLocker, takePack, takeBeacon, roundsAfterPack} from "./shared/loot.js";
-import {newCloak, toggle as cloakToggle, tick as cloakTick, SHORT_M} from "./shared/cloak.js";
-import {LURE_S, SAFE_M, ROLL_M, lures as lureCovers, ringSpot, rollEnd} from "./shared/beacon.js";
+import {newCloak, toggle as cloakToggle, tick as cloakTick, SHORT_M, shortCircuit as cloakShort, broken as cloakBroken, STUN_S} from "./shared/cloak.js";
+import {LURE_S, SAFE_M, ROLL_M, lures as lureCovers, ringSpot, rollEnd, reverse as beaconReverse, REVERSE_S} from "./shared/beacon.js";
 import {ALARM_MS, fmtTime} from "./shared/finish.js";
 import {MAX_HP, HIT_DMG, newHealth, hurt as hpHurt, regen as hpRegen, revived as hpRevived, downed as hpDowned, mayHit} from "./shared/health.js";
 import {pick as pickSpawn} from "./shared/spawn.js";
 import {createAudio} from "./audio/engine.js";
 import {near as nearW, buildNav as buildNavW, cellOf, cellXZ, nearestWalk, astar, segClear as segClearW, rayClear as rayClearW, mainRegion as mainRegionW, pickSpots as pickSpotsW, indexBoxes, rng32, NAV, NX0, NZ0, NW, NH} from "./shared/world.js";
-import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW, swarmApart} from "./shared/monsters.js";
+import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW, swarmApart, stunNear} from "./shared/monsters.js";
 import {levelMix, stepInterval, stepGain} from "./shared/mix.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
 
@@ -561,7 +569,7 @@ function groupSpawn(level) {
 }
 
 // ---------------------------------------------------------------- the handheld device: security feeds for the floor you are on, and a map of it
-const devOn = {v: false}; let devMode = "cams", camIdx = 0, devSlide = 0;
+const devOn = {v: false}; let devMode = "map", camIdx = 0, devSlide = 0;          // the handheld shows the map; the camera feeds have no controls (a later item will bring them back as a full-screen ability)
 const rt = new THREE.WebGLRenderTarget(384, 240); rt.texture.colorSpace = THREE.SRGBColorSpace;
 const feedCam = new THREE.PerspectiveCamera(50, 384 / 240, 0.05, 80);
 const mapCanvas = document.createElement("canvas"); mapCanvas.width = 512; mapCanvas.height = 320;
@@ -675,7 +683,7 @@ function aimFeed(c, t) {
   feedCam.rotation.set(tilt * Math.PI / 180, yaw + Math.PI + pan * Math.PI / 180, 0, "YXZ");
 }
 function toggleDevice() { devOn.v = !devOn.v; if (devOn.v) device.visible = true; }
-function toggleMode() { if (devOn.v) devMode = devMode === "cams" ? "map" : "cams"; else toggleDevice(); }
+function toggleMode() { toggleDevice(); }
 function camHud() {                                                         // the feed's caption, and the buzz line when a camera sees a monster close to someone
   const el = $("camhud"), show = devOn.v && devMode === "cams" && S.cams.length && !loading;
   if (show) { const hot = CAMHOT.get(camIdx % S.cams.length); el.style.display = "block"; el.className = hot ? "hot" : ""; el.textContent = `CAM ${camIdx % S.cams.length + 1} / ${S.cams.length}` + (hot ? ` · ${hot.map(m => m.cfg.name).join(", ")} IN VIEW` : "") + `   [Q/T switch · 1-9 pick · Z hot camera]`; } else el.style.display = "none";
@@ -695,6 +703,46 @@ function useDoor() {
   }
   if (best) { if (best.target === 0) openDoor(best, true); else closeDoor(best); }
 }
+// ---------------------------------------------------------------- what you hold, and the controls (the same on keyboard and controller)
+//   move: WASD / left stick · look: mouse / right stick · jump: Space / A · crouch (toggle): Shift / left-stick click · run (hold): R / right-stick click
+//   X (or F): the action button: doors, fuses, switches, notes, the power, the keypad, loot, lifting a teammate (hold)
+//   Y: tap to take out what you carry (tap again to rotate), hold for the wheel · RT / left click: use what you hold (fire / cloak on-off / roll a beacon)
+//   LT / right click: the gun aims; with the cloak or a beacon in hand it is the secondary ability · LB / RB (Q / E): support and combat/objective consumables (none yet)
+//   D-pad up / View / Tab / M: the handheld map (the camera feeds have no controls for now)
+const HELD = {item: null, yAt: 0, yDown: false, wheel: false, sel: 0, aimBtn: false, padAim: false};
+const AIM = {on: false, fov: 75, fovAim: 42};
+let crouchLatch = false;
+const ITEM_NAMES = {gun: "RAY GUN", cloak: "CLOAK", beacon: "AFK BEACON"};
+const ITEM_HINT = {gun: "RT / click: fire · LT / right click: aim", cloak: "RT / click: on/off · LT / right click: short circuit (5 min offline, stuns monsters near you)", beacon: "RT / click: roll it · LT / right click: reverse the frequency"};
+const owned = () => [LT.gun && "gun", CL.have && "cloak", BC.have > 0 && "beacon"].filter(Boolean);
+function setHeld(it) {
+  HELD.item = it || null; AIM.on = false;
+  toast(HELD.item ? `Holding: ${ITEM_NAMES[it]}   ${ITEM_HINT[it]}` : "Hands empty", 2600);
+}
+function rotateHeld() {
+  const o = owned(); if (!o.length) { toast("You have nothing to hold yet: the lockers on B1 hold a ray gun and a cloak"); return; }
+  const k = o.indexOf(HELD.item); setHeld(o[(k + 1) % o.length]);                                      // from empty hands (-1) this gives the first one
+}
+const wheelEntries = () => ["hands", ...owned()];
+function renderWheel() {
+  const el = $("wheel"), e = wheelEntries(); el.style.display = HELD.wheel ? "flex" : "none"; if (!HELD.wheel) return;
+  el.innerHTML = e.map((it, k) => `<span class="${k === HELD.sel ? "on" : ""}">${it === "hands" ? "HANDS" : ITEM_NAMES[it]}</span>`).join("");
+}
+function yPress() { HELD.yDown = true; HELD.yAt = performance.now(); HELD.wheel = false; }
+function yRelease() {
+  if (!HELD.yDown) return; HELD.yDown = false;
+  if (HELD.wheel) { const it = wheelEntries()[HELD.sel]; HELD.wheel = false; renderWheel(); setHeld(it === "hands" ? null : it); }
+  else rotateHeld();
+}
+function yTick() {
+  if (HELD.yDown && !HELD.wheel && performance.now() - HELD.yAt > 350) { HELD.wheel = true; const k = wheelEntries().indexOf(HELD.item || "hands"); HELD.sel = k < 0 ? 0 : k; renderWheel(); }
+}
+const wheelMove = d => { if (HELD.wheel) { const n = wheelEntries().length; HELD.sel = (HELD.sel + d + n) % n; renderWheel(); } };
+const usePrimary = () => HELD.item === "gun" ? fire() : HELD.item === "cloak" ? toggleCloak() : HELD.item === "beacon" ? throwBeacon() : (toast("Nothing in your hands: tap Y"), false);
+const useSecondary = () => HELD.item === "cloak" ? cloakShortCircuit() : HELD.item === "beacon" ? reverseBeacon() : false;
+const useConsumable = slot => toast(slot === 0 ? "Your support slot (LB / Q) is empty" : "Your combat / objective slot (RB / E) is empty");
+const doAction = () => { if (!reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor(); };
+const crouchToggle = () => { crouchLatch = !crouchLatch; };
 addEventListener("keydown", e => {
   if (inGame) return;
   if (KPUI.open) {                                                           // the keypad takes the keyboard while it is up
@@ -702,54 +750,64 @@ addEventListener("keydown", e => {
     if (/^(Digit|Numpad)\d$/.test(e.code)) kpPress(e.code.slice(-1));
     else if (e.code === "Backspace") { KPUI.buf = KPUI.buf.slice(0, -1); renderKp(); }
     else if (e.code === "Enter" || e.code === "NumpadEnter") kpPress("OK");
-    else if (e.code === "Escape" || e.code === "KeyE") closeKeypad();
+    else if (e.code === "Escape" || e.code === "KeyX" || e.code === "KeyF") closeKeypad();
     return;
   }
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space" || e.code === "Tab") e.preventDefault();
+  if (HELD.wheel && (e.code === "ArrowLeft" || e.code === "ArrowRight") && !e.repeat) wheelMove(e.code === "ArrowLeft" ? -1 : 1);
   if (e.repeat || dead) return;
-  if ((e.code === "KeyE" || e.code === "KeyX") && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor();
-  if (e.code === "Tab") toggleDevice();
-  if (e.code === "KeyM") toggleMode();
-  if (e.code === "KeyF") fire();
-  if (e.code === "KeyV") toggleCloak();
-  if (e.code === "KeyG") throwBeacon();
+  if (e.code === "KeyX" || e.code === "KeyF") doAction();
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight") crouchToggle();
+  if (e.code === "KeyY") yPress();
+  if (e.code === "Tab" || e.code === "KeyM") toggleDevice();
+  if (e.code === "KeyQ") useConsumable(0);
+  if (e.code === "KeyE") useConsumable(1);
+  if (/^Digit[1-3]$/.test(e.code)) { const it = ["gun", "cloak", "beacon"][+e.code.slice(5) - 1]; if (owned().includes(it)) setHeld(it); else toast(`You do not have the ${ITEM_NAMES[it].toLowerCase()}`); }
   if (e.code === "KeyH") document.getElementById("help").classList.toggle("on");
   if (e.code === "KeyN") toast(AUD.toggleMute() ? "Sound off" : "Sound on");
-  if (e.code === "KeyZ") hotCam();
-  if (/^Digit[1-9]$/.test(e.code) && devOn.v && S.cams.length) camIdx = Math.min(+e.code.slice(5) - 1, S.cams.length - 1);
-  if (e.code === "KeyQ") cycleCam(-1);
-  if (e.code === "KeyT" && devOn.v) cycleCam(1);                                   // next camera (R is only run)
 });
-addEventListener("wheel", e => { if (devOn.v && devMode === "cams") cycleCam(e.deltaY > 0 ? 1 : -1); }, {passive: true});
-addEventListener("keyup", e => { keys[e.code] = false; });
-addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
-renderer.domElement.addEventListener("mousedown", e => { if (e.button === 0 && document.pointerLockElement === renderer.domElement) fire(); });
+addEventListener("wheel", e => { if (HELD.wheel) wheelMove(e.deltaY > 0 ? 1 : -1); }, {passive: true});
+addEventListener("keyup", e => { keys[e.code] = false; if (e.code === "KeyY") yRelease(); });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; HELD.aimBtn = false; HELD.yDown = false; });
+renderer.domElement.addEventListener("mousedown", e => {
+  if (document.pointerLockElement !== renderer.domElement || dead || inGame) return;
+  if (e.button === 0) usePrimary();
+  else if (e.button === 2) { if (HELD.item === "gun") HELD.aimBtn = true; else useSecondary(); }
+});
+addEventListener("mouseup", e => { if (e.button === 2) HELD.aimBtn = false; });
+renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
 renderer.domElement.addEventListener("click", () => { if (![...navigator.getGamepads()].some(g => g)) renderer.domElement.requestPointerLock?.(); });
 addEventListener("mousemove", e => {
   if (document.pointerLockElement !== renderer.domElement) return;
-  P.yaw -= e.movementX * 0.0024; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0024));
+  const k = AIM.on ? 0.45 : 1;
+  P.yaw -= e.movementX * 0.0024 * k; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0024 * k));
 });
 const dz = (v, t = 0.16) => Math.abs(v) < t ? 0 : Math.sign(v) * (Math.abs(v) - t) / (1 - t);
 let rumble = null;
 function pad() {
   const gp = [...navigator.getGamepads()].find(g => g && g.connected);
   rumble = gp && gp.vibrationActuator ? gp.vibrationActuator : null;
-  if (!gp) return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, crouch: false, use: false, run: false};
-  const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && b[i].pressed);
+  if (!gp) { HELD.padAim = false; return {mx: 0, mz: 0, lx: 0, ly: 0, jump: false, use: false, run: false}; }
+  const a = gp.axes, b = gp.buttons, down = i => !!(b[i] && (b[i].pressed || b[i].value > 0.5));
   const edge = i => { const now = down(i), was = padPrev[i]; padPrev[i] = now; return now && !was; };
+  const yNow = down(3), yWas = padPrev[3]; padPrev[3] = yNow;
   if (!dead) {
-    if (edge(2) && !reviveTarget() && !tryFuse() && !trySwitch() && !tryNote() && !tryPower() && !tryLoot()) useDoor();                // X: open / close a door (hold it beside a downed teammate to revive them)
-    if (edge(3)) toggleDevice();                              // Y: take the device out / put it away
-    if (edge(8) || edge(12)) toggleMode();                    // View / D-pad up: feeds <-> map
-    if (edge(4) || edge(14)) cycleCam(-1);                    // LB / D-pad left: previous camera
-    if (edge(6)) toggleCloak();                               // LT: the cloak
-    if (edge(5)) throwBeacon();                               // RB: roll an AFK Beacon
-    if (edge(7)) fire();                                      // RT: fire the ray gun (RB and LT are kept for the beacon and the cloak)
-    if (edge(15)) cycleCam(1);
-    if (edge(13)) hotCam();                                   // D-pad down: the nearest camera that sees a monster                                // D-pad right: next camera
-  }
-  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: dz(a[2] || 0, 0.12), ly: dz(a[3] || 0, 0.12), jump: down(0), use: down(2), run: down(10), crouch: down(1) || down(11)};   // hold L-stick click to run; R-stick click (or B) crouches
+    if (yNow && !yWas) yPress(); else if (!yNow && yWas) yRelease();                // Y: tap = take out / rotate, hold = the wheel
+    yTick();
+    if (HELD.wheel) { const wx = a[2] || 0, was = padPrev.wx || 0; padPrev.wx = Math.abs(wx) > 0.6 ? Math.sign(wx) : 0; if (padPrev.wx && padPrev.wx !== was) wheelMove(padPrev.wx); }
+    if (edge(2)) doAction();                                  // X: the action button
+    if (edge(10)) crouchToggle();                             // left-stick click: crouch, click again to walk
+    if (edge(8) || edge(12)) toggleDevice();                  // View / D-pad up: the handheld map
+    if (edge(4)) useConsumable(0);                            // LB: support consumable
+    if (edge(5)) useConsumable(1);                            // RB: combat / objective consumable
+    if (edge(7)) usePrimary();                                // RT: use what you hold
+    const lt = down(6), ltEdge = lt && !padPrev[6]; padPrev[6] = lt;
+    HELD.padAim = lt && HELD.item === "gun";                  // LT: the gun aims while it is held ...
+    if (ltEdge && HELD.item !== "gun") useSecondary();        // ... and with the cloak or a beacon it is the secondary ability
+  } else { HELD.padAim = false; HELD.yDown = false; }
+  const k = AIM.on ? 0.45 : 1, still = HELD.wheel;
+  return {mx: dz(a[0] || 0), mz: dz(a[1] || 0), lx: still ? 0 : dz(a[2] || 0, 0.12) * k, ly: still ? 0 : dz(a[3] || 0, 0.12) * k, jump: down(0), use: down(2), run: down(11)};          // right-stick click runs (hold)
 }
 
 // ---------------------------------------------------------------- fuses: the stair door at the top of B1, L1 and L2 needs NEED of them (rules: shared/fuses.js; in a room the server holds the state)
@@ -898,10 +956,22 @@ function fire() {
   if (net.host()) resolveShot(o, d);
   return true;
 }
+const heldSeen = new Set();
+function heldHud(dt) {
+  const o = owned();
+  for (const it of o) if (!heldSeen.has(it)) { heldSeen.add(it); if (!HELD.item) setHeld(it); }                  // the first time you pick something up it is in your hands
+  for (const it of [...heldSeen]) if (!o.includes(it)) heldSeen.delete(it);
+  if (HELD.item && !o.includes(HELD.item)) HELD.item = null;
+  const el = $("held"), show = !loading && !dead && !FIN.results && !!HELD.item;
+  el.style.display = show ? "block" : "none"; if (show) el.innerHTML = `<b>${ITEM_NAMES[HELD.item]}${HELD.item === "gun" ? " · " + LT.rounds : HELD.item === "beacon" ? " ×" + BC.have : ""}</b>${ITEM_HINT[HELD.item]}`;
+  $("reticle").style.display = AIM.on ? "block" : "none";
+  stunFx = Math.max(0, stunFx - dt * 1.6); $("stunfx").style.opacity = stunFx;
+}
 function animateGun(dt) {
+  heldHud(dt);
   GUN.cool = Math.max(0, GUN.cool - dt); P.shotT = Math.max(0, P.shotT - dt); GUN.kick = Math.max(0, GUN.kick - dt * 7);
   if (net.on) for (const p of net.peers.values()) if (p.shotT > 0) p.shotT -= dt;
-  GUN.pivot.visible = !!LT.gun && !dead && !loading && !devOn.v && myCarry() < 0 && !FIN.results;
+  GUN.pivot.visible = !!LT.gun && HELD.item === "gun" && !dead && !loading && !devOn.v && myCarry() < 0 && !FIN.results;
   if (GUN.pivot.visible) { const bob = P.moving ? Math.sin(performance.now() / (P.running ? 90 : 160)) * (P.running ? 0.012 : 0.006) : 0; GUN.pivot.position.set(0.22, -0.3 + bob, -0.5 + GUN.kick * 0.07); GUN.pivot.rotation.x = GUN.kick * 0.12; }
   GUN.flash.material.opacity = GUN.kick > 0.6 ? (GUN.kick - 0.6) * 2.5 : 0;
   for (const list of [GUN.beams, GUN.fx]) for (let i = list.length - 1; i >= 0; i--) {
@@ -921,7 +991,7 @@ function loadCloakModel() {                                                  // 
 }
 function toggleCloak() {
   if (!CL.have || dead || loading) return;
-  const n = cloakToggle(CL.st); if (n === CL.st) { toast("The cloak is flat"); AUD.play("cloak_flat"); return; }
+  const n = cloakToggle(CL.st); if (n === CL.st) { toast(cloakBroken(CL.st) ? `The cloak is dead for ${Math.ceil(CL.st.broken / 60)} more minute(s)` : "The cloak is flat"); AUD.play("cloak_flat"); return; }
   AUD.play(n.on ? "cloak_on" : "cloak_off"); if (net.on) net.send({t: "cloak"});
   CL.st = n; toast(n.on ? "Cloak on: monsters see you only from very close" : "Cloak off");
 }
@@ -932,7 +1002,7 @@ function animateCloak(dt) {
   if (wasOn && !CL.st.on && CL.st.b <= 0) { AUD.play("cloak_flat"); toast("The cloak is flat"); }
   const bar = $("cloak"); bar.style.display = CL.have && !loading && !FIN.results ? "block" : "none"; bar.querySelector("i").style.width = CL.st.b * 100 + "%";
   $("cloakfx").style.opacity = CL.st.on ? 0.55 + 0.25 * Math.sin(performance.now() / 120) : 0;
-  CL.pivot.visible = CL.have && !dead && !loading && !devOn.v && !FIN.results;
+  CL.pivot.visible = CL.have && HELD.item === "cloak" && !dead && !loading && !devOn.v && !FIN.results;
   if (CL.pivot.visible) CL.pivot.position.set(-0.3, -0.3 + (CL.st.on ? 0.03 * Math.sin(performance.now() / 150) : 0), -0.5);
 }
 // AFK Beacon: pick up to 2 (two lie on every floor), G (controller: RB) rolls one 12 m ahead. For 25 s every monster within 30 m goes to it and idles round it.
@@ -967,6 +1037,26 @@ function throwBeacon() {
   if (net.on) net.send({t: "beacon", x: ex, z: ez});
   toast(BC.have ? `AFK Beacon rolled: ${BC.have} left` : "AFK Beacon rolled"); return true;
 }
+// the cloak's secondary: short-circuit it. It is dead for 5 minutes, and everything within 8 m is stunned for 5 s (it neither moves nor hits: run through it).
+function cloakShortCircuit() {
+  if (!CL.have || dead || loading || KPUI.open || FIN.out) return false;
+  if (cloakBroken(CL.st)) { toast(`The cloak is dead for ${Math.ceil(CL.st.broken / 60)} more minute(s)`); AUD.play("cloak_flat"); return false; }
+  CL.st = cloakShort(CL.st); AUD.play("zap", {priority: true, rate: 0.7});
+  if (net.on) net.send({t: "cloak2"}); else stunNear(monsters, P.p.x, P.p.y, P.p.z, STUN_S);
+  stunFlash(); toast("Short circuit: the monsters near you are stunned for 5 s. The cloak is dead for 5 minutes", 4200); return true;
+}
+let stunFx = 0;
+const stunFlash = () => { stunFx = 1; rumble?.playEffect?.("dual-rumble", {duration: 300, strongMagnitude: .6, weakMagnitude: 1}); };
+// the beacon's secondary: reverse the nearest running beacon within 30 m: for 12 s the monsters run from it, then they come back and group up round it
+function reverseBeacon() {
+  if (dead || loading || KPUI.open || FIN.out) return false;
+  const now = clk(); let best = null, bd = 30;
+  for (const b of BC.list) { if (b.scene !== S.id || now < b.land || now >= b.until || b.reversed) continue; const d = Math.hypot(b.x - P.p.x, b.z - P.p.z); if (d < bd) { bd = d; best = b; } }
+  if (!best) { toast("No running beacon within 30 m (or it was already reversed)"); return false; }
+  if (net.on) net.send({t: "beacon2"}); else markReversed(best, beaconReverse(best, now));
+  toast("Frequency reversed: the monsters run from the beacon for 12 s, then group up round it", 4200); return true;
+}
+function markReversed(b, r) { Object.assign(b, r); if (b.ring) b.ring.material.color.set(0x40a0ff); if (b.led) b.led.material.color.set(0x40a0ff); AUD.play("beacon_tick", {pos: [b.x, S.floor + .3, b.z], loud: true, rate: 0.6}); }
 function animateBeacons(dt) {
   const now = clk();
   for (let i = BC.list.length - 1; i >= 0; i--) {
@@ -1417,12 +1507,14 @@ function onNet(m) {
       const was = HP.h.hp; HP.h = {hp: m.hp, hurtAt: m.hp < was ? clk() : HP.h.hurtAt};
       if (m.hp < was) { HP.flash = 1; rumble?.playEffect?.("dual-rumble", {duration: 250, strongMagnitude: 1, weakMagnitude: .8}); AUD.play("hurt", {priority: true, rate: .92 + Math.random() * .16}); }
       LT.gun = !!m.gun; LT.rounds = m.rounds; BC.have = m.beacons; CL.have = !!m.cloak;
-      if (m.cloak) CL.st = {...CL.st, on: m.cloak.on, b: (m.cloak.on !== CL.st.on || Math.abs(CL.st.b - m.cloak.b) > 0.15) ? m.cloak.b : CL.st.b};
+      if (m.cloak) CL.st = {...CL.st, on: m.cloak.on, b: (m.cloak.on !== CL.st.on || Math.abs(CL.st.b - m.cloak.b) > 0.15) ? m.cloak.b : CL.st.b, broken: Math.abs((CL.st.broken || 0) - (m.cloak.x || 0)) > 3 ? (m.cloak.x || 0) : (CL.st.broken || 0)};
       if (m.hp <= 0 && !dead && !loading) die();
       if (m.respawn && dead) respawn();
       break;
     }
     case "beacon": if (m.scene === S.id && !loading) addBeacon(m.x, m.z, [m.x, m.z]); break;                       // someone rolled a beacon on this floor (it lands at once for us)
+    case "stun": if (m.scene === S.id && !loading && m.from !== net.id) { stunFx = Math.max(stunFx, 0.6); AUD.play("zap", {pos: [m.x, S.floor + 1, m.z], loud: true, rate: 0.7}); } break;          // someone short-circuited their cloak: a flash, and the monsters round them stop
+    case "reverse": if (m.scene === S.id && !loading) { const b = BC.list.filter(q => q.scene === S.id).sort((p, q) => Math.hypot(p.x - m.x, p.z - m.z) - Math.hypot(q.x - m.x, q.z - m.z))[0]; if (b && Math.hypot(b.x - m.x, b.z - m.z) < 2) markReversed(b, {reversed: true}); } break;
     case "revived": revived(net.peers.get(m.by)); break;
     case "fuses": setFuses(m.scene, m.st); break;
     case "switches": setSwitches(m.scene, m.st); break;
@@ -1574,7 +1666,7 @@ function die() {
 function standUp() { $("death").style.opacity = 0; $("fear").style.opacity = 0; $("death").textContent = "YOU DIED"; $("death").style.background = ""; }
 function revived(by) {
   if (!dead) return;
-  dead = false; P.crouch = false; P.imm = 4; P.v.set(0, 0, 0); standUp(); HP.h = hpRevived(clk()); AUD.stinger("st_lift");
+  dead = false; P.crouch = false; crouchLatch = false; P.imm = 4; P.v.set(0, 0, 0); standUp(); HP.h = hpRevived(clk()); AUD.stinger("st_lift");
   toast(by ? `${by.name} lifted you` : "You got up");
 }
 function respawn() {
@@ -1613,19 +1705,22 @@ function update(dt) {
   const g = pad();
   P.yaw += (((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.9 - g.lx * 2.6) * dt;
   P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - g.ly * 2.0 * dt));
-  const rv = reviveTarget(), reviving = !!(rv && (keys.KeyE || keys.KeyX || g.use));            // hold E / X beside a downed teammate for 4 s
+  const rv = reviveTarget(), reviving = !!(rv && (keys.KeyX || keys.KeyF || g.use));            // hold X beside a downed teammate for 4 s
   P.reviveT = reviving ? (P.reviveT || 0) + dt : 0;
   const rp = $("revive");
-  if (rv) { rp.style.display = "block"; rp.querySelector("span").textContent = reviving ? `Lifting ${rv.name}…` : `Hold E to lift ${rv.name}`; rp.querySelector("b span").style.width = Math.min(1, P.reviveT / REVIVE_S) * 100 + "%"; }
+  if (rv) { rp.style.display = "block"; rp.querySelector("span").textContent = reviving ? `Lifting ${rv.name}…` : `Hold X to lift ${rv.name}`; rp.querySelector("b span").style.width = Math.min(1, P.reviveT / REVIVE_S) * 100 + "%"; }
   else rp.style.display = "none";
   if (reviving && P.reviveT >= REVIVE_S) { net.send({t: "revive", to: rv.id}); rv.dead = false; P.reviveT = 0; }
   const fwd = (reviving || KPUI.open) ? 0 : (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - g.mz;
   const side = (reviving || KPUI.open) ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + g.mx;
-  P.crouch = !!(keys.ShiftLeft || keys.ShiftRight || g.crouch);
+  P.crouch = crouchLatch;                                                                       // Shift / left-stick click toggles it
   P.moving = Math.hypot(fwd, side) > 0.2;
-  const runKey = !P.crouch && !reviving && !KPUI.open && (keys.KeyR || g.run);                // hold R (or press in the left stick) to run: faster than any monster, and loud
+  const runKey = !reviving && !KPUI.open && (keys.KeyR || g.run);                                // hold R (or the right stick) to run: faster than any monster, and loud; running stands you up
   if (P.tired && P.stam >= RUN_RESUME) P.tired = false;
   P.running = !!(runKey && P.moving && !P.tired && P.stam > 0);
+  if (P.running) { crouchLatch = false; P.crouch = false; }
+  AIM.on = HELD.item === "gun" && (HELD.aimBtn || HELD.padAim) && !dead && !loading;
+  { const target = AIM.on ? AIM.fovAim : AIM.fov; if (Math.abs(camera.fov - target) > 0.05) { camera.fov += (target - camera.fov) * Math.min(1, dt * 12); camera.updateProjectionMatrix(); } }
   P.stam = Math.max(0, Math.min(1, P.stam + (P.running ? -dt / RUN_S : dt / RECOVER_S)));
   if (P.running && P.stam <= 0) { P.tired = true; P.running = false; }
   $("stam").style.opacity = P.stam < 0.999 ? 1 : 0; $("stam").firstElementChild.style.width = P.stam * 100 + "%"; $("stam").firstElementChild.style.background = P.tired ? "#a55" : "#cdb";

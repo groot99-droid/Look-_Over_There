@@ -20,7 +20,7 @@ export function brain(idx, N, opts = {}) {
   const cellOf = (x, z) => g.nearestWalk(g.S.nav, x, z);
   const dist = (x, z) => Math.hypot(x - g.P.p.x, z - g.P.p.z);
   const face = (x, z) => { g.P.yaw = Math.atan2(-(x - g.P.p.x), -(z - g.P.p.z)); };
-  const stop = () => { g.keys.KeyW = false; g.keys.KeyE = false; g.keys.KeyR = false; };
+  const stop = () => { g.keys.KeyW = false; g.keys.KeyX = false; g.keys.KeyR = false; };
 
   // ---- Dijkstra over the walkable grid; allowed (optional) is a Uint8Array of cells the path may use
   const hd = new Float32Array(CELLS * 8), hc = new Int32Array(CELLS * 8);
@@ -253,8 +253,8 @@ export function brain(idx, N, opts = {}) {
     const id = g.S.id, st = g.FZ.st;
     known();                                                           // keep the team's blackboard fresh with what this bot sees
     if (g.FIN.out) { stop(); return; }
-    if (g.reviveTarget()) { stop(); g.keys.KeyE = true; B.hold += 0.05; return; }
-    if (B.hold > 3.5) B.revives++; B.hold = 0; g.keys.KeyE = false;
+    if (g.reviveTarget()) { stop(); g.keys.KeyX = true; B.hold += 0.05; return; }
+    if (B.hold > 3.5) B.revives++; B.hold = 0; g.keys.KeyX = false;
     openNear();
     // what is around: sneak when a monster that has not noticed us is near; run only when nothing is near
     let near = 99, chaser = null;

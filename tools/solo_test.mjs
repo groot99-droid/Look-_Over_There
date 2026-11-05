@@ -95,7 +95,7 @@ try {
   const dry = await p.evaluate(() => { const g = window.__game; g.GUN.cool = 0; const keep = g.LT.rounds; g.LT.rounds = 0; const f = g.fire(); g.LT.rounds = keep; return f; });
   check("with no rounds the gun does not fire", dry === false);
   check("firing is limited to one shot every 0.6 s", await p.evaluate(() => { const g = window.__game; g.GUN.cool = 0; const a = g.fire(), b = g.fire(); g.GUN.cool = 0; return a === true && b === false; }));
-  await go(await at(0)); await p.keyboard.press("KeyE");
+  await go(await at(0)); await p.keyboard.press("KeyX");
   await until("pressing E picks up the fuse", p, () => window.__game.myCarry() === 0);
   await p.evaluate(() => window.__game.step(0.016));
   check("the counter shows you are carrying", await p.evaluate(() => /CARRYING/.test(document.getElementById("fusehud").textContent)));
@@ -197,12 +197,12 @@ try {
   check("spawns lean toward the fuses still to find (median distance under 0.7 of a uniform draw)", sp.goals === 3 && sp.medSpawn < 0.7 * sp.medUniform, JSON.stringify(sp));
   check("no spawn is within 16 m of a monster, and they differ", sp.clear && sp.distinct > 100, JSON.stringify(sp));
   // a fuse carried off the floor goes back to where it started
-  await go(await at(1)); await p.keyboard.press("KeyE");
+  await go(await at(1)); await p.keyboard.press("KeyX");
   await until("a fuse picked up on B1", p, () => window.__game.myCarry() === 1);
   await load("L1"); await load("B1");
   check("a fuse carried off B1 went back to its start", await p.evaluate(() => window.__game.FZ.st.B1[1].s === 0));
   for (let i = 0; i < 3; i++) {
-    await go(await at(i)); await p.keyboard.press("KeyE");
+    await go(await at(i)); await p.keyboard.press("KeyX");
     await until(`fuse ${i + 1} picked up`, p, () => window.__game.myCarry() >= 0);
     await p.evaluate(() => window.__game.openDoor(window.__game.upDoor(), true));
     await until(`fuse ${i + 1} in the door`, p, n => window.__game.FZ.st.B1.filter(f => f.s === 2).length === n + 1, i);
@@ -215,12 +215,12 @@ try {
   const s0 = await swAt(0), s1 = await swAt(1);
   check("the two switches are far apart", Math.hypot(s0[0] - s1[0], s0[1] - s1[1]) >= 14, `(${Math.hypot(s0[0] - s1[0], s0[1] - s1[1]).toFixed(1)} m)`);
   await p.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0]; m.pos.set(x + 8, m.fy, z); }, s1);     // one monster within earshot of switch 1
-  await go(s1); await p.keyboard.press("KeyE");
+  await go(s1); await p.keyboard.press("KeyX");
   await until("flipping the second switch first works (any order)", p, () => { const st = window.__game.SW.st.L1; return !st[0].on && st[1].on; });
   check("one switch is not enough: the door stays locked", await p.evaluate(() => { const g = window.__game; g.step(0.016); return g.isLocked(g.upDoor()) && /SWITCHES 1\/2/.test(document.getElementById("fusehud").textContent); }));
   check("the clunk sent a monster to look", await p.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
   check("a flipped switch stays flipped (E again does not undo it)", await p.evaluate(() => { const g = window.__game; g.swAct(1); return g.SW.st.L1[1].on === true; }));
-  await go(s0); await p.keyboard.press("KeyE");
+  await go(s0); await p.keyboard.press("KeyX");
   await until("the other switch is flipped one at a time", p, () => window.__game.SW.st.L1.every(x => x.on));
   check("both on: the door is powered", await p.evaluate(() => { const g = window.__game; g.step(0.016); return !g.isLocked(g.upDoor()) && /DOOR POWERED/.test(document.getElementById("fusehud").textContent); }));
   // L2 has a keypad: four notes, each with one digit of the code
@@ -232,7 +232,7 @@ try {
   let near = 1e9; for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) near = Math.min(near, Math.hypot(notes[i][0] - notes[j][0], notes[i][1] - notes[j][1]));
   check("the notes are spread out", near >= 8, `(closest pair ${near.toFixed(1)} m)`);
   const code = await p.evaluate(() => window.__game.KP.local.L2.code);                                  // solo: the game holds the code
-  await go(notes[2]); await p.keyboard.press("KeyE");
+  await go(notes[2]); await p.keyboard.press("KeyX");
   await until("reading note 3 shows its digit", p, d => window.__game.KP.st.L2.found[2] === d, code[2]);
   check("the others stay hidden, and the HUD shows what is known", await p.evaluate(() => { const g = window.__game; g.step(0.016); return g.KP.st.L2.found.filter(d => d !== null).length === 1 && /CODE _ _ \d _/.test(document.getElementById("fusehud").textContent); }));
   check("a note is read once", await p.evaluate(() => window.__game.nearNote() === -1));
@@ -257,12 +257,12 @@ try {
   const far = Math.hypot(l4.spot[0] - 16, l4.spot[1] - 7.7);
   check("the L4 switch is on the far side of the room", far >= 30, `(${far.toFixed(1)} m from the stairs, at ${l4.spot.map(v => v.toFixed(1))})`);
   await p.evaluate(([x, z]) => { const g = window.__game; for (const m of g.monsters) { m.state = "patrol"; m.path = []; } const m = g.monsters[0]; m.pos.set(x + 10, m.fy, z); }, l4.spot);          // one monster within earshot
-  await go([l4.spot[0] + 1.2, l4.spot[1]]); await p.keyboard.press("KeyE");
+  await go([l4.spot[0] + 1.2, l4.spot[1]]); await p.keyboard.press("KeyX");
   await until("pressing E at the far switch turns the power on", p, () => window.__game.POWER.on && window.__game.POWER.by === "L4");
   check("the L4 switch is loud: a monster goes to look", await p.evaluate(() => { const m = window.__game.monsters[0]; return m.state === "search" || m.state === "chase"; }));
   check("the opening is clear, the glass is rolling up and monsters can use the way out", await p.evaluate(() => { const g = window.__game; for (let i = 0; i < 120; i++) g.step(0.02); return !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && g.S.nav.reduce((n, v) => n + v, 0) > 0 && g.monsters.every(m => m.walk === g.S.nav); }));
   check("the way out opened more of the map to walk on", await p.evaluate(n => window.__game.S.nav.reduce((a, v) => a + v, 0) > n, l4.navBefore));
-  await go([0, 21]); await p.keyboard.press("KeyE");
+  await go([0, 21]); await p.keyboard.press("KeyX");
   check("the power cannot be thrown twice", await p.evaluate(() => window.__game.POWER.by === "L4"));
   await load("L1");
   check("coming back to L1 the switches are still on", await p.evaluate(() => window.__game.SW.st.L1.every(x => x.on) && !window.__game.isLocked(window.__game.upDoor())));
@@ -275,7 +275,7 @@ try {
   check("L3 (no monsters) has 4 ammo packs to restock from", await r.evaluate(() => window.__game.packSpots().length === 4 && window.__game.LT.vis.packs.length === 4));
   await r.evaluate(() => { const g = window.__game, sp = g.S.pw.spot; g.P.p.set(sp[0], g.S.floor + 0.02, sp[1] + 1.4); g.P.v.set(0, 0, 0); g.P.yaw = 0; g.step(0.016); });
   check("the prompt appears at the box", await r.evaluate(() => /Press E to switch on the power/.test(document.getElementById("prompt").textContent)));
-  await r.keyboard.press("KeyE");
+  await r.keyboard.press("KeyX");
   await r.waitForFunction(() => window.__game.POWER.on, null, {timeout: 30000}).then(() => check("pressing E at the L3 box turns the power on", true), () => check("pressing E at the L3 box turns the power on", false));
   await rload("L4");
   check("arriving on L4 the doors are already open", await r.evaluate(() => { const g = window.__game; return g.S.shutter.off && !g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}) && !g.S.glass.visible && /POWER ON/.test((g.step(0.016), document.getElementById("fusehud").textContent)); }));
