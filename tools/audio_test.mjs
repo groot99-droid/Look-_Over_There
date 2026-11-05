@@ -74,7 +74,7 @@ check("a few seconds of game frames with sound on raise no errors and fetch noth
   await sf.goto(`http://localhost:${srv.port}/?sound=1`); await sf.click("body"); await sleep(2500);
   const idx = JSON.parse(fs.readFileSync(new URL("../audio/files/index.json", import.meta.url)));
   const hasM4a = Object.values(idx).some(v => v && v.m4a);
-  check("without Opus support the engine fetches .m4a files when they exist", !hasM4a || (asked.some(f => f.endsWith(".m4a")) && !asked.some(f => f.endsWith(".ogg"))), asked.slice(0, 3).join(","));
+  check("without Opus support the engine fetches .m4a files and no .ogg (build with --aac first)", hasM4a && asked.some(f => f.endsWith(".m4a")) && !asked.some(f => f.endsWith(".ogg")), asked.slice(0, 3).join(","));
   await ctx.close();
 }
 // silence without files, and for bots
