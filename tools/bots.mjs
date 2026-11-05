@@ -32,7 +32,7 @@ try {
   const START = opt("start", "");                                                                  // --start=L1: skip the floors below it (each bot is taken up its stair doors as soon as the round begins)
   if (START) {
     await Promise.all(pages.map(p => p.waitForFunction(() => window.__game.net.phase === "playing" && !window.__game.loading, null, {timeout: 120000})));
-    await Promise.all(pages.map(p => p.evaluate(async want => { const g = window.__game; for (let i = 0; i < 6 && g.S.id !== want; i++) { const d = g.upDoor(); if (!d) break; const l = d.d.link; await g.loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); } }, START)));
+    await Promise.all(pages.map(p => p.evaluate(async want => { const g = window.__game; for (let i = 0; i < 6 && g.S.id !== want; i++) { const d = g.upDoor(); if (!d) break; const l = d.d.link; await g.loadScene(l.scene); } }, START)));          // no arrival: the floor's own spawn spot (the stair landing on L1 is a pocket the bots' nav grid thinks is sealed)
     console.log(`bots start on ${START}`);
   }
   const relay = setInterval(async () => {                                          // the team's blackboard: every bot's position, role and claim, shared with all of them
