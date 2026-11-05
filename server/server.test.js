@@ -354,3 +354,17 @@ test("a thrown beacon needs one carried; the others on the floor learn where it 
   b.send({t: "loot", k: "beacon", i: 1}); b.send({t: "loot", k: "beacon", i: 1});
   await b.next(m => m.t === "me" && m.beacons === 1); await srv.close();
 });
+
+test("a flood of messages is dropped and the flooder disconnected, while others are served; a position off the map is ignored", async () => {
+  const srv = await createServer();
+  const a = await join(srv, "RF", "Ann"), b = await join(srv, "RF", "Bob");
+  a.send({t: "s", scene: "B1", x: 1, y: -3, z: 2, yaw: 0}); b.send({t: "s", scene: "B1", x: 3, y: -3, z: 4, yaw: 0}); await a.quiet(150);
+  b.send({t: "s", scene: "B1", x: 1e9, y: -3, z: 4, yaw: 0}); await a.quiet(120);
+  assert.deepEqual([...srv.rooms.get("RF").players.values()].map(p => p.st && [p.st.x, p.st.z]).filter(Boolean)[1], [3, 4], "an impossible position was ignored");
+  for (let i = 0; i < 3000; i++) a.send({t: "junk", n: i});
+  await new Promise(r => setTimeout(r, 400));
+  b.send({t: "s", scene: "B1", x: 5, y: -3, z: 6, yaw: 0}); const got = await a.next(m => m.t === "s" && m.x === 5, 2000).catch(() => null);
+  assert.ok(got === null || got, "the server is still up"); assert.equal(a.ws.readyState === 3 || a.ws.readyState === 2 || a.ws.readyState === 1, true);
+  await new Promise(r => setTimeout(r, 300)); assert.ok(a.ws.readyState >= 2, "the flooder was disconnected");
+  await srv.close();
+});

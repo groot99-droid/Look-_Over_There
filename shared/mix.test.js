@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {LEVELS, levelMix, danger, smooth, occlusion, stepInterval, monsterStepInterval, stepGain, alarmPeriod, sirenFreq, growlFor, REQUIRED_CUES, smoothstep, audibleRange} from "./mix.js";
+import {LEVELS, levelMix, danger, smooth, occlusion, stepInterval, monsterStepInterval, stepGain, alarmPeriod, sirenFreq, growlFor, monsterVoice, MONSTER_VOICES, REQUIRED_CUES, smoothstep, audibleRange} from "./mix.js";
 
 test("danger layers rise as a chaser closes, the music ducks, and nothing plays without a chaser", () => {
   const none = danger([], 100); assert.equal(none.t1 + none.t2 + none.t3 + none.heart, 0); assert.equal(none.duck, 1);
@@ -44,4 +44,9 @@ test("every level has a mix, an unknown level falls back to B1, and growls are s
 test("every cue the engine needs exists in audio/cues.json", () => {
   const cues = JSON.parse(readFileSync(new URL("../audio/cues.json", import.meta.url))).cues;
   for (const k of REQUIRED_CUES) assert.ok(cues[k], `missing cue ${k}`);
+});
+test("each monster kind has its own voice, and an unknown kind falls back to a stable one", () => {
+  const kinds = ["sinew", "pale_traveler", "clawed", "creature"]; assert.equal(new Set(kinds.map(k => monsterVoice(k, 0).growl)).size, 4, "four kinds, four growls");
+  assert.ok(monsterVoice("sinew", 0).rate < monsterVoice("pale_traveler", 0).rate, "the pale traveler is higher");
+  assert.deepEqual(monsterVoice("nobody", 4), {growl: growlFor(4), rate: 1}); assert.ok(Object.values(MONSTER_VOICES).every(v => v.rate > 0.5 && v.rate < 1.5));
 });

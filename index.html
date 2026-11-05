@@ -1490,7 +1490,7 @@ function audioTick(dt) {
   if (recheck) for (const m of here) m.audBlocked = !segClear(P.p.x, eye, P.p.z, m.pos.x, m.fy + 1.3, m.pos.z, 0.5);
   const chasers = here.filter(m => m.state === "chase").map(m => ({d: Math.hypot(m.pos.x - P.p.x, m.pos.z - P.p.z)}));
   AUD.update(dt, {chasers, hp: dead ? 100 : HP.h.hp, alarmMsLeft: S.id === "L4" && FIN.alarmUntil && !FIN.out && !FIN.results ? alarmLeft() : null});
-  AUD.monsters(dt, here.map(m => ({id: monsters.indexOf(m), x: m.pos.x, y: m.fy, z: m.pos.z, state: m.state, speed: m.speed || 0, blocked: !!m.audBlocked})), P.p);
+  AUD.monsters(dt, here.map(m => ({id: monsters.indexOf(m), name: m.cfg.name, x: m.pos.x, y: m.fy, z: m.pos.z, state: m.state, speed: m.speed || 0, blocked: !!m.audBlocked})), P.p);
   if (net.on) AUD.peers(dt, [...net.peers.values()].filter(p => p.scene === S.id && !p.dead).map(p => {
     if (recheck) p.audBlocked = !segClear(P.p.x, eye, P.p.z, p.x, p.y + 1.2, p.z, 0.5);
     return {id: p.id, x: p.x, y: p.y, z: p.z, moving: p.moving, run: p.run, crouch: p.crouch, blocked: !!p.audBlocked}; }), levelMix(S.id).step);

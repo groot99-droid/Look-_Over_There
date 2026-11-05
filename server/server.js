@@ -20,6 +20,7 @@ import * as PS from "./playerstate.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript", ".ogg": "audio/ogg"};
+const RATE_BURST = 240, RATE_PER_S = 90, RATE_KICK = 600;                                   // messages: a burst of 240, 90 a second after (the game sends about 25 a second)
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
 
 export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random, simHz = Number(process.env.SIM_HZ) || 20, clock = () => Date.now() / 1000} = {}) {
@@ -112,7 +113,11 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
   }
   wss.on("connection", ws => {
     let room = null, me = null;
+    let tokens = RATE_BURST, lastMsg = Date.now(), dropped = 0;                // a message budget per connection: a burst, then RATE_PER_S; a flood is dropped, and a flooder is disconnected
     ws.on("message", raw => {
+      const nowMs = Date.now(); tokens = Math.min(RATE_BURST, tokens + (nowMs - lastMsg) / 1000 * RATE_PER_S); lastMsg = nowMs;
+      if (tokens < 1) { if (++dropped > RATE_KICK) ws.close(1008, "too many messages"); return; }
+      tokens--; dropped = Math.max(0, dropped - 0.1);
       let m; try { m = JSON.parse(raw); } catch { return; }
       if (!m || typeof m.t !== "string") return;
       if (!me) {
@@ -138,7 +143,9 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
         case "s": {                                                   // a player's state goes only to those on the same floor; everyone else just learns which floor you are on
           const scene = typeof m.scene === "string" ? m.scene.slice(0, 8) : null;
           const was = me.scene; me.scene = scene;
-          const f = k => Number.isFinite(m[k]) ? m[k] : 0; me.st = {x: f("x"), y: f("y"), z: f("z"), yaw: f("yaw"), crouch: !!m.crouch, moving: !!m.moving, run: !!m.run, carry: !!m.carry, cloak: !!m.cloak, dead: !!m.dead, imm: !!m.imm};
+          const f = k => Number.isFinite(m[k]) ? m[k] : 0, inMap = Math.abs(f("x")) <= 100 && Math.abs(f("z")) <= 100 && f("y") > -20 && f("y") < 30;          // a position off the map (or not a number) is ignored: the player stays where they were
+          if (!inMap && me.st) { m = {...m, x: me.st.x, y: me.st.y, z: me.st.z}; }
+          me.st = {x: f("x"), y: f("y"), z: f("z"), yaw: f("yaw"), crouch: !!m.crouch, moving: !!m.moving, run: !!m.run, carry: !!m.carry, cloak: !!m.cloak, dead: !!m.dead, imm: !!m.imm};
           broadcast(room, {...m, id: me.id, hp: Math.round(me.ps.hp.hp), cloak: PS.cloakOn(me.ps) ? 1 : 0, gun: me.ps.gun ? 1 : 0, dead: PS.isDown(me.ps) ? 1 : 0, imm: PS.isImmune(me.ps, clock()) ? 1 : 0}, me.id, scene);          // health, cloak, gun and being down are the server's word, not the client's
           if (was !== scene) {
             ensureFloor(room, scene); pruneFloors(room);

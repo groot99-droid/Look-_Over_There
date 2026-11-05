@@ -40,6 +40,9 @@ export const alarmPeriod = (msLeft, totalMs = 60000) => 0.7 + 1.0 * clamp(msLeft
 export const sirenFreq = (t, period) => 540 + 260 * (0.5 - 0.5 * Math.cos((t % period) / period * 2 * Math.PI));
 
 // Which growl a monster uses (stable per monster) and the cue names for the layers.
+// Each kind of monster has its own voice: which growl it makes when it starts hunting, and how its pitch sits (lower = bigger). Unknown kinds fall back to a growl chosen by id.
+export const MONSTER_VOICES = {sinew: {growl: "mon_growl_1", rate: 0.85}, pale_traveler: {growl: "mon_growl_2", rate: 1.1}, clawed: {growl: "mon_growl_3", rate: 0.8}, creature: {growl: "mon_roar", rate: 0.9}};
+export const monsterVoice = (name, id) => MONSTER_VOICES[name] || {growl: growlFor(id), rate: 1};
 export const growlFor = id => ["mon_growl_1", "mon_growl_2", "mon_growl_3"][Math.abs(id | 0) % 3];
 export const LAYERS = ["t_1", "t_2", "t_3"];
-export const REQUIRED_CUES = ["heart", "heart_fast", "mon_idle", "mon_roar", "mon_step", "st_notice", ...LAYERS, ...Object.values(LEVELS).flatMap(l => [l.score, l.bed, l.step])];
+export const REQUIRED_CUES = [...Object.values(MONSTER_VOICES).map(v => v.growl), "heart", "heart_fast", "mon_idle", "mon_roar", "mon_step", "st_notice", ...LAYERS, ...Object.values(LEVELS).flatMap(l => [l.score, l.bed, l.step])];

@@ -1,6 +1,6 @@
 // The game's audio engine (Web Audio). Sounds are built at deploy time from the author's sound library (tools/build_audio.py -> audio/files/*.ogg);
 // if they are missing the engine stays silent and the game plays on. Rules that need no audio device live in shared/mix.js.
-import {levelMix, danger, smooth, occlusion, audibleRange, monsterStepInterval, stepInterval, stepGain, alarmPeriod, sirenFreq, growlFor, LAYERS} from "../shared/mix.js";
+import {levelMix, danger, smooth, occlusion, audibleRange, monsterStepInterval, stepInterval, stepGain, alarmPeriod, sirenFreq, monsterVoice, LAYERS} from "../shared/mix.js";
 
 const CUE_GAIN = {step_tile: .5, step_floor: .5, hurt: .9, pickup: .5, ui: .4, door_open: .7, door_close: .7, door_creak: .6, lock: .6, unlock: .6, locker: .7, fuse_take: .6, fuse_slot: .8, fuse_drop: .7,
   switch: .7, power: .7, key_press: .35, key_ok: .5, key_bad: .5, key_lock: .5, gun: .85, gun_dry: .4, zap: .8, beacon_roll: .5, beacon_tick: .25, beacon_end: .5, cloak_on: .5, cloak_off: .5, cloak_flat: .4,
@@ -140,9 +140,9 @@ export function createAudio({base = "audio/files/", enabled = true} = {}) {
       if (!s.idle || s.idle.stopped) s.idle = A.play("mon_idle", {loop: true, pos: [m.x, m.y + 1.2, m.z], gain: 1, rate: 0.85 + (m.id % 5) * 0.04});
       s.idle.setPos(m.x, m.y + 1.2, m.z); s.idle.setOcclusion(m.blocked, d); s.idle.setGain(m.state === "chase" ? 0.15 : m.state === "search" ? 0.8 : 0.45);
       s.step += dt; const iv = monsterStepInterval(m.speed);
-      if (s.step >= iv) { s.step = 0; A.play("mon_step", {pos: [m.x, m.y, m.z], gain: 1, rate: 0.62 + Math.random() * 0.1, occluded: m.blocked, loud: true}); }
+      if (s.step >= iv) { s.step = 0; A.play("mon_step", {pos: [m.x, m.y, m.z], gain: 1, rate: (0.62 + Math.random() * 0.1) * monsterVoice(m.name, m.id).rate, occluded: m.blocked, loud: true}); }
       if (m.state === "chase" && s.state !== "chase") {
-        A.play(growlFor(m.id), {pos: [m.x, m.y + 1.4, m.z], gain: 1, rate: 0.9 + Math.random() * 0.2, occluded: m.blocked, loud: true, priority: true});
+        const v = monsterVoice(m.name, m.id); A.play(v.growl, {pos: [m.x, m.y + 1.4, m.z], gain: 1, rate: v.rate * (0.95 + Math.random() * 0.1), occluded: m.blocked, loud: true, priority: true});
         if (d < 28 && A.ctx.currentTime - noticeAt > 6) { noticeAt = A.ctx.currentTime; A.stinger("st_notice"); }
       }
       s.state = m.state;
