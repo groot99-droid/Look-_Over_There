@@ -211,7 +211,9 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           }
           break;
         }
-        case "cloak": if (PS.toggleCloak(me.ps)) sendMe(me); break;       // switch the cloak on or off (it drains on the server's clock)
+        case "cloak": if (PS.toggleCloak(me.ps)) sendMe(me); break;
+        case "cloak2": if (me.scene && PS.shortCircuit(me.ps)) { room.floors[me.scene]?.cloakBlast(me); sendMe(me); } break;          // the cloak's secondary: short-circuit it and stun the monsters round you
+        case "beacon2": if (me.scene) room.floors[me.scene]?.reverseBeacon(me); break;                                                // a beacon's secondary: reverse its frequency       // switch the cloak on or off (it drains on the server's clock)
         case "exit": {                                                // walked out of the store onto the parking lot
           if (me.scene !== "L4" || !room.power.on || !room.run) break;
           const r = exitPlayer(room.run, me.id, Date.now(), me.name);

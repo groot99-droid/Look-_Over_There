@@ -2,9 +2,10 @@
 // hitting what a monster touches, deciding what a ray-gun shot does, swarming a thrown beacon, running to a noise, opening doors, hunting at the finale, and telling the floor
 // where the monsters are. Players still say where they are (their `s` messages: x, y, z, flags); the server stores that on the player as `st`.
 import {worldFromDoc, stepDoors, buildNav} from "../shared/world.js";
-import {MonsterSim, spawnPlan, resolveShot, swarmApart} from "../shared/monsters.js";
+import {MonsterSim, spawnPlan, resolveShot, swarmApart, stunNear} from "../shared/monsters.js";
 import {HIT_DMG} from "../shared/health.js";
-import {LURE_S} from "../shared/beacon.js";
+import {LURE_S, reverse as reverseLure} from "../shared/beacon.js";
+import {STUN_S} from "../shared/cloak.js";
 import {ALARM_MS} from "../shared/finish.js";
 
 export const TICK_S = 0.05, SNAP_EVERY = 2, DOORS_EVERY = 10, ALERT_R = 40, THROW_SPEED = 4;
@@ -62,6 +63,21 @@ export class Floor {
     const roll = Math.min(5, Math.hypot(x - p.st.x, z - p.st.z) / THROW_SPEED), land = this.t + roll;
     this.lures.push({id: ++this.beaconSeq, x, z, land, until: land + LURE_S});
     this.io.toFloor({t: "beacon", from: p.id, scene: this.scene, x, z}, p.id); return true;
+  }
+  // the cloak's short circuit: every monster within STUN_R of the player is stunned for STUN_S seconds (it neither moves nor hits); the floor sees the flash
+  cloakBlast(p) {
+    if (!p.st) return [];
+    const idx = stunNear(this.monsters, p.st.x, p.st.y, p.st.z, STUN_S);
+    this.io.toFloor({t: "stun", scene: this.scene, from: p.id, i: idx, secs: STUN_S, x: p.st.x, z: p.st.z}); return idx;
+  }
+  // a beacon's secondary: reverse the frequency of the nearest running beacon within 30 m of the player (once per beacon)
+  reverseBeacon(p) {
+    if (!p.st) return false;
+    let best = -1, bd = 30;
+    this.lures.forEach((b, k) => { const d = Math.hypot(b.x - p.st.x, b.z - p.st.z); if (this.t >= b.land && this.t < b.until && !b.reversed && d < bd) { bd = d; best = k; } });
+    if (best < 0) return false;
+    const b = this.lures[best] = reverseLure(this.lures[best], this.t);
+    this.io.toFloor({t: "reverse", scene: this.scene, from: p.id, x: b.x, z: b.z, secs: b.repelUntil - this.t}); return true;
   }
   alertNear(x, z, r = ALERT_R) { for (const m of this.monsters) if (Math.hypot(m.pos.x - x, m.pos.z - z) < r) m.alert(x, z); }
   powerOn() { if (this.W.shutter && !this.W.shutter.off) { this.W.shutter.off = true; this.W.nav = buildNav(this.W, this.W.floor); } }

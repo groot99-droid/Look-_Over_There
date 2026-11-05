@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {newCloak, toggle, tick, MIN_ON, DRAIN_S, RECHARGE_S, RECHARGE_DELAY, seenFrom, SHORT_M} from "./cloak.js";
+import {newCloak, toggle, tick, MIN_ON, DRAIN_S, RECHARGE_S, RECHARGE_DELAY, seenFrom, SHORT_M, shortCircuit, broken, BROKEN_S, STUN_R, STUN_S} from "./cloak.js";
 
 test("on drains about 15 s and then switches itself off", () => {
   let c = toggle(newCloak()); assert.ok(c.on);
@@ -19,4 +19,12 @@ test("it cannot switch on below 10%, can always switch off, and turning off rest
 });
 test("a cloaked player is seen only from very close", () => {
   assert.ok(seenFrom(false, 20)); assert.ok(!seenFrom(true, SHORT_M + 0.1)); assert.ok(seenFrom(true, SHORT_M));
+});
+
+test("short circuit: the cloak is dead for 5 minutes (no switching on, no recharge), then it works again from empty", () => {
+  let c = toggle(newCloak()); assert.ok(c.on); c = shortCircuit(c); assert.ok(broken(c) && !c.on && c.b === 0 && c.broken === BROKEN_S);
+  assert.equal(shortCircuit(c), c, "it cannot be short-circuited twice"); assert.equal(toggle(c), c, "it cannot be switched on while dead");
+  for (let t = 0; t < BROKEN_S - 1; t += 1) c = tick(c, 1); assert.ok(broken(c) && c.b === 0, "still dead after 299 s");
+  c = tick(c, 2); assert.ok(!broken(c) && c.b === 0, "alive again, empty"); for (let t = 0; t < 10; t += 1) c = tick(c, 1); assert.ok(c.b > 0, "it recharges once it is working again");
+  assert.deepEqual([STUN_R, STUN_S, BROKEN_S], [8, 5, 300]);
 });

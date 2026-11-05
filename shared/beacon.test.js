@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {active, lures, ringSpot, rollEnd, pulled, nearPlayer, LURE_M, ROLL_M, RING_MIN, RING_MAX, SAFE_M} from "./beacon.js";
+import {active, lures, ringSpot, rollEnd, pulled, nearPlayer, LURE_M, ROLL_M, RING_MIN, RING_MAX, SAFE_M, reverse, repelling, REVERSE_S, GROUP_S} from "./beacon.js";
 
 const b = {x: 10, z: 10, until: 100};
 test("it pulls monsters within 30 m while it runs, and none after", () => {
@@ -19,4 +19,11 @@ test("a roll goes 12 m, or stops before a wall", () => {
 });
 test("a player within 4 m of a monster is still noticed", () => {
   assert.ok(nearPlayer({x: 0, z: 0}, [{x: SAFE_M, z: 0}])); assert.ok(!nearPlayer({x: 0, z: 0}, [{x: SAFE_M + 0.1, z: 0}])); assert.ok(!nearPlayer({x: 0, z: 0}, []));
+});
+
+test("reversing the frequency: they run for 12 s, then it pulls again for at least 10 s more; once only; never an ended beacon", () => {
+  const r = reverse({x: 1, z: 1, until: 30}, 20); assert.ok(r.reversed && repelling(r, 20 + REVERSE_S - 0.1) && !repelling(r, 20 + REVERSE_S));
+  assert.equal(r.until, 20 + REVERSE_S + GROUP_S, "kept running long enough for them to group up"); assert.ok(active(r, 20 + REVERSE_S + 1));
+  assert.equal(reverse(r, 21), r, "only once"); const old = {x: 1, z: 1, until: 5}; assert.equal(reverse(old, 6), old, "an ended beacon cannot be reversed");
+  assert.equal(reverse({x: 1, z: 1, until: 100}, 10).until, 100, "a long-running beacon keeps its own end");
 });

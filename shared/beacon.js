@@ -17,3 +17,9 @@ export function rollEnd(x, z, dx, dz, blocked, step = 0.25) {
 // Which monsters (id, x, z) a beacon pulls, and which of them a player has come too close to (they keep to normal sight).
 export const pulled = (b, mons, now) => mons.filter(m => lures(b, m.x, m.z, now));
 export const nearPlayer = (m, players) => players.some(p => Math.hypot(p.x - m.x, p.z - m.z) <= SAFE_M);
+
+// The beacon's secondary ability: reverse the frequency. For REVERSE_S seconds the monsters it would pull run away from it instead; when that ends it pulls again and they
+// group up round it (it is kept running for at least GROUP_S more). A beacon can be reversed once. Returns the beacon unchanged if it cannot be.
+export const REVERSE_S = 12, GROUP_S = 10;
+export const repelling = (b, now) => !!b && (b.repelUntil || 0) > now;
+export const reverse = (b, now) => active(b, now) && !b.reversed ? {...b, reversed: true, repelUntil: now + REVERSE_S, until: Math.max(b.until, now + REVERSE_S + GROUP_S)} : b;

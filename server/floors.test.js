@@ -126,7 +126,7 @@ test("a teammate within 2.5 m lifts a downed player to 50 HP; too far, or an upr
 });
 test("rounds, the cloak and beacons: nothing without the locker or pickups, the server counts them, and a shot costs a round", async () => {
   const clk = clockOf(), srv = await createServer({clock: clk.now}), {ps, floor} = await floorWith(srv, "P4", "B1", ["Ann", "Bob"]);
-  const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
+  const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0}; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
   at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150);
   const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), d = [dx / L, 0, dz / L], o = [a[0], floor.W.floor + 1.52, a[1]];
   ps[0].send({t: "shot", o, d}); ps[0].send({t: "cloak"}); ps[0].send({t: "beacon", x: a[0] + 3, z: a[1]}); await sleep(150);
@@ -137,5 +137,26 @@ test("rounds, the cloak and beacons: nothing without the locker or pickups, the 
   clk.adv(0.1); ps[0].send({t: "shot", o, d}); await sleep(100); assert.equal(srv.rooms.get("P4").players.get(ps[0].id).ps.rounds, 2, "too soon after the last");
   ps[0].send({t: "loot", k: "beacon", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 1);
   clk.adv(2); ps[0].send({t: "beacon", x: a[0] + 3, z: a[1]}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 0); assert.equal(floor.lures.length, 1);
+  await srv.close();
+});
+test("secondary abilities: the cloak's short circuit stuns the monsters round you and kills the cloak for 5 minutes; a beacon's reverse sends them away, then they group up", async () => {
+  const srv = await createServer(), {ps, floor} = await floorWith(srv, "S2", "B1", ["Ann", "Bob"]);
+  const [a, b] = clearPair(floor.W, 6), m = floor.monsters[0]; m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0}; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
+  for (const o of floor.monsters.slice(1)) { o.pos.set(900, o.fy, 900); o.wait = 99; }
+  at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150);
+  ps[0].send({t: "cloak2"}); ps[0].send({t: "beacon2"}); await sleep(120); assert.ok(!(m.stunT > 0) && !floor.lures.length, "without the cloak or a beacon nothing happens");
+  ps[0].send({t: "loot", k: "locker", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.gun); ps[1].inbox.length = 0;
+  ps[0].send({t: "cloak2"}); const me = await ps[0].next(m2 => m2.t === "me" && m2.cloak && m2.cloak.x > 0); assert.equal(me.cloak.x, 300); assert.ok(m.stunT > 4, "the monster 6 m away is stunned");
+  const ev = await ps[1].next(kind("stun")); assert.ok(ev.i.includes(0) && ev.secs === 5);
+  ps[0].send({t: "cloak"}); await sleep(120); assert.equal(srv.rooms.get("S2").players.get(ps[0].id).ps.cloak.on, false, "a dead cloak does not switch on");
+  ps[0].send({t: "cloak2"}); await sleep(120); assert.equal(srv.rooms.get("S2").players.get(ps[0].id).ps.cloak.broken > 290, true, "and it cannot be short-circuited again");
+  // the reverse
+  m.stunT = 0; m.cfg = {...m.cfg, patrol: 1.4, alert: 2.7, chase: 5.5}; m.pos.set(b[0], m.fy, b[1]); m.yaw = Math.atan2(a[0] - b[0], a[1] - b[1]); m.state = "patrol"; m.wait = 99; floor.lures.length = 0;      // 6 m from the players, facing away: it does not see them
+  ps[0].send({t: "loot", k: "beacon", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 1);
+  const ux = (b[0] - a[0]) / 6, uz = (b[1] - a[1]) / 6, can = [b[0] + ux * 2, b[1] + uz * 2]; ps[0].inbox.length = 0; ps[0].send({t: "beacon", x: can[0], z: can[1]}); await ps[0].next(m2 => m2.t === "me" && m2.beacons === 0); await sleep(100); stepN(floor, 5); assert.equal(m.lureId, 1, "first it is pulled in");
+  ps[1].inbox.length = 0; ps[0].send({t: "beacon2"}); const rv = await ps[1].next(kind("reverse")); assert.ok(rv.secs > 11);
+  const d0 = Math.hypot(m.pos.x - can[0], m.pos.z - can[1]); stepN(floor, 6); assert.ok(Math.hypot(m.pos.x - can[0], m.pos.z - can[1]) > d0 + 3, "then it runs away");
+  ps[0].send({t: "beacon2"}); await sleep(100); assert.equal(floor.lures[0].reversed, true);
+  floor.t = floor.lures[0].repelUntil + 0.1; stepN(floor, 9.5); assert.ok(Math.hypot(m.pos.x - can[0], m.pos.z - can[1]) < 5, "and when it ends they come back and group up round it");
   await srv.close();
 });

@@ -1,7 +1,7 @@
 // What the server knows about each player that a client must not decide for itself: health, ammunition, cloak battery, beacons, and the down/respawn timers.
 // Pure functions over a state object and a clock (seconds); the rules themselves are in shared/health.js, cloak.js, loot.js and monsters.js.
 import {newHealth, hurt, regen, revived, downed} from "../shared/health.js";
-import {newCloak, toggle as cloakToggle, tick as cloakTick} from "../shared/cloak.js";
+import {newCloak, toggle as cloakToggle, tick as cloakTick, shortCircuit as cloakShort, broken as cloakBroken} from "../shared/cloak.js";
 import {GUN_ROUNDS, MAX_ROUNDS, MAX_BEACONS, roundsAfterPack} from "../shared/loot.js";
 import {SHOT_COOL} from "../shared/monsters.js";
 
@@ -47,6 +47,11 @@ export function toggleCloak(ps) {
   const n = cloakToggle(ps.cloak); if (n === ps.cloak) return false; ps.cloak = n; return true;
 }
 // what the player is told about themselves
-export const view = ps => ({hp: Math.round(ps.hp.hp), gun: ps.gun, rounds: ps.rounds, beacons: ps.beacons, cloak: ps.cloak ? {on: ps.cloak.on, b: +ps.cloak.b.toFixed(1)} : null});
+// the cloak's secondary ability: short-circuit it (the caller stuns the monsters round the player). False if they cannot (down, no cloak, already broken).
+export function shortCircuit(ps) {
+  if (isDown(ps) || !ps.cloak || cloakBroken(ps.cloak)) return false;
+  ps.cloak = cloakShort(ps.cloak); return true;
+}
+export const view = ps => ({hp: Math.round(ps.hp.hp), gun: ps.gun, rounds: ps.rounds, beacons: ps.beacons, cloak: ps.cloak ? {on: ps.cloak.on, b: +ps.cloak.b.toFixed(1), x: Math.ceil(ps.cloak.broken || 0)} : null});
 // true when what the player is told has changed since the last time (and remembers it)
 export function changed(ps) { const s = JSON.stringify(view(ps)); if (s === ps.sent) return false; ps.sent = s; return true; }

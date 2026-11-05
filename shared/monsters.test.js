@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {worldFromDoc, FLOORS, mainRegion, cellXZ, cellOf, segClear, rng32, near} from "./world.js";
-import {MonsterSim, spawnPlan, resolveShot, rayMonster, banishSpot, CHASE_LOSE_S, SEARCH_S, GLITCH_S, BANISH_FROM_PLAYER} from "./monsters.js";
+import {MonsterSim, spawnPlan, resolveShot, rayMonster, banishSpot, stunNear, CHASE_LOSE_S, SEARCH_S, GLITCH_S, BANISH_FROM_PLAYER} from "./monsters.js";
+import {reverse} from "./beacon.js";
 
 const json = p => JSON.parse(readFileSync(new URL(p, import.meta.url)));
 const monCfg = json("../world/monsters.json"), cfgOf = name => monCfg.monsters.find(m => m.name === name);
@@ -92,4 +93,22 @@ test("the same inputs give the same monsters, and a seeded spawn plan is the sam
   const run = () => { const W = mkWorld("B1"), env = mkEnv(W, 9), plan = spawnPlan(W, monCfg, "B1"), ms = plan.map(p => new MonsterSim(p.cfg, "B1", p.x, p.z, env)); for (let i = 0; i < 400; i++) { env.t += 0.05; ms.forEach(m => m.update(0.05, [])); } return ms.map(m => m.snapshot()); };
   assert.deepEqual(run(), run()); assert.equal(spawnPlan(mkWorld("B1"), monCfg, "B1").length, 4); assert.equal(spawnPlan(mkWorld("L3"), monCfg, "L3").length, 0);
   assert.deepEqual(spawnPlan(mkWorld("B1"), monCfg, "B1").map(p => [p.x, p.z]), spawnPlan(mkWorld("B1"), monCfg, "B1").map(p => [p.x, p.z]));
+});
+
+test("a stunned monster neither moves nor hits for 5 s, then goes on; stunNear stuns only the monsters within 8 m on the same floor", () => {
+  const {m, env, t, a} = setup(1.5); const tt = {...t, x: m.pos.x + 0.3, z: m.pos.z, id: 1};
+  assert.ok(tick(m, env, [tt], 0.3).length > 0, "unstunned it hits at this range"); m.hitAt = {};
+  const idx = stunNear([m], m.pos.x + 2, m.fy, m.pos.z, 5); assert.deepEqual(idx, [0]);
+  const before = [m.pos.x, m.pos.z]; const caught = tick(m, env, [tt], 4.5); assert.equal(caught.length, 0, "no hits while stunned"); assert.deepEqual([m.pos.x, m.pos.z], before, "and it does not move");
+  tick(m, env, [tt], 1); assert.ok(m.stunT <= 0, "the stun is over after 5 s");
+  const far = new MonsterSim(cfgOf("sinew"), "B1", a[0], a[1], env); assert.deepEqual(stunNear([far], far.pos.x + 20, far.fy, far.pos.z, 5), [], "20 m away is out of range");
+  assert.deepEqual(stunNear([far], far.pos.x, far.fy + 3.2, far.pos.z, 5), [], "another floor");
+});
+test("a reversed beacon sends monsters away from it, and when it ends they come back and group up round it", () => {
+  const {W, m, env, a, b} = setup(10); m.state = "patrol"; m.wait = 99;
+  let can = {id: 7, x: a[0] + (a[0] - b[0]) * 0 + 1, z: a[1] + 1, land: env.t, until: env.t + 25}; can = {...can};
+  can = reverse(can, env.t); const d0 = Math.hypot(m.pos.x - can.x, m.pos.z - can.z);
+  tick(m, env, [], 6, 0.05, [can]); const d1 = Math.hypot(m.pos.x - can.x, m.pos.z - can.z); assert.ok(d1 > d0 + 4, "it runs away from the can: " + d0.toFixed(1) + " -> " + d1.toFixed(1));
+  assert.equal(m.lureId, null, "it is not lured while the frequency is reversed");
+  env.t = can.repelUntil + 0.1; tick(m, env, [], 40, 0.05, [can]); assert.ok(Math.hypot(m.pos.x - can.x, m.pos.z - can.z) < 5, "afterwards it comes back to the can and idles round it");
 });

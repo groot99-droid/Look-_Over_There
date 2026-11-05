@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {newPS, hit, tick, lift, gotLocker, gotPack, gotBeacon, shoot, throwBeacon, toggleCloak, view, changed, isDown, isImmune, canTakePack, canTakeBeacon, DOWNED_S, IMMUNE_S, THROW_GAP_S} from "./playerstate.js";
+import {newPS, hit, tick, lift, gotLocker, gotPack, gotBeacon, shoot, throwBeacon, toggleCloak, shortCircuit, view, changed, isDown, isImmune, canTakePack, canTakeBeacon, DOWNED_S, IMMUNE_S, THROW_GAP_S} from "./playerstate.js";
 
 test("three hits down a player; the grace second and the gap protect; being down or immune takes no more", () => {
   const ps = newPS(); assert.ok(hit(ps, 35, 10)); assert.equal(view(ps).hp, 65); assert.ok(!hit(ps, 35, 10.5), "grace");
@@ -33,4 +33,11 @@ test("the cloak: needs the locker, toggles, drains on the server's clock and swi
 });
 test("changed() says so once per change", () => {
   const ps = newPS(); assert.ok(changed(ps)); assert.ok(!changed(ps)); gotLocker(ps); assert.ok(changed(ps)); assert.ok(!changed(ps));
+});
+
+test("short circuit: needs a working cloak and a living player; kills the cloak for 5 minutes and shows in the view", () => {
+  const ps = newPS(); assert.ok(!shortCircuit(ps), "no cloak yet"); gotLocker(ps); assert.ok(toggleCloak(ps) && ps.cloak.on);
+  assert.ok(shortCircuit(ps)); assert.deepEqual([ps.cloak.on, ps.cloak.b, view(ps).cloak.x], [false, 0, 300]); assert.ok(!shortCircuit(ps), "already dead"); assert.ok(!toggleCloak(ps), "cannot be switched on");
+  tick(ps, 100, 0); assert.equal(view(ps).cloak.x, 200, "the broken seconds count down on the server's clock");
+  const d = newPS(); gotLocker(d); hit(d, 50, 0); hit(d, 50, 2); assert.ok(isDown(d) && !shortCircuit(d), "a downed player cannot");
 });
