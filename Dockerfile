@@ -12,14 +12,14 @@ FROM node:22-slim
 WORKDIR /app
 COPY server/package.json server/package-lock.json server/
 RUN cd server && npm ci --omit=dev
-COPY server/server.js server/
+COPY server/server.js server/floorsim.js server/playerstate.js server/
 COPY index.html ./
 COPY world world
 COPY monsters monsters
 COPY characters characters
 COPY shared shared
 COPY models models
-COPY audio/engine.js audio/cues.json audio/
+COPY audio/engine.js audio/audition.js audio/cues.json audio/
 COPY --from=audio /build/audio/files audio/files
 ENV PORT=8080
 EXPOSE 8080
