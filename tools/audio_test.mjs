@@ -60,9 +60,9 @@ check("a few seconds of game frames with sound on raise no errors and fetch noth
   await aud.goto(`http://localhost:${srv.port}/?sound=1`); await aud.waitForSelector("#au-list button[data-cue]", {timeout: 60000});
   const cueCount = Object.keys(JSON.parse(fs.readFileSync(new URL("../audio/cues.json", import.meta.url))).cues).length;
   check("the audition page has a play button for every cue", await aud.locator("#au-list button[data-cue]").count() === cueCount, String(cueCount));
-  await aud.click("body"); await sleep(1500); const before = await aud.evaluate(() => window.__game.AUD.debug().played);
+  await aud.click("body"); await sleep(1500); const before = await aud.evaluate(() => window.__aud.debug().played);
   await aud.click('button[data-cue="gun"]'); await sleep(400);
-  check("a cue plays from the audition page", await aud.evaluate(() => window.__game.AUD.debug().played) > before);
+  check("a cue plays from the audition page", await aud.evaluate(() => window.__aud.debug().played) > before);
   await aud.keyboard.press("KeyH"); check("H shows the controls list", await aud.evaluate(() => document.getElementById("help").classList.contains("on")));
   await aud.close();
 }

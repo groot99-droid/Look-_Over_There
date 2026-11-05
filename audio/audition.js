@@ -1,6 +1,7 @@
 // The audition page (open the game with ?sound=1): every cue in audio/cues.json by group with a play button, a source circling the listener (to hear the 3D placement),
 // the level score with the danger and heartbeat controls, and the mix volumes. For judging the picks: each row shows the cue id and the library sound it was cut from.
 export async function openAudition(AUD, doc = document) {
+  window.__aud = AUD;
   const cues = (await (await fetch("./audio/cues.json")).json()).cues;
   const el = doc.createElement("div");
   el.style.cssText = "position:fixed;inset:0;z-index:50;background:#0a0a0a;color:#d8d8c4;font:13px/1.5 system-ui,sans-serif;overflow:auto;padding:18px 22px";
