@@ -147,6 +147,7 @@ const $ = id => document.getElementById(id);
 const AUD = createAudio({enabled: !new URLSearchParams(location.search).has("bot")});
 { const un = () => AUD.unlock().then(ok => { if (ok) for (const ev of ["pointerdown", "keydown", "touchstart"]) removeEventListener(ev, un, true); }); for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, un, true); }
 
+if (new URLSearchParams(location.search).has("sound")) import("./audio/audition.js").then(m => m.openAudition(AUD));          // ?sound=1: the audition page over the lobby
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);

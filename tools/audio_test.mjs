@@ -54,6 +54,29 @@ check("the music volume setting changes the music bus", Math.abs(d.musicGain - 0
 // the game's own hooks ran without errors while playing
 await A(() => { const g = window.__game; g.AUD.set("music", 0.7); g.P.moving = true; g.P.ground = true; for (let i = 0; i < 80; i++) g.sim(0.05, performance.now() / 1000); g.applyHit(35); g.toggleCloak(); });
 check("a few seconds of game frames with sound on raise no errors and fetch nothing that is missing", errors.length === 0 && missing.length === 0, errors.concat(missing).slice(0, 3).join(" | "));
+// the audition page (?sound=1) lists every cue and plays one; H lists the controls
+{
+  const aud = await (await browser.newContext({viewport: {width: 960, height: 600}})).newPage();
+  await aud.goto(`http://localhost:${srv.port}/?sound=1`); await aud.waitForSelector("#au-list button[data-cue]", {timeout: 60000});
+  const cueCount = Object.keys(JSON.parse(fs.readFileSync(new URL("../audio/cues.json", import.meta.url))).cues).length;
+  check("the audition page has a play button for every cue", await aud.locator("#au-list button[data-cue]").count() === cueCount, String(cueCount));
+  await aud.click("body"); await sleep(1500); const before = await aud.evaluate(() => window.__game.AUD.debug().played);
+  await aud.click('button[data-cue="gun"]'); await sleep(400);
+  check("a cue plays from the audition page", await aud.evaluate(() => window.__game.AUD.debug().played) > before);
+  await aud.keyboard.press("KeyH"); check("H shows the controls list", await aud.evaluate(() => document.getElementById("help").classList.contains("on")));
+  await aud.close();
+}
+// Safari before 18.4 cannot play Ogg Opus: the engine asks for the AAC copy then
+{
+  const ctx = await browser.newContext(); const sf = await ctx.newPage(); const asked = [];
+  await sf.addInitScript(() => { const o = HTMLMediaElement.prototype.canPlayType; HTMLMediaElement.prototype.canPlayType = function (t) { return /ogg/.test(t) ? "" : o.call(this, t); }; });
+  sf.on("request", r => { if (/audio\/files\//.test(r.url())) asked.push(r.url().split("/").pop()); });
+  await sf.goto(`http://localhost:${srv.port}/?sound=1`); await sf.click("body"); await sleep(2500);
+  const idx = JSON.parse(fs.readFileSync(new URL("../audio/files/index.json", import.meta.url)));
+  const hasM4a = Object.values(idx).some(v => v && v.m4a);
+  check("without Opus support the engine fetches .m4a files when they exist", !hasM4a || (asked.some(f => f.endsWith(".m4a")) && !asked.some(f => f.endsWith(".ogg"))), asked.slice(0, 3).join(","));
+  await ctx.close();
+}
 // silence without files, and for bots
 const silent = await A(async () => { const m = await import("/audio/engine.js"); const a = m.createAudio({base: "nothing-here/"}); await a.unlock(); a.setLevel("B1"); a.play("gun"); a.update(0.1, {chasers: [{d: 3}], hp: 5}); a.monsters(0.1, [{id: 1, x: 1, y: 0, z: 1, state: "chase", speed: 3}], {x: 0, z: 0}); return a.status; });
 check("with the files missing the engine is silent and does not throw", silent === "silent", silent);
