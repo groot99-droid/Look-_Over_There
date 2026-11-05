@@ -46,7 +46,7 @@ The stair door at the top of each floor stays locked until that floor's puzzle i
 
 ### Switches (built)
 - Two switch posts stand at least 14 m apart (usually 25+), in the same places for everyone (seeded, like the fuses). Press E / X within 1.6 m to flip one. They are flipped one at a time, by anyone, in any order, and stay flipped; both on powers the stair door. The lamps over the door and the HUD (`SWITCHES 1/2`) show progress.
-- A flip is loud: every monster on the floor within 40 m goes to look at the switch (unless it is already chasing someone). The floor's host runs the monsters, so this works the same in a room and solo.
+- A flip is loud: every monster on the floor within 40 m goes to look at the switch (unless it is already chasing someone). The server runs the monsters, so this works the same in a room and solo.
 - A player arriving on the floor later sees which switches are already on. State is held by the server per room (`shared/switches.js` is the one rule set).
 - Placeholder art in code; an optional `models/switch.glb` replaces it (see `docs/MODELS.md`).
 
@@ -89,7 +89,7 @@ No assigned classes. **Monsters show on the handheld map only through the camera
 3. Close doors: **built**
 4. Fuses and the gated stair door: **built** (B1). Switches on L1, the keypad on L2, and the L3 box / L4 power trick: **built**. The finale and score (7) are built too. The next steps are server-side monsters (6) and bots (8).
 5. Monsters on the map only through cameras: **built**
-6. Monster simulation on the server (catches cheat-proof; no stutter when a host's tab is in the background). Do this before scaling to many players.
+6. Monster simulation on the server: **built** (`server/floorsim.js`, rules shared with the page in `shared/world.js` and `shared/monsters.js`). There is no host any more: every client follows the server's snapshots.
 7. Finale alarm and scoring: **built**
 8. Bot players to tune the numbers: **first version built** (`tools/bots.mjs`, see below)
 
@@ -124,7 +124,7 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 
 **How it is built (the architecture).**
 - `shared/loot.js` (pure, with tests): lockers and ammo packs per floor, taken once; the same rules in the server and in solo play, like `shared/fuses.js`.
-- Server: relays loot state to the floor (late joiners get it on arrival) and sends a `shot` message only to the host of the shooter's floor; the host resolves it, because the host already runs the monsters. A banish is a position jump in the host's snapshot (clients already snap a monster that moves more than 8 m) plus a `zap` message so every client plays the effect.
+- Server: relays loot state to the floor (late joiners get it on arrival), checks a `shot` (the ray must start near the shooter, and the server takes the round) and resolves it on its own monsters. A banish is a position jump in the snapshot (clients snap a monster that moves more than 8 m) plus a `zap` message so every client plays the effect.
 - Client: the held gun (scaled to about 0.55 m, bottom right, a short recoil kick and a cyan flash from the tip), a small cross-hair, a round counter, lockers and packs drawn in code like the fuses, and the other players seen holding it.
 - Monster: a `banish(spot)` method and the placement rule above.
 - Bots: a bot with rounds fires at a chasing monster that is within 12 m, in sight, when its escape margin is under 2 s, and the bait uses it to pull a monster off the runner's way. Then rerun `tools/bots.mjs` and compare downs per floor with and without the gun: the first real test of the idea.
@@ -137,10 +137,10 @@ The gun is `models/gun.glb` (Meshy's "Error Deletion Ray", 10k triangles). It is
 
 **Step 2, built: the gun in your hand.** Once you have a gun it is held bottom right (the Meshy model, scaled to about 0.55 m, with a short kick and a cyan flash when it fires). Fire with the left mouse button (once the mouse is captured), `F`, or the controller's right bumper (the cameras keep LB and D-pad right). One shot every 0.6 s, each costs a round. You cannot fire with a fuse in your hands, with the map or camera device out, while downed, or at the end screen; with no rounds it clicks ("Out of rounds").
 - *The ray:* from your eye along the aim, 25 m long, stopped by walls and shut doors; a monster is hit if the ray passes within 0.6 m of any of three points up its body. A thin cyan beam is drawn to where the ray ended, for you and for everyone on the floor.
-- *A hit:* the floor's host (who runs the monsters) decides it. The monster is deleted: it flickers for 0.5 s while it does nothing, then stands at a spot on its floor that is at least 15 m from every player, out of every player's sight, and (where the floor allows) at least 35 m away by path; it forgets the chase, waits 4 s and patrols again. It cannot be banished again for 8 s: a shot at it in that time is a wasted round. Everyone sees the glitch at both places (a cyan flash) because the host announces it (`zap`).
+- *A hit:* the server decides it (in solo, the page does). The monster is deleted: it flickers for 0.5 s while it does nothing, then stands at a spot on its floor that is at least 15 m from every player, out of every player's sight, and (where the floor allows) at least 35 m away by path; it forgets the chase, waits 4 s and patrols again. It cannot be banished again for 8 s: a shot at it in that time is a wasted round. Everyone sees the glitch at both places (a cyan flash) because the host announces it (`zap`).
 - *Noise:* a shot is heard as a run (9 m, halved through a wall) for half a second, even if you are crouching: the shooter counts as running for the monsters' hearing.
-- *In a room:* a shot from anyone but the host goes through the server to the floor's host only; the server sends everyone else just the beam. Rounds are counted by each player's own game (a modified client could cheat), like the rest of the trust in this build, and the hit itself is the host's call. The host works out the landing spot, which can cost it a moment (a few path searches) on a big floor.
-- *Not done yet:* the other players are not seen holding the gun; the bots do not use it (step 3); sound is built (docs/AUDIO.md).
+- *In a room:* the shooter sends a `shot` intent; the server validates it, counts the round (clients cannot give themselves rounds), decides the hit and sends everyone the beam and the `zap`.
+- Other players are seen holding the ray gun; the bots use it; sound is built (docs/AUDIO.md).
 
 ## Bots for tuning
 
@@ -214,3 +214,10 @@ New rules: the cloak goes on only when a monster is within 9 m or hunting, never
 | old (`--legacy-items`) | 0, 0, 0 | 13, 6, 14 | 27, 15, 29 | 2, 2, 2 |
 
 The cloak is no longer wasted (1 to 9 s per round with no monster near, against all of its use before), but the round outcomes are inside the spread: no clear gain. The real finding is that bots throw only 1 to 2 beacons per round between four of them, so they rarely hold one; the beacon pickups are not on their way. The next step would be to route the runner past the nearest beacon at the start, not to tune throwing.
+
+## Server-run monsters and player state
+
+- **Monsters** run on the server, one `Floor` per room and floor that has a player (`server/floorsim.js`), at 20 Hz; snapshots go out at 10 Hz as `{t:"m", scene, l:[[x,z,yaw,speed,state]...], d}`. The rules are the same code the page runs in solo (`shared/world.js`, `shared/monsters.js`); `tools/world_parity.mjs` checks that the page and the server build the same navigation grid, boxes, doors and spawns. A server tick for 8 players costs about 0.25 ms.
+- **The server owns your state** (`server/playerstate.js`): HP, rounds, the gun, beacons carried, the cloak battery, down / respawn / revive. You send intents (`shot`, `beacon`, `cloak`, `loot`, `revive`, `door`, `switch`, `keypad`, `power`); it answers `{t:"me", hp, gun, rounds, beacons, cloak}` and puts your server HP and cloak into what other players see. A modified client cannot give itself rounds or health, hit monsters from across the map, or open a door it is not near.
+- **Position stays the client's** (as in most games like this). The server drops off-map positions, and each socket has a message budget (a burst of 240, 90 per second, a kick past 600 flooded).
+- **Controls list:** `H` in game. Voices: each monster kind has its own growl and pitch.

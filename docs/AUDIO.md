@@ -21,6 +21,7 @@ Music per level, effects and 3D monsters, all made from the author's sound libra
 
 ## Limits
 
-- Opus in Ogg plays in Chrome, Firefox, Edge and Safari 18.4 or later; older Safari stays silent without errors.
+- Opus in Ogg plays in Chrome, Firefox, Edge and Safari 18.4 or later; older Safari gets an AAC copy (`.m4a`, built with `tools/build_audio.py --aac`, which the Dockerfile uses) and the engine picks it when the browser says it cannot play Opus in Ogg. Loops in AAC may have a faint gap at the seam (encoder delay).
+- **Audition page:** open the game with `?sound=1` to see every cue with its library source, play any of them, try the level scores with a monster-distance and a health slider (danger layers, heartbeat), circle a growl around you in 3D, and set the volumes. Per-monster voices are in `MONSTER_VOICES` in `shared/mix.js` (a growl and a pitch per kind).
 - The first mapping of sounds to events was chosen by name, length and measurement, not by ear: expect to swap some. All of it is data in `audio/cues.json`.
 - The first Railway build reads about 760 MB from GitHub; later builds reuse the cached stage.

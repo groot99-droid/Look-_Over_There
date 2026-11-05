@@ -200,7 +200,7 @@ export function brain(idx, N, opts = {}) {
     let kind = null, items = [];
     if (!g.LT.gun && v.lockers.length) { kind = "locker"; items = free(v.lockers, st.lockers, kind); }
     else {
-      if (!opts.nobeacons && g.BC.have < 2 && v.beacons) { kind = "beacon"; items = free(v.beacons, st.beacons || [], kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < (opts.legacyItems ? 20 : 28); }); }
+      if (!opts.nobeacons && g.BC.have < 2 && v.beacons) { kind = "beacon"; items = free(v.beacons, st.beacons || [], kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < (opts.legacyItems ? 20 : 40); }); }
       if (!items.length && g.LT.gun && g.LT.rounds < 6) { kind = "pack"; items = free(v.packs, st.packs, kind).filter(it => { const c = cellOf(it.x, it.z); return c >= 0 && F.bot.d[c] < 22; }); }
     }
     if (!items.length) return false;
