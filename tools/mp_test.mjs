@@ -14,6 +14,7 @@ const srv = await createServer({port: 0, countdownMs: 400});
 // the server runs the monsters and owns health: tests reach into it (it runs in this process)
 const roomOf = code => srv.rooms.get(code), floorOf = (scene, code = "TEST") => roomOf(code).floors[scene], playerOf = (id, code = "TEST") => roomOf(code).players.get(id);
 const parkMonsters = (floor, except = -1) => floor.monsters.forEach((m, i) => { m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0}; if (i !== except) { m.pos.set(900 + i * 5, m.fy, 900); m.state = "patrol"; m.path = []; m.wait = 99; } });       // keep them from interfering
+const guard = code => { for (const p of roomOf(code).players.values()) p.ps.immUntil = 1e15; };                    // the server's immunity: monsters ignore the players (tests that want a hit lift it)
 const serverDown = id => { const p = playerOf(id), now = Date.now() / 1000; p.ps.hp = {hp: 0, hurtAt: now}; p.ps.downAt = now; };          // the server downs a player: their client hears it
 const serverUntil = async (name, fn, ms = 30000) => { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return check(name, true); await sleep(100); } check(name, false); };
 const browser = await chromium.launch({args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]});
@@ -52,7 +53,7 @@ try {
   A = await info(a); B = await info(b);
   const maxd = Math.max(...A.mons.map((m, i) => Math.hypot(m[0] - B.mons[i][0], m[1] - B.mons[i][1])));
   check("monsters agree across clients", maxd < 1.5, `(max gap ${maxd.toFixed(2)} m)`);
-  parkMonsters(floorOf("B1"));                                                                          // from here the test is about guns, fuses and doors: the monsters stand still, far away
+  parkMonsters(floorOf("B1")); guard("TEST");                                                           // from here the test is about guns, fuses and doors: the monsters stand still, far away, and the players are safe
 
   // ---- guns: one gun each from the B1 lockers, shared state, and a leaver's locker opens again
   const standBy = (pg, k, i) => pg.evaluate(([k, i]) => { const g = window.__game, it = g.LT.vis[k][i]; g.P.p.set(it.home[0] + 0.5, g.S.floor + 0.02, it.home[1]); g.P.v.set(0, 0, 0); g.step(0.016); g.tryLoot(); }, [k, i]);
@@ -121,6 +122,7 @@ try {
   await Promise.all([a, b].map(p => p.waitForFunction(() => { const g = window.__game; return g.S.id === "L1" && !g.loading && [...g.net.peers.values()].every(q => q.scene === "L1"); }, null, {timeout: 60000})));
   await sleep(500);
   A = await info(a); B = await info(b);
+  parkMonsters(floorOf("L1"));
   check("both on L1, and the server runs it", A.scene === "L1" && B.scene === "L1" && !!floorOf("L1") && A.peers[0]?.scene === "L1" && B.peers[0]?.scene === "L1", JSON.stringify({A: [A.scene, A.peers[0]?.scene], B: [B.scene, B.peers[0]?.scene]}));
   let [host, guest] = [a, b];                                       // (just two names: the server has no host any more)
 
@@ -220,6 +222,7 @@ try {
   await host.evaluate(() => { window.__game.BC.list.length = 0; });
 
   // a server monster catches the guest once her 4 s of safety after the lift have run out: 50 HP, then 15, then down
+  playerOf(guestId).ps.immUntil = 0;                                                               // now she can be hurt (Ann stays safe)
   { const gf = floorOf("L2"); parkMonsters(gf, 0); const gm2 = gf.monsters[0], gpos = await guest.evaluate(() => [window.__game.P.p.x, window.__game.P.p.z]); gm2.pos.set(gpos[0] + 0.4, gm2.fy, gpos[1]); gm2.state = "patrol"; gm2.path = []; gm2.wait = 99; }
   await until("the server's monster hit the lifted guest (50 HP): at most 15 left", guest, () => window.__game.HP.h.hp <= 15);
   await until("the host sees the guest's low HP under their name", host, () => [...window.__game.net.peers.values()][0].hp <= 15);
@@ -239,7 +242,7 @@ try {
   const solo2 = await (await browser.newContext({viewport: {width: 320, height: 200}})).newPage();
   solo2.on("pageerror", e => console.log("[Cy pageerror]", e.message));
   await solo2.goto(`http://localhost:${srv.port}/?room=OTHER&name=Cy&char=2&auto=1&ready=1`);
-  await inGame(solo2);
+  await inGame(solo2); guard("OTHER");
   await solo2.evaluate(() => window.__game.loadScene("L4")); await solo2.waitForFunction(() => window.__game.S.id === "L4" && !window.__game.loading, null, {timeout: 60000});
   check("a room that did not use the L3 box finds L4 shut", await solo2.evaluate(() => { const g = window.__game; return !g.POWER.on && !g.S.shutter.off && !!g.collide({x: 0, y: g.S.floor + 0.3, z: 27.2}); }));
   await serverUntil("the server runs L4 for the other room", () => !!floorOf("L4", "OTHER")); parkMonsters(floorOf("L4", "OTHER"));
@@ -252,6 +255,7 @@ try {
   for (const pg of [a, b, solo2]) await pg.close().catch(() => {});             // software rendering: free the CPU for the last room
   const mk = async (name, char) => { const pg = await (await browser.newContext({viewport: {width: 320, height: 200}})).newPage(); pg.on("pageerror", e => console.log(`[${name} pageerror]`, e.message)); await pg.goto(`http://localhost:${srv.port}/?room=FIN&name=${name}&char=${char}&auto=1&ready=1`); await inGame(pg); return pg; };
   const x = await mk("Xia", 1), y = await mk("Yul", 4);
+  await serverUntil("both are in the finale room", () => roomOf("FIN") && roomOf("FIN").players.size === 2); guard("FIN");
   const toL4 = pg => pg.evaluate(() => window.__game.loadScene("L4")).then(() => pg.waitForFunction(() => window.__game.S.id === "L4" && !window.__game.loading, null, {timeout: 170000}));
   await toL4(x); await toL4(y);
   await serverUntil("the server runs L4 for the finale room", () => !!floorOf("L4", "FIN") && roomOf("FIN").players.size === 2); parkMonsters(floorOf("L4", "FIN"));
