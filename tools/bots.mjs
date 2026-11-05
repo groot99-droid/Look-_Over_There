@@ -28,13 +28,13 @@ try {
     pages.push(page);
   }
   await Promise.all(pages.map(p => p.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000})));
+  await Promise.all(pages.map((p, i) => p.evaluate(`(${brain.toString()})(${i}, ${N}, ${JSON.stringify({nogun: args.includes("--nogun"), nocloak: args.includes("--nocloak"), nobeacons: args.includes("--nobeacons"), omniscient: args.includes("--omniscient"), legacyItems: args.includes("--legacy-items"), nocams: args.includes("--nocams")})})`)));
   const START = opt("start", "");                                                                  // --start=L1: skip the floors below it (each bot is taken up its stair doors as soon as the round begins)
   if (START) {
     await Promise.all(pages.map(p => p.waitForFunction(() => window.__game.net.phase === "playing" && !window.__game.loading, null, {timeout: 120000})));
     await Promise.all(pages.map(p => p.evaluate(async want => { const g = window.__game; for (let i = 0; i < 6 && g.S.id !== want; i++) { const d = g.upDoor(); if (!d) break; const l = d.d.link; await g.loadScene(l.scene, {pos: l.arrive, face: l.face, door: l.door}); } }, START)));
     console.log(`bots start on ${START}`);
   }
-  await Promise.all(pages.map((p, i) => p.evaluate(`(${brain.toString()})(${i}, ${N}, ${JSON.stringify({nogun: args.includes("--nogun"), nocloak: args.includes("--nocloak"), nobeacons: args.includes("--nobeacons"), omniscient: args.includes("--omniscient"), legacyItems: args.includes("--legacy-items"), nocams: args.includes("--nocams")})})`)));
   const relay = setInterval(async () => {                                          // the team's blackboard: every bot's position, role and claim, shared with all of them
     try { const pubs = (await Promise.all(pages.map(p => p.evaluate(() => (window.__bot && window.__bot.pub) || null)))).filter(Boolean); await Promise.all(pages.map(p => p.evaluate(bb => { window.__bb = bb; }, pubs))); } catch (e) {}
   }, 400);
