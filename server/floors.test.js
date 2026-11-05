@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {WebSocket} from "ws";
 import {createServer} from "./server.js";
-import {segClear, mainRegion, cellXZ, FLOORS, rng32, rayClear} from "../shared/world.js";
+import {segClear, mainRegion, cellXZ, cellOf, FLOORS, rng32, rayClear} from "../shared/world.js";
 
 function client(port) {
   const ws = new WebSocket(`ws://localhost:${port}/ws`), inbox = [], waiters = [];
@@ -19,9 +19,10 @@ const at = (c, scene, x, z, extra = {}) => c.send({t: "s", scene, x, y: FLOORS[s
 const stepN = (floor, secs) => { for (let t = 0; t < secs; t += 0.05) floor.step(0.05); };
 // a spot with a clear straight line of d metres to another walkable spot
 function clearPair(W, d, seed = 4) {
-  const cells = mainRegion(W), r = rng32(seed);
+  const cells = mainRegion(W), r = rng32(seed), inRegion = new Set(cells);
   for (let i = 0; i < 4000; i++) {
     const [x, z] = cellXZ(cells[Math.floor(r() * cells.length)]), a = r() * 6.28, x2 = x + Math.cos(a) * d, z2 = z + Math.sin(a) * d;
+    if (!inRegion.has(cellOf(x2, z2))) continue;
     if ([0.25, 0.5, 0.75, 1].every(u => segClear(W, x, W.floor + 1.0, z, x + (x2 - x) * u, W.floor + 1.0, z + (z2 - z) * u, 0)) && segClear(W, x, W.floor + 1.5, z, x2, W.floor + 1.5, z2, 0) && rayClear(W, [x, W.floor + 1.52, z], [(x2 - x) / d, 0, (z2 - z) / d], d)) return [[x, z], [x2, z2]];
   }
   throw new Error("no clear pair");

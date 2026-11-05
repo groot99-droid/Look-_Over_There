@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {worldFromDoc, FLOORS, mainRegion, cellXZ, segClear, rng32, near} from "./world.js";
+import {worldFromDoc, FLOORS, mainRegion, cellXZ, cellOf, segClear, rng32, near} from "./world.js";
 import {MonsterSim, spawnPlan, resolveShot, rayMonster, banishSpot, CHASE_LOSE_S, SEARCH_S, GLITCH_S, BANISH_FROM_PLAYER} from "./monsters.js";
 
 const json = p => JSON.parse(readFileSync(new URL(p, import.meta.url)));
@@ -12,10 +12,10 @@ function mkEnv(W, seed = 1) { const env = {W, t: 100, rnd: rng32(seed), opened: 
 function tick(m, env, targets, secs, dt = 0.05, lures = []) { let caught = []; for (let t = 0; t < secs - 1e-9; t += dt) { env.t += dt; caught = caught.concat(m.update(dt, targets, lures).caught); } return caught; }
 // two walkable spots d metres apart with a clear straight line at eye height
 function clearPair(W, d, seed = 3) {
-  const cells = mainRegion(W), r = rng32(seed);
+  const cells = mainRegion(W), r = rng32(seed), inRegion = new Set(cells);
   for (let i = 0; i < 4000; i++) {
     const [x, z] = cellXZ(cells[Math.floor(r() * cells.length)]), a = r() * 6.28, x2 = x + Math.cos(a) * d, z2 = z + Math.sin(a) * d;
-    if (W.nav[cells.length && 0] === undefined) continue;
+    if (!inRegion.has(cellOf(x2, z2))) continue;                          // both ends are on the floor's walkable main region
     if (segClear(W, x, W.floor + 1.6, z, x2, W.floor + 1.4, z2, 0) && cellXZ && near(W, x2, z2, 0.1)) {
       const open = [0.3, 0.6, 0.9].every(u => segClear(W, x, W.floor + 1.0, z, x + (x2 - x) * u, W.floor + 1.0, z + (z2 - z) * u, 0));
       if (open) return [[x, z], [x2, z2]];
