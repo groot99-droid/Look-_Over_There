@@ -4,6 +4,7 @@
     python3 tools/build_audio.py                      # every cue, from the public GitHub release
     python3 tools/build_audio.py --only m_b1,gun      # some cues
     python3 tools/build_audio.py --source-dir DIR     # zips already on disk (tests, offline)
+    python3 tools/build_audio.py --aac                # also an AAC (.m4a) copy of every cue, for Safari before 18.4
     python3 tools/build_audio.py --allow-partial      # a failure leaves a note (audio/files/FAILED) and still exits 0 (Docker build)
 
 Each sound is read out of its zip with HTTP range requests (the zip's directory first, then only that member), so a 1 GB zip is never
@@ -98,7 +99,7 @@ def run(args):
     subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-loglevel", "error", "-y"] + args, capture_output=True, check=True)
 
 
-def encode(src, dst, cue):
+def encode(src, dst, cue, aac=False):
     start, ln = cue.get("start", 0), cue.get("len")
     total = probe_len(src); ln = min(ln, total - start) if ln else total - start
     tmp = Path(tempfile.mkdtemp(prefix="cue-")); clip = tmp / "clip.wav"; fmt = ["-ac", str(cue.get("ch", 1)), "-ar", "48000"]
@@ -113,11 +114,13 @@ def encode(src, dst, cue):
         run(["-ss", str(start), "-t", str(ln), "-i", str(src)] + fade + fmt + [str(clip)])
     gain = level(clip, cue)
     run(["-i", str(clip), "-af", f"volume={gain:.2f}dB,alimiter=limit=0.89", "-c:a", "libopus", "-b:a", "64k" if cue.get("ch", 1) == 2 else "28k", "-application", "audio", str(dst)])
+    if aac:                                                          # the same sound as AAC in m4a, for browsers that cannot play Opus in Ogg (Safari before 18.4)
+        run(["-i", str(clip), "-af", f"volume={gain:.2f}dB,alimiter=limit=0.89", "-c:a", "aac", "-b:a", "96k" if cue.get("ch", 1) == 2 else "40k", "-movflags", "+faststart", str(Path(dst).with_suffix(".m4a"))])
     shutil.rmtree(tmp, ignore_errors=True)
     return probe_len(dst), round(gain, 1)
 
 
-def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print):
+def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print, aac=False):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     index_path = out / "index.json"
     index = {k: v for k, v in json.loads(index_path.read_text()).items() if not k.startswith("_")} if index_path.exists() else {}
@@ -127,7 +130,7 @@ def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print):
     for k, cue in wanted.items(): by_id.setdefault(cue["id"], []).append(k)
     for id_, keys in by_id.items():
         entry = lock["entries"].get(id_)
-        todo = [k for k in keys if not (out / f"{k}.ogg").exists() or index.get(k, {}).get("stamp") != stamp(wanted[k], entry)]
+        todo = [k for k in keys if not (out / f"{k}.ogg").exists() or (aac and not (out / f"{k}.m4a").exists()) or index.get(k, {}).get("stamp") != stamp(wanted[k], entry)]
         if not todo: log(f"  {id_}: up to date"); continue
         try:
             if not entry: raise RuntimeError("not in the lock: run tools/make_lock.py")
@@ -136,9 +139,9 @@ def build(cues, lock, out, only=None, source_dir=None, opener=None, log=print):
             tmp = Path(tempfile.mkdtemp(prefix="member-")); src = tmp / ("src" + Path(entry["member"]).suffix.lower())
             src.write_bytes(blob); del blob
             for k in todo:
-                dur, gain = encode(src, out / f"{k}.ogg", wanted[k])
+                dur, gain = encode(src, out / f"{k}.ogg", wanted[k], aac)
                 index[k] = {"file": f"{k}.ogg", "dur": round(dur, 3), "bytes": (out / f"{k}.ogg").stat().st_size, "bus": wanted[k]["bus"], "ch": wanted[k].get("ch", 1),
-                            "loop": bool(wanted[k].get("loop")), "gain_db": gain, "stamp": stamp(wanted[k], entry)}
+                            "loop": bool(wanted[k].get("loop")), "gain_db": gain, "stamp": stamp(wanted[k], entry), **({"m4a": f"{k}.m4a"} if aac else {})}
                 log(f"    {k}: {dur:.1f} s, {index[k]['bytes'] // 1024} KB, gain {gain:+.1f} dB")
             shutil.rmtree(tmp, ignore_errors=True)
         except Exception as err:  # noqa: BLE001 - one failure must not stop the rest
@@ -155,13 +158,13 @@ def stamp(cue, entry):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cues", default=str(ROOT / "audio/cues.json")); ap.add_argument("--lock", default=str(ROOT / "audio/sources.lock.json")); ap.add_argument("--out", default=str(ROOT / "audio/files"))
-    ap.add_argument("--only", default=""); ap.add_argument("--source-dir"); ap.add_argument("--allow-partial", action="store_true")
+    ap.add_argument("--only", default=""); ap.add_argument("--source-dir"); ap.add_argument("--allow-partial", action="store_true"); ap.add_argument("--aac", action="store_true", help="also write .m4a (AAC) for Safari before 18.4")
     a = ap.parse_args(argv)
     if not shutil.which("ffmpeg"): print("ffmpeg is needed", file=sys.stderr); return 2
     cues, lock = json.load(open(a.cues)), json.load(open(a.lock))
     only = {k for k in a.only.split(",") if k} or None
     if only and not only <= set(cues["cues"]): print("unknown cue:", ", ".join(sorted(only - set(cues["cues"]))), file=sys.stderr); return 2
-    index, failed = build(cues, lock, a.out, only, a.source_dir)
+    index, failed = build(cues, lock, a.out, only, a.source_dir, aac=a.aac)
     total = sum(v["bytes"] for v in index.values())
     print(f"{len(index)} cues built, {total / 1e6:.1f} MB; {len(failed)} failed")
     marker = Path(a.out) / "FAILED"

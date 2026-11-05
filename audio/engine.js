@@ -10,6 +10,8 @@ const STORE = "lot-audio", MAX_VOICES = 34;
 export function createAudio({base = "audio/files/", enabled = true} = {}) {
   const A = {status: enabled ? "idle" : "off", ctx: null, index: null, settings: {master: 0.9, music: 0.7, sfx: 0.9, mute: false}, level: null, voices: 0, listener: {x: 0, y: 0, z: 0}, stats: {played: 0, dropped: 0}};
   try { Object.assign(A.settings, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* private window: defaults */ }
+  const oggOk = (() => { try { const a = document.createElement("audio"); return !!a.canPlayType && a.canPlayType('audio/ogg; codecs="opus"') !== ""; } catch (e) { return true; } })();
+  const fileFor = e => (!oggOk && e.m4a) ? e.m4a : e.file;                  // Opus in Ogg first; AAC where the browser cannot play it
   const bufs = new Map(); let bus = null, reverb = null, music = null, token = 0, duckUntil = 0, alarm = null, noticeAt = -99; const mons = new Map(), peers = new Map();
   const smoothed = {t1: 0, t2: 0, t3: 0, heart: 0, heartFast: 0, duck: 1};
 
@@ -44,7 +46,7 @@ export function createAudio({base = "audio/files/", enabled = true} = {}) {
   const have = key => !!(A.index && A.index[key]);
   function buf(key) {
     if (!have(key)) return Promise.resolve(null);
-    if (!bufs.has(key)) bufs.set(key, fetch(base + A.index[key].file).then(r => r.arrayBuffer()).then(d => A.ctx.decodeAudioData(d)).catch(() => null));
+    if (!bufs.has(key)) bufs.set(key, fetch(base + fileFor(A.index[key])).then(r => r.arrayBuffer()).then(d => A.ctx.decodeAudioData(d)).catch(() => null));
     return bufs.get(key);
   }
   A.preload = keys => Promise.all(keys.map(buf));

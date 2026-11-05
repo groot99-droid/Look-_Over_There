@@ -52,6 +52,13 @@ class BuildAudio(unittest.TestCase):
         f = B.HTTPRangeFile(f"http://127.0.0.1:{self.srv.server_port}/Fake.zip", block=64 * 1024)
         self.assertEqual(f.size, (self.tmp / "Fake.zip").stat().st_size)
         with zipfile.ZipFile(f) as z: self.assertEqual(z.read("cat/tone.wav"), self.blob)
+    def test_aac_copy_is_written_only_when_asked_and_matches_the_length(self):
+        out = self.tmp / "out_aac"
+        index, failed = B.build({"cues": {"short": self.cues["cues"]["short"]}}, self.lock, out, source_dir=self.tmp, log=lambda m: None, aac=True)
+        self.assertEqual(failed, []); self.assertTrue((out / "short.m4a").exists()); self.assertEqual(index["short"]["m4a"], "short.m4a")
+        self.assertAlmostEqual(B.probe_len(out / "short.m4a"), index["short"]["dur"], delta=0.12)
+        out2 = self.tmp / "out_plain"; i2, _ = B.build({"cues": {"short": self.cues["cues"]["short"]}}, self.lock, out2, source_dir=self.tmp, log=lambda m: None)
+        self.assertNotIn("m4a", i2["short"]); self.assertFalse((out2 / "short.m4a").exists())
     def test_build_makes_seamless_loops_and_trims_and_refuses_a_wrong_hash(self):
         out = self.tmp / "out"; logs = []
         index, failed = B.build(self.cues, self.lock, out, source_dir=self.tmp, log=logs.append)

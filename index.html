@@ -31,6 +31,13 @@
   #kp-close{font-size:13px;padding:8px 0;color:#9a9a8a}
   #prompt{position:fixed;left:50%;bottom:22%;transform:translateX(-50%);color:#e6e6d0;font:600 15px/1.4 system-ui,sans-serif;letter-spacing:.05em;z-index:3;pointer-events:none;display:none;text-shadow:0 0 6px #000;text-align:center}
   #fusehud{position:fixed;right:14px;top:10px;color:#e0c060;font:700 12px/1.5 system-ui,sans-serif;letter-spacing:.1em;z-index:1;pointer-events:none;display:none;text-shadow:0 0 4px #000}
+  #help{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);z-index:6;color:#d8d8c4;font:500 14px/1.7 system-ui,sans-serif}
+  #help.on{display:flex}
+  #help .card{max-width:760px;width:92%;padding:22px 26px;border:1px solid #444;background:#0b0b0b}
+  #help h2{margin:0 0 10px;letter-spacing:.2em;font-size:15px}
+  #help .cols{display:grid;grid-template-columns:1fr 1fr;gap:6px 28px}
+  #help b{color:#fff;display:inline-block;min-width:92px}
+  #help small{display:block;margin-top:12px;opacity:.6}
   #toast{position:fixed;left:50%;top:9%;transform:translateX(-50%);color:#d8d8c4;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.06em;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s;text-shadow:0 0 6px #000;text-align:center}
   #scream{position:fixed;left:50%;top:50%;z-index:2;pointer-events:none;display:none;color:#e24a3c;font:700 13px/1 system-ui,sans-serif;text-shadow:0 0 6px #000;transform:translate(-50%,-50%);text-align:center;animation:pulse .7s infinite alternate}
   #scream i{display:block;font-style:normal;font-size:30px;line-height:1}
@@ -84,6 +91,10 @@
 <div id="hud"></div>
 <div id="camhud"></div><div id="buzz"></div><div id="cloak"><b>CLOAK · V</b><i></i></div><div id="cloakfx"></div><div id="beacons"></div><div id="hp"><b>HP</b><i></i></div><div id="hurt"></div><div id="stam"><i></i></div><div id="alarm"></div><div id="redpulse"></div>
 <div id="results"><div class="card"><h1>OUT</h1><table id="r-rows"></table><div id="r-best"></div><button id="r-again" type="button">Play again</button></div></div>
+<div id="help"><div class="card"><h2>CONTROLS</h2><div class="cols"><div>
+<div><b>WASD</b>move</div><div><b>Mouse</b>look</div><div><b>Space</b>jump</div><div><b>R (hold)</b>run, loud</div><div><b>Shift</b>crouch, quiet</div><div><b>E / X</b>use, door, loot (hold to revive)</div><div><b>F / click</b>ray gun</div><div><b>V</b>cloak</div><div><b>G</b>roll an AFK Beacon</div></div><div>
+<div><b>Tab</b>device out / away</div><div><b>M</b>feeds / map</div><div><b>Q / T</b>previous / next camera</div><div><b>1-9</b>pick a camera</div><div><b>Z</b>camera that sees a monster</div><div><b>N</b>sound on / off</div><div><b>H</b>this list</div></div></div>
+<small>Controller: left stick move · right stick look · A jump · B / right-stick click crouch · left-stick click run · X use · Y device · RT fire · LT cloak · RB beacon · LB / D-pad left previous camera · D-pad right next · D-pad down camera with a monster · View / D-pad up map</small></div></div>
 <div id="toast"></div>
 <div id="prompt"></div>
 <div id="kp"><div id="kp-box"><div id="kp-title">KEYPAD</div><div id="kp-code"></div><div id="kp-found"></div><div id="kp-note"></div><div id="kp-pad"></div><button id="kp-close" type="button">Close (Esc or E)</button></div></div>
@@ -544,6 +555,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyF") fire();
   if (e.code === "KeyV") toggleCloak();
   if (e.code === "KeyG") throwBeacon();
+  if (e.code === "KeyH") document.getElementById("help").classList.toggle("on");
   if (e.code === "KeyN") toast(AUD.toggleMute() ? "Sound off" : "Sound on");
   if (e.code === "KeyZ") hotCam();
   if (/^Digit[1-9]$/.test(e.code) && devOn.v && S.cams.length) camIdx = Math.min(+e.code.slice(5) - 1, S.cams.length - 1);

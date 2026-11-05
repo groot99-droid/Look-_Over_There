@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 ffmpeg 
 WORKDIR /build
 COPY audio/cues.json audio/sources.lock.json audio/
 COPY tools/build_audio.py tools/
-RUN python3 tools/build_audio.py --allow-partial || mkdir -p audio/files
+RUN python3 tools/build_audio.py --allow-partial --aac || mkdir -p audio/files
 
 FROM node:22-slim
 WORKDIR /app
