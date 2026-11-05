@@ -50,7 +50,7 @@ await G("window.__press(11, false)"); await G("window.__axis(1, 0)"); await tick
 await page.keyboard.press("ShiftLeft"); await tick(2); check("Shift crouches too", await G(() => window.__game.P.crouch)); await page.keyboard.press("ShiftLeft"); await tick(2); check("and again to walk", await G(() => !window.__game.P.crouch));
 await G("window.__game.keys.KeyW = true; window.__game.keys.KeyR = true"); await tick(6); check("R runs", await G(() => window.__game.P.running)); await G("window.__game.keys.KeyW = false; window.__game.keys.KeyR = false");
 // the gun: RT fires only when it is in the hands, LT aims
-await G(() => { window.__game.GUN.cool = 0; }); await tap(3); await tap(3); await tap(3);                                    // back to the gun
+await G(() => { window.__game.GUN.cool = 0; }); await tap(3); await tap(3);                                                  // cloak -> beacon -> gun
 check("holding the gun", /RAY GUN/.test(await heldNow() || ""), await heldNow());
 const r0 = await G(() => window.__game.LT.rounds); await tap(7); check("RT fires the ray gun", (await G(() => window.__game.LT.rounds)) === r0 - 1);
 await G("window.__press(6, true)"); await tick(30); check("LT aims: the aim state is on and the reticle shows", await G(() => window.__game.AIM.on && document.getElementById("reticle").style.display === "block"));
