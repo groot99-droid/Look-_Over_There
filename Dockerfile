@@ -19,6 +19,7 @@ COPY monsters monsters
 COPY characters characters
 COPY shared shared
 COPY models models
+COPY games games
 COPY audio/engine.js audio/audition.js audio/cues.json audio/
 COPY --from=audio /build/audio/files audio/files
 ENV PORT=8080

@@ -18,7 +18,7 @@ import {Floor} from "./floorsim.js";
 import * as PS from "./playerstate.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio"]);            // nothing else in the repo is public
+const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio", "games"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript", ".ogg": "audio/ogg", ".m4a": "audio/mp4"};
 const RATE_BURST = 240, RATE_PER_S = 90, RATE_KICK = 600;                                   // messages: a burst of 240, 90 a second after (the game sends about 25 a second)
 const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
@@ -144,7 +144,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
           me.ready = !!m.ready; lobbyChanged(room);
           break;
         case "s": {                                                   // a player's state goes only to those on the same floor; everyone else just learns which floor you are on
-          const scene = typeof m.scene === "string" ? m.scene.slice(0, 8) : null;
+          const scene = typeof m.scene === "string" && Object.hasOwn(FLOORS, m.scene) ? m.scene : null;          // only the five floors exist for the server (the solo-only passages and games never reach a room)
           const was = me.scene; me.scene = scene;
           const f = k => Number.isFinite(m[k]) ? m[k] : 0, inMap = Math.abs(f("x")) <= 100 && Math.abs(f("z")) <= 100 && f("y") > -20 && f("y") < 30;          // a position off the map (or not a number) is ignored: the player stays where they were
           if (!inMap && me.st) { m = {...m, x: me.st.x, y: me.st.y, z: me.st.z}; }

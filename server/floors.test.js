@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {WebSocket} from "ws";
 import {createServer} from "./server.js";
-import {segClear, mainRegion, cellXZ, FLOORS, rng32} from "../shared/world.js";
+import {segClear, mainRegion, cellXZ, FLOORS, rng32, rayClear} from "../shared/world.js";
 
 function client(port) {
   const ws = new WebSocket(`ws://localhost:${port}/ws`), inbox = [], waiters = [];
@@ -22,7 +22,7 @@ function clearPair(W, d, seed = 4) {
   const cells = mainRegion(W), r = rng32(seed);
   for (let i = 0; i < 4000; i++) {
     const [x, z] = cellXZ(cells[Math.floor(r() * cells.length)]), a = r() * 6.28, x2 = x + Math.cos(a) * d, z2 = z + Math.sin(a) * d;
-    if ([0.25, 0.5, 0.75, 1].every(u => segClear(W, x, W.floor + 1.0, z, x + (x2 - x) * u, W.floor + 1.0, z + (z2 - z) * u, 0)) && segClear(W, x, W.floor + 1.5, z, x2, W.floor + 1.5, z2, 0)) return [[x, z], [x2, z2]];
+    if ([0.25, 0.5, 0.75, 1].every(u => segClear(W, x, W.floor + 1.0, z, x + (x2 - x) * u, W.floor + 1.0, z + (z2 - z) * u, 0)) && segClear(W, x, W.floor + 1.5, z, x2, W.floor + 1.5, z2, 0) && rayClear(W, [x, W.floor + 1.52, z], [(x2 - x) / d, 0, (z2 - z) / d], d)) return [[x, z], [x2, z2]];
   }
   throw new Error("no clear pair");
 }
@@ -49,7 +49,7 @@ test("the floor's players get snapshots of the monsters, others do not", async (
 });
 test("a ray-gun shot is decided here: a hit banishes the monster and the floor gets a zap; a shot from nowhere near the shooter does nothing", async () => {
   const srv = await createServer(), {ps, floor} = await floorWith(srv, "F4", "B1", ["Ann", "Bob"]);
-  const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
+  const [a, b] = clearPair(floor.W, 8), m = floor.monsters[0]; m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0}; m.state = "patrol"; m.wait = 99; m.pos.set(b[0], m.fy, b[1]);
   at(ps[0], "B1", a[0], a[1]); at(ps[1], "B1", a[0] + 1, a[1]); await sleep(150); ps[0].send({t: "loot", k: "locker", i: 0}); await ps[0].next(m2 => m2.t === "me" && m2.gun); ps[0].inbox.length = 0; ps[1].inbox.length = 0;
   const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz), d = [dx / L, 0, dz / L], o = [a[0], floor.W.floor + 1.52, a[1]];
   ps[0].send({t: "shot", o: [o[0] + 40, o[1], o[2]], d}); await sleep(150); assert.ok(m.glitchT <= 0, "a shot from 40 m away from the shooter is refused");

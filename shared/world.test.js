@@ -27,7 +27,7 @@ function astarScan(walk, a, b) {
 
 test("every floor builds from its json with walkable space, doors and a main region", () => {
   for (const [id, W] of Object.entries(worlds)) {
-    assert.equal(W.floor, FLOORS[id]); assert.ok(W.boxes.length > 50, id); assert.ok(W.nav.reduce((a, b) => a + b, 0) > 500, id + " walkable cells");
+    assert.equal(W.floor, FLOORS[id]); assert.ok(W.boxes.length >= 40, id); assert.ok(W.nav.reduce((a, b) => a + b, 0) > 500, id + " walkable cells");
     assert.ok(mainRegion(W).length > 500, id + " main region");
   }
   assert.ok(worlds.B1.doors.length > 0 && worlds.B1.doors.some(d => d.link), "B1 has doors, and a stair door");

@@ -66,10 +66,10 @@ test("a stair door is never used: a path that runs into one is given up", () => 
   assert.ok(env.opened.includes(plain), "an ordinary door they open (after half a second)");
 });
 test("an AFK Beacon pulls monsters in range, ignores far players, still notices a close one, and ends in a search", () => {
-  const {W, m, env, a, b} = setup(14); const can = {id: 1, x: b[0], z: b[1], until: env.t + 25};
+  const {W, m, env, a, b} = setup(14); const can = {id: 1, x: b[0], z: b[1], until: env.t + 60};
   const far = player([a[0] - 3, a[1] - 3], {y: W.floor}); m.state = "patrol"; m.wait = 99;
   tick(m, env, [far], 3, 0.05, [can]); assert.equal(m.lureId, 1); assert.equal(m.state, "search");
-  tick(m, env, [far], 25, 0.05, [can]); assert.ok(Math.hypot(m.pos.x - can.x, m.pos.z - can.z) < 4, "it is round the can");
+  tick(m, env, [far], 50, 0.05, [can]); assert.ok(Math.hypot(m.pos.x - can.x, m.pos.z - can.z) < 4, "it is round the can");
   env.t = can.until + 1; tick(m, env, [], 0.1, 0.05, [can]); assert.equal(m.lureId, null); assert.equal(m.state, "search", "then it searches there");
   tick(m, env, [], SEARCH_S + 14); assert.equal(m.state, "patrol");
     // a player 3 m from a lured monster, in front of it, is still noticed

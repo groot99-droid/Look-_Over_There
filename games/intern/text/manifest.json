@@ -1,0 +1,32 @@
+{
+  "_comment": "Doc 1 §6.3 / Doc 3 MG-05 mode C. Mundane and impossible items interleave and never separate; ratio holds ~60% mundane per Doc 1 §9.5. Row 019 only appears if SAW_HARLOWE is set, is in a different typeface, and has no ORDER/FLAG buttons -- it cannot be interacted with and does not block completion.",
+  "rows": [
+    { "num": "001", "item": "Ballpoint pen, blue, medium", "qty": 24, "unit": "ct" },
+    { "num": "002", "item": "Copier toner, K-series", "qty": 4, "unit": "ct" },
+    { "num": "003", "item": "Liquid teeth", "qty": 4, "unit": "L" },
+    { "num": "004", "item": "Coffee filter, #4", "qty": 200, "unit": "ct" },
+    { "num": "005", "item": "Time-lapsed dread", "qty": 12, "unit": "unit" },
+    { "num": "006", "item": "Fluorescent tube, T8, 48 in", "qty": 60, "unit": "ct" },
+    { "num": "007", "item": "One (1) childhood bedroom, disassembled", "qty": 1, "unit": "pallet" },
+    { "num": "008", "item": "Hand soap, refill", "qty": 12, "unit": "ct" },
+    { "num": "009", "item": "Hold music, unlooped", "qty": 1, "unit": "reel" },
+    { "num": "010", "item": "Copy paper, 20 lb, letter", "qty": 40, "unit": "case" },
+    { "num": "011", "item": "The sound of a car in a driveway at 6:40 pm", "qty": 1, "unit": "unit" },
+    { "num": "012", "item": "Binder clip, medium", "qty": 144, "unit": "ct" },
+    { "num": "013", "item": "Consent, notarized", "qty": 1, "unit": "ct" },
+    { "num": "014", "item": "Floor wax, industrial", "qty": 20, "unit": "gal" },
+    { "num": "015", "item": "Legs, pair, personnel-issue", "qty": 2, "unit": "ct" },
+    { "num": "016", "item": "Staples, standard", "qty": 5000, "unit": "ct" },
+    { "num": "017", "item": "Six (6) months", "qty": 1, "unit": "unit" },
+    { "num": "018", "item": "Trash liner, 55 gal", "qty": 100, "unit": "ct" }
+  ],
+  "harloweRow": {
+    "num": "019",
+    "item": "whatever is in the box, do not sign for it",
+    "qty": "n/a",
+    "unit": "n/a",
+    "requiresFlag": "SAW_HARLOWE",
+    "interactable": false,
+    "typeface": "harlowe"
+  }
+}

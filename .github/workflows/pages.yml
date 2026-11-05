@@ -31,6 +31,7 @@ jobs:
           cp -r shared _site/shared
           cp -r models _site/models
           cp -r world _site/world
+          cp -r games _site/games
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

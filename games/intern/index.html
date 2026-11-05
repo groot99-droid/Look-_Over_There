@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>NINETY-NINE</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="stage">
+    <!-- The stage (src/stage/stage.js) draws the building live into this layer, through the candidate's eyes. -->
+    <div id="scene-layer"></div>
+    <!-- Threshold labels, captions, the walk hint, the touch joystick. -->
+    <div id="hud-layer"></div>
+    <!-- The application form, laid over the apartment's CRT while he sits at it. -->
+    <div id="screen-layer" hidden></div>
+    <div id="ending-card" hidden></div>
+    <div id="boot-error" hidden></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

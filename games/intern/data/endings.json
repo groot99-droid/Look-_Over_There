@@ -1,0 +1,119 @@
+{
+  "_comment": "Doc 1 §2.4 resolveEnding() output maps here. Each ending is a room of the building (data/rooms.json `room`) the candidate walks into: stepping into its `zone` (or `autoSeconds` passing) takes the camera -- `preShot` first if there is one, then `show` puts props in place, then the room's own `beats` (the runBeats vocabulary), then the pull-back `shot` -- and a dead-still `holdSeconds` before the card (Doc 2: a 4 second hold with no motion whatsoever). `label` is the ending zone's label, if any. `flagOverlays` hide props on arrival when a flag is set. `routes` is the way on from a room that is not the ending's (the store's staff door, toward the waiting room). `hum` is the room's hum for the ending (scenes.json's `hum`, played in the ending's room): already playing from S8 H's store, it carries on, is never restarted, and fades with the beds at the card. Doc 1 §6.4 for card text (textKey resolved via text.js against /text/endings.json). C4 is deliberately broken only on these cards -- 'you' appears exactly once per card.",
+  "ASSIMILATION": {
+    "id": "SE_ASSIM",
+    "room": "SE_ASSIM",
+    "shot": "ending",
+    "holdSeconds": 4,
+    "textKey": "ending.assimilation",
+    "flagOverlays": [
+      {
+        "flag": "NEVER_SAT",
+        "hide": [
+          "mychair",
+          "hundredth",
+          "hundredth_print"
+        ],
+        "note": "Doc 1 §2.5 / §6.4: if NEVER_SAT there is no chair for him at all in the boardroom; he remains standing at the table for the length of the hold."
+      },
+      {
+        "flag": "DELIVERED",
+        "hide": [
+          "package",
+          "ring"
+        ],
+        "note": "He carries the package in (S8 C DELIVER sets the flag); the glass is bare until the camera leaves him, and then it is at the centre of the table (`show`)."
+      }
+    ],
+    "zone": "head",
+    "show": [
+      "self",
+      "package",
+      "ring"
+    ],
+    "_showNote": "`self` is him, standing at the head beside his chair, revealed as the camera leaves his eyes: his face is the blurred texture map (Doc 1 §6.4).",
+    "autoSeconds": 90,
+    "ambience": "S8_C_AMB_BOARDROOM.wav"
+  },
+  "EXPULSION": {
+    "id": "SE_EXPUL",
+    "room": "SE_EXPUL",
+    "shot": "ending",
+    "holdSeconds": 4,
+    "textKey": "ending.expulsion",
+    "flagOverlays": [],
+    "zone": "door",
+    "_zoneNote": "The storefront door stands open outward; an invisible threshold stops him in the doorway (he cannot render out there). Stepping up to it plays the ending: the camera withdraws into the store without him.",
+    "autoSeconds": 90,
+    "ambience": "S8_H_AMB_STORE.wav",
+    "hum": {
+      "hz": 48,
+      "gain": 0.018,
+      "followDrone": true
+    },
+    "_humNote": "Doc 1 §6.4: the store's fluorescent hum is 48 Hz, detuned exactly as far as the building's drone (audio.js setHum). Already humming from S8 H's store, it carries on; it fades with the beds at the card."
+  },
+  "PENDING": {
+    "id": "SE_PEND",
+    "room": "SE_PEND",
+    "shot": "ending",
+    "holdSeconds": 4,
+    "textKey": "ending.pending",
+    "flagOverlays": [],
+    "zone": "seat",
+    "label": "TAKE A SEAT",
+    "_labelNote": "S1's label again, the first thing the building asked of him.",
+    "autoSeconds": 90,
+    "preShot": "sit",
+    "show": [
+      "hands",
+      "slip99"
+    ],
+    "_showNote": "`slip99` is the slip in his hands, printed 99 (Doc 1 §6.4: uncalled).",
+    "beats": [
+      {
+        "sfxCue": "speaker-click"
+      },
+      {
+        "caption": "call.hundred",
+        "className": "scene-caption-receptionist",
+        "holdMs": 2600
+      },
+      {
+        "waitMs": 900
+      }
+    ],
+    "_beatsNote": "Doc 1 §6.4: seated, the slip reading 99 in his hands, the speaker clicks: 'One hundred.' playEnding() runs `beats` after the preShot sits him down and `show` puts the hands and the slip in his lap, before the pull-back `shot`.",
+    "ambience": "S1_C_AMB.wav",
+    "routes": {
+      "S8_H": {
+        "exit": "staff",
+        "via": "CN_CORRIDOR_SERVICE"
+      }
+    }
+  },
+  "RETAINED": {
+    "id": "SE_RETAINED",
+    "room": "SE_RETAINED",
+    "shot": "retained",
+    "holdSeconds": 4,
+    "textKey": "ending.retained",
+    "flagOverlays": [
+      {
+        "flag": "NEVER_SAT",
+        "hide": [
+          "mychair",
+          "hundredth",
+          "hundredth_print"
+        ]
+      }
+    ],
+    "_note": "Added post-launch (Doc 1 §9.1). The same boardroom as ASSIMILATION, a shorter pull-back that keeps the package in frame. He opened the box and left it on the sorting table; the package is on the glass anyway, resealed, when he walks in.",
+    "zone": "head",
+    "show": [
+      "self"
+    ],
+    "autoSeconds": 90,
+    "ambience": "S8_C_AMB_BOARDROOM.wav"
+  }
+}
