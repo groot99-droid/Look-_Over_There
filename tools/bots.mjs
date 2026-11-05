@@ -55,5 +55,6 @@ for (const r of rows) {
 const res = rows.find(r => r.results)?.results;
 if (res) console.log("RESULTS " + res.map(x => `${x.place}.${x.name} ${Math.floor(x.ms / 60000)}:${String(Math.floor(x.ms / 1000) % 60).padStart(2, "0")}`).join("  "));
 if (JSON_OUT) fs.writeFileSync(JSON_OUT, JSON.stringify(rows, null, 2));
+{ const t = srv.tickStats; console.log(`Server sim tick: avg ${(t.sum / Math.max(1, t.n)).toFixed(2)} ms, max ${t.max.toFixed(1)} ms over ${t.n} ticks`); }
 await browser.close(); await srv.close();
 process.exit(rows.length && rows.every(r => r.results) ? 0 : 1);

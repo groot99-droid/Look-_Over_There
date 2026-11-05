@@ -60,11 +60,14 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
   const sendMe = (p, extra = {}) => { p.ps.sent = JSON.stringify(PS.view(p.ps)); send(p, {t: "me", ...PS.view(p.ps), ...extra}); };
   function hurtPlayer(room, p, dmg) { if (p && p.ps && PS.hit(p.ps, dmg, clock())) sendMe(p); }
   function pruneFloors(room) { for (const scene of Object.keys(room.floors)) if (!room.floors[scene].players().length) delete room.floors[scene]; }
+  const tickStats = {n: 0, sum: 0, max: 0};                                          // how long the simulation tick takes (ms), for load checks
   const ticker = setInterval(() => {
+    const t0 = performance.now();
     for (const room of rooms.values()) {
       for (const f of Object.values(room.floors)) f.step(1 / simHz);
       for (const p of room.players.values()) { const r = PS.tick(p.ps, 1 / simHz, clock()); if (r === "respawn") sendMe(p, {respawn: 1}); else if (PS.changed(p.ps)) sendMe(p); }
     }
+    const ms = performance.now() - t0; tickStats.n++; tickStats.sum += ms; if (ms > tickStats.max) tickStats.max = ms;
   }, 1000 / simHz);
   // fuses: one state array per gated floor, kept for the life of the room. Rules are in shared/fuses.js; this only relays them to the floor's players.
   const floorFuses = (room, scene) => room.fuses[scene] ||= newFloor();
@@ -252,7 +255,7 @@ export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = 
       if (!room.players.size) { clearTimeout(room.timer); rooms.delete(room.code); } else { lobbyChanged(room); checkDone(room); }
     });
   });
-  return new Promise(resolve => httpServer.listen(port, () => resolve({httpServer, wss, port: httpServer.address().port, rooms,
+  return new Promise(resolve => httpServer.listen(port, () => resolve({httpServer, wss, port: httpServer.address().port, rooms, tickStats,
     close: () => new Promise(r => { clearInterval(ticker); for (const c of wss.clients) c.terminate(); wss.close(); httpServer.close(r); })})));
 }
 
