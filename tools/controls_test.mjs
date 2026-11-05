@@ -18,9 +18,10 @@ await page.addInitScript(() => {                                          // a c
 await page.goto(`http://localhost:${srv.port}/`); await page.click("#l-solo");
 await page.waitForFunction(() => window.__game && !document.getElementById("load"), null, {timeout: 240000});
 const G = f => page.evaluate(f);
-const tick = async (n = 6) => { await G(`(() => { const g = window.__game; for (let i = 0; i < ${n}; i++) g.update(0.05); })()`); await sleep(60); };
+const tick = async (n = 6) => { await G(`(() => { const g = window.__game; for (let i = 0; i < ${n}; i++) g.sim(0.05, performance.now() / 1000); })()`); await sleep(60); };
 const tap = async (i, ms = 80) => { await G(`window.__press(${i}, true)`); await tick(2); await sleep(ms); await G(`window.__press(${i}, false)`); await tick(2); };
-const heldNow = () => G(() => document.querySelector("#held").style.display === "none" ? null : document.querySelector("#held b").textContent);
+const NAMES = {gun: "RAY GUN", cloak: "CLOAK", beacon: "AFK BEACON"};
+const heldNow = () => G(() => window.__game.HELD.item).then(it => it ? NAMES[it] : null);
 await G(() => { const g = window.__game; g.P.imm = 999; for (const m of g.monsters) { m.cfg = {...m.cfg, patrol: 0, alert: 0, chase: 0, sight: 0}; m.pos.set(900, m.fy, 900); } });
 
 // nothing in the hands
@@ -52,8 +53,8 @@ await G("window.__game.keys.KeyW = true; window.__game.keys.KeyR = true"); await
 await G(() => { window.__game.GUN.cool = 0; }); await tap(3); await tap(3); await tap(3);                                    // back to the gun
 check("holding the gun", /RAY GUN/.test(await heldNow() || ""), await heldNow());
 const r0 = await G(() => window.__game.LT.rounds); await tap(7); check("RT fires the ray gun", (await G(() => window.__game.LT.rounds)) === r0 - 1);
-await G("window.__press(6, true)"); await tick(30); check("LT aims: the view zooms in and the reticle shows", await G(() => window.__game.AUD && document.getElementById("reticle").style.display === "block" && window.__game.update && true));
-const fovAim = await G(() => window.__camFov?.()); await G("window.__press(6, false)"); await tick(30);
+await G("window.__press(6, true)"); await tick(30); check("LT aims: the aim state is on and the reticle shows", await G(() => window.__game.AIM.on && document.getElementById("reticle").style.display === "block"));
+await G("window.__press(6, false)"); await tick(30);
 // a cloak in the hands: RT on/off, LT short circuit
 await tap(3); check("rotated to the cloak", /CLOAK/.test(await heldNow() || ""), await heldNow());
 await tap(7); check("RT with the cloak switches it on", await G(() => window.__game.CL.st.on));
