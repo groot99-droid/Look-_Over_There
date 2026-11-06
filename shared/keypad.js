@@ -1,7 +1,8 @@
 // The keypad floor: the stair door takes a CODE_LEN-digit code. Each digit lies on a note somewhere on the floor (note i holds digit i of the code);
 // whoever reads a note shows that digit to the whole team. Typing a wrong code is loud and locks the keypad for a while.
 // The code itself stays with whoever keeps the state (the server in a room, the game when solo): clients only ever see view(st).
-export const KEYPAD_FLOORS = ["L2"];
+import {REGISTRY} from "./registry.js";
+export const KEYPAD_FLOORS = REGISTRY.scenesWith("keypad");
 export const CODE_LEN = 4;
 export const LOCK_MS = 8000;
 export const newKeypad = (rnd = Math.random) => ({code: Array.from({length: CODE_LEN}, () => Math.min(9, Math.floor(rnd() * 10))), found: Array(CODE_LEN).fill(false), solved: false, fails: 0, lockUntil: 0});

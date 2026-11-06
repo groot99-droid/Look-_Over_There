@@ -1,7 +1,8 @@
 // The world's rules that need no graphics: boxes, the spatial grid, doors, the navigation grid, path-finding, rays. Used by the game page (solo play and
 // rendering) and by the server (which runs the monsters). A world W is {id, floor, boxes, grid, doors, nav, shutter}; the page's `S` object already has this shape.
+import {REGISTRY} from "./registry.js";
 export const NAV = 0.5, NX0 = -27, NZ0 = -24, NW = Math.ceil(54 / NAV), NH = Math.ceil(54 / NAV), CELL = 8;
-export const FLOORS = {B1: -3.0, L1: 0, L2: 3.2, L3: 6.4, L4: 9.6};          // each scene's floor height
+export const FLOORS = REGISTRY.floors;          // each scene's floor height: the multiplayer scenes of the world manifest (shared/farway.manifest.js)
 export const rng32 = seed => { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; };
 
 const key = (i, k) => i + "," + k;

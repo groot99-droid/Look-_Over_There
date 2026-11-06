@@ -14,6 +14,7 @@ import {ALARM_MS, newRun, exitPlayer, done as runDone, finish, results as runRes
 import {LOOT_FLOORS, newLoot, takeLocker, takePack, takeBeacon, putBack} from "../shared/loot.js";
 import {KEYPAD_FLOORS, newKeypad, view as keypadView, find as keypadFind, tryCode} from "../shared/keypad.js";
 import {FLOORS} from "../shared/world.js";
+import {REGISTRY} from "../shared/registry.js";
 import {Floor} from "./floorsim.js";
 import * as PS from "./playerstate.js";
 
@@ -21,7 +22,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVE = new Set(["index.html", "world", "monsters", "characters", "shared", "models", "audio", "games"]);            // nothing else in the repo is public
 const TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".js": "text/javascript", ".ogg": "audio/ogg", ".m4a": "audio/mp4"};
 const RATE_BURST = 240, RATE_PER_S = 90, RATE_KICK = 600;                                   // messages: a burst of 240, 90 a second after (the game sends about 25 a second)
-const NUM_CHARS = 5, MAX_PLAYERS = 8, COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
+const NUM_CHARS = 5, MAX_PLAYERS = REGISTRY.maxPlayers("original"), COLORS = ["#e0a040", "#4fc3f7", "#9ccc65", "#f06292", "#ba68c8", "#ffd54f", "#4db6ac", "#ff8a65"];
+if (COLORS.length < MAX_PLAYERS) throw new Error(`the world manifest allows ${MAX_PLAYERS} players a room but the server has ${COLORS.length} player colours: add colours first`);
 
 export function createServer({port = 0, root = ROOT, countdownMs = 10000, rng = Math.random, simHz = Number(process.env.SIM_HZ) || 20, clock = () => Date.now() / 1000} = {}) {
   const docs = new Map(), readJson = rel => JSON.parse(fs.readFileSync(path.join(root, rel), "utf8"));

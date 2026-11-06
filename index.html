@@ -148,13 +148,11 @@ import {near as nearW, buildNav as buildNavW, cellOf, cellXZ, nearestWalk, astar
 import {MonsterSim, MON_STATES, SHOT_RANGE, SHOT_COOL, HIT_R, SHOT_NOISE_S, BANISH_PATH, BANISH_FROM_PLAYER, BANISH_WAIT, BANISH_IMMUNE, GLITCH_S, NOISE_WALK, NOISE_CARRY_CROUCH, NOISE_WALL, CHASE_LOSE_S, SEARCH_S, spawnPlan, rayMonster as rayMonsterW, banishSpot as banishSpotW, resolveShot as resolveShotW, swarmApart, stunNear} from "./shared/monsters.js";
 import {levelMix, stepInterval, stepGain} from "./shared/mix.js";
 import {POWER_SOURCES, newPower, throwPower} from "./shared/power.js";
+import {REGISTRY} from "./shared/registry.js";
 
 const MON_URL = "world/monsters.json";
 // one scene is resident at a time; the floors are joined by doors at the top of the stairs (doors carry a "link" to the scene they open)
-const SCENES = {
-  B1: {glbs: ["world/B1.glb"], floor: -3.0}, L1: {glbs: ["world/L1.glb"], floor: 0}, L2: {glbs: ["world/L2.glb"], floor: 3.2},
-  L3: {glbs: ["world/L3.glb"], floor: 6.4}, L4: {glbs: ["world/L4.glb", "world/Exterior.glb"], floor: 9.6},
-};
+const SCENES = REGISTRY.pageScenes;                              // {id: {glbs, floor}} for every built scene: from the world manifest (shared/farway.manifest.js)
 const $ = id => document.getElementById(id);
 // sound (audio/engine.js): built from the author's sound library at deploy time; silent if the files are missing, and off for bots
 const AUD = createAudio({enabled: !new URLSearchParams(location.search).has("bot")});
