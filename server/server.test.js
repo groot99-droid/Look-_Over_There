@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {WebSocket} from "ws";
 import {createServer} from "./server.js";
+import {REGISTRY} from "../shared/registry.js";
 
 // a tiny client: queues what it receives so a test can wait for a message of a given kind
 function client(port) {
@@ -366,5 +367,16 @@ test("a flood of messages is dropped and the flooder disconnected, while others 
   b.send({t: "s", scene: "B1", x: 5, y: -3, z: 6, yaw: 0}); const got = await a.next(m => m.t === "s" && m.x === 5, 2000).catch(() => null);
   assert.ok(got === null || got, "the server is still up"); assert.equal(a.ws.readyState === 3 || a.ws.readyState === 2 || a.ws.readyState === 1, true);
   await new Promise(r => setTimeout(r, 300)); assert.ok(a.ws.readyState >= 2, "the flooder was disconnected");
+  await srv.close();
+});
+
+test("a room holds the manifest's maximum number of players, each with a different colour, and refuses one more", async () => {
+  const max = REGISTRY.maxPlayers("original"), srv = await createServer(), cs = [];
+  for (let i = 0; i < max; i++) cs.push(await join(srv, "FULL", "P" + i));
+  const lobby = await cs[0].next(m => m.t === "lobby" && m.players.length === max);
+  assert.equal(new Set(lobby.players.map(p => p.color)).size, max, "every player has their own colour");
+  const extra = client(srv.port); await extra.open; extra.send({t: "join", room: "FULL", name: "Late"});
+  await extra.next(kind("full"));
+  assert.ok(!(await extra.quiet(100)).some(m => m.t === "welcome"), "the one over the limit is never welcomed");
   await srv.close();
 });

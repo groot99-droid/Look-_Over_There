@@ -2,7 +2,8 @@
 // A gun starts with GUN_ROUNDS, a pack adds PACK_ROUNDS, and nobody carries more than MAX_ROUNDS. Shared by the server (rooms) and the game (solo play).
 // AFK Beacons lie on every floor too (BEACONS each), taken once, at most MAX_BEACONS carried. A locker also holds a cloak: whoever opens it gets both.
 // A floor's state is {lockers: [0|id], packs: [0|id], beacons: [0|id]}: 0 = still there, otherwise the id of the player who took it.
-export const LOOT = {B1: {lockers: 8, packs: 3}, L1: {lockers: 0, packs: 3}, L2: {lockers: 0, packs: 3}, L3: {lockers: 0, packs: 4}, L4: {lockers: 0, packs: 3}};
+import {REGISTRY} from "./registry.js";
+export const LOOT = REGISTRY.loot;                      // lockers and packs per floor: from the world manifest
 export const GUN_ROUNDS = 3, PACK_ROUNDS = 3, MAX_ROUNDS = 9, BEACONS = 2, MAX_BEACONS = 2;
 export const LOOT_FLOORS = Object.keys(LOOT);
 export const newLoot = scene => LOOT[scene] ? {lockers: Array(LOOT[scene].lockers).fill(0), packs: Array(LOOT[scene].packs).fill(0), beacons: Array(BEACONS).fill(0)} : null;

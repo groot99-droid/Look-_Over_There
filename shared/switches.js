@@ -1,6 +1,7 @@
 // Floor switches: NEED_SW switches stand far apart on the floor; flip each one, in any order and one at a time (they stay flipped).
 // When all are on, the floor's stair door is powered. Shared by the server (rooms) and the game (solo play).
-export const SWITCH_FLOORS = ["L1"];
+import {REGISTRY} from "./registry.js";
+export const SWITCH_FLOORS = REGISTRY.scenesWith("switches");
 export const NEED_SW = 2;
 export const newSwitches = () => Array.from({length: NEED_SW}, () => ({on: false}));
 export const swCount = st => st ? st.filter(s => s.on).length : 0;

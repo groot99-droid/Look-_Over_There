@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {WebSocket} from "ws";
 import {createServer} from "./server.js";
+import {REGISTRY} from "../shared/registry.js";
 import {segClear, mainRegion, cellXZ, cellOf, FLOORS, rng32, rayClear} from "../shared/world.js";
 
 function client(port) {
@@ -89,8 +90,8 @@ test("a door a player asks for opens for the whole floor only when they are near
   at(ps[0], "L1", link.cx + 1, link.cz); await sleep(100); ps[0].send({t: "door", name: link.d.name, open: 1}); await sleep(100); assert.equal(link.target, 0, "stair doors are not a player's to open");
   await srv.close();
 });
-test("simulating a busy floor is cheap: 8 players on B1 for 10 s of game time", async () => {
-  const srv = await createServer(), {ps, floor} = await floorWith(srv, "F9", "B1", ["a", "b", "c", "d", "e", "f", "g", "h"]);
+test("simulating a busy floor is cheap: a full room (the manifest's size) on B1 for 10 s of game time", async () => {
+  const srv = await createServer(), {ps, floor} = await floorWith(srv, "F9", "B1", Array.from({length: REGISTRY.maxPlayers("original")}, (_, i) => "p" + i));
   const r = rng32(9), cells = mainRegion(floor.W); ps.forEach((p, i) => { const [x, z] = cellXZ(cells[Math.floor(r() * cells.length)]); at(p, "B1", x, z, {moving: 1, run: i % 2}); }); await sleep(150);
   const t0 = process.hrtime.bigint(); stepN(floor, 10); const ms = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
   console.log(`  average tick ${ms.toFixed(2)} ms`); assert.ok(ms < 5, `${ms} ms per tick`); await srv.close();

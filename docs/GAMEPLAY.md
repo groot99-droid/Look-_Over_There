@@ -1,6 +1,6 @@
 # Gameplay plan
 
-A co-op round for 2–8 players: climb the building together (B1 → L1 → L2 → L3 → L4) and get out. About 20 minutes.
+A co-op round for 2–10 players (the room size is `modes.original.players.max` in the world manifest): climb the building together (B1 → L1 → L2 → L3 → L4) and get out. About 20 minutes.
 Status: **built** = in the game and covered by `tools/mp_test.mjs` / `server/server.test.js`; **planned** = not built.
 The numbers are starting points, not tuned.
 
