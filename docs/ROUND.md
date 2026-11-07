@@ -54,7 +54,7 @@ A player who joins during PLAYING skips the lobby and spawns with the group. A r
 | RND-22 | The results screen shows place, time, deaths, revives and score, your best time on this browser, and a welcome to Farway the first time you finish the Original. | CHANGE | A browser test finishes a solo round and reads the screen. |
 | RND-23 | Finishing the Original for the first time sets the flag `original_complete`. It is stored on this device first and moves to the account when accounts exist. | NEW | The flag survives a reload. |
 | RND-24 | After the results the player can walk out to the Overworld. The link `lot.L4.front_doors>overworld` requires `original_complete`. | NEW (needs the Overworld) | `tools/manifest.mjs links` shows it open once the flag is held. |
-| RND-25 | Ranking is online and counts runs from the whole game. Boards are kept apart by mode and by group size: solo, 2 to 4, 5 to 10. Whether a board ranks by time or by score is open. | NEW, needs a backend | Decisions 1 and 2. |
+| RND-25 | Ranking is online and counts runs from the whole game. Boards are kept apart by mode and by group size: solo, 2 to 4, 5 to 10. Whether a board ranks by time or by score is open. | NEW | `docs/BACKEND.md`; Decision 1 (time or score) |
 | RND-26 | A run time is accepted only from a run record the server made. A client cannot send a time. | NEW | A test posts a made-up time and it is refused. |
 | RND-27 | Revives count toward a player's total score and deaths count against it. Starting formula, to tune: 1000, plus 150 per revive, minus 100 per death, minus 1 per 5 s of round time, never below 0. | NEW (formula is a proposal) | A test scores a made-up run. |
 
@@ -82,7 +82,7 @@ A 20-wave run: 5 floors, 4 chambers each, top down: L4, L3, L2, L1, B1. A chambe
 | GBI-7 | A locker (one per safe house and one per chamber) shows your loadout and lets you change it. After you die it returns your weapons and gear for free. It does not return ammo, consumables or perks. Those are bought back at the Market or a safe house. The existing one-time loot locker on B1 needs a different name. | NEW | A test dies and checks what the locker returns. |
 | GBI-8 | Lethal weapons come from the arsenal (ten weapons, three consumables). Each needs its own ammo rule. The ray, the cloak and the beacon stay non-lethal. Q and E (LB and RB) are consumable slots. | NEW | One test per weapon rule. |
 | GBI-9 | Money comes from clearing chambers and from kills and revives. Level comes from achievements. Money and items are shared with the rest of the game. Progress is its own save. | NEW | |
-| GBI-10 | Per-run score goes to an online leaderboard, with personal and overall bests. | NEW, needs a backend | Decision 1. |
+| GBI-10 | Per-run score goes to an online leaderboard, with personal and overall bests. | NEW | `docs/BACKEND.md` |
 | GBI-11 | The 20 waves stay 20 when floors are added, by sampling. | NEW | |
 
 ## Decisions
@@ -91,8 +91,8 @@ Settled:
 - Room size is 10.
 - Co-op inside the games is optional, and friends can pop in at any time, so a party of 10 can split across levels and games (RND-12, RND-15).
 - A death is a down nobody revived. Revives are counted and add to the total score (RND-20, RND-27).
+- Backend: PostgreSQL on Railway (Hobby now, Pro when needed). Players start anonymous and can sign in with Discord. The audience is 18 and over. Email sign-in and marketing email come later. See `docs/BACKEND.md`.
 
 Still open:
-1. **Backend.** Accounts, saves and an online leaderboard need storage. The options are in the PR discussion and will go into `docs/BACKEND.md` as the first step of session 5.
-2. **Score formula and what ranks the board.** The RND-27 formula is a placeholder. A board can rank by time, by score, or have one of each.
-3. **Name for the Going back in locker**, since the existing locker is a one-time pickup.
+1. **Score formula and what ranks the board.** The RND-27 formula is a placeholder. A board can rank by time, by score, or have one of each.
+2. **Name for the Going back in locker**, since the existing locker is a one-time pickup.

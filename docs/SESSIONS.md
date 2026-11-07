@@ -12,7 +12,7 @@ Read first: `docs/WORLD.md` (what Farway is), `docs/ROUND.md` (what a round must
 | 2 | Gate return fix, links read from the manifest | 1 | not started |
 | 3 | Run record, player stats, results v2 | 1 | not started |
 | 4 | Modes and parties | 1 | not started |
-| 5 | Backend: decision, then accounts and leaderboard | 3 | not started, needs the backend decision (`docs/ROUND.md`, decision 1) |
+| 5 | Backend: Postgres, anonymous accounts, Discord sign-in, leaderboard | 3 | decided, plan in `docs/BACKEND.md`; not started |
 | 6 | Overworld v0 | 1, 3 (after 2) | not started |
 | 7 | Physics: decision and a playground prototype | | not started |
 | 8 | Going back in prototype | 3, 4 | not started |
@@ -90,10 +90,14 @@ Every prompt below starts with this line:
 - **Done when.** A client joins with a `mode`. The room takes its floors, size and finish from the manifest. A party key groups people by mode and code. `GET /rooms?mode=` lists open rooms. The server refuses to start if the manifest's room size exceeds the player colours.
 - **Decided.** Room size is 10 (done in the manifest PR). Make sure the lobby, name tags and spawns handle 10.
 
-### Session 5: backend decision, then accounts and leaderboard
-- **Step 1, then stop.** Write `docs/BACKEND.md`: the storage options for the current Node server on Railway (a database add-on, a file database on a volume, a hosted service), what each costs and needs, how accounts start (anonymous device id first, upgradeable), and a recommendation. Push it and wait for the owner.
-- **Step 2, after approval.** Store run records (written only by the server), serve `GET /leaderboard?mode=&bucket=` with buckets solo, 2 to 4 and 5 to 8, keep the `original_complete` flag and later the save per account, and refuse a time that is not from a run record (RND-26).
-- **Needs.** Session 3 merged.
+### Session 5: backend (Postgres, anonymous accounts, Discord sign-in, leaderboard)
+- **Decided.** `docs/BACKEND.md` is the plan: Postgres as its own Railway service, anonymous accounts first, Discord sign-in, server-only writes, 18+ audience. Email and marketing come later.
+- **Goal.** The five build steps in `docs/BACKEND.md`: the store interface with an in-memory and a Postgres implementation, anonymous sessions, Discord sign-in, run records and the leaderboard, and the privacy routes.
+- **Touches.** New files under `server/store/` and `server/auth/`, a few lines in `server/server.js` (the join and the end of a round), new migration files. Nothing in `index.html` except a sign-in button and the leaderboard screen, kept to a small new region.
+- **Needs.** Session 3 merged for steps 4 and 5. Steps 1 to 3 can start earlier.
+- **The owner must first** create the Discord application, add the Railway Postgres service and set the variables listed in `docs/BACKEND.md`. Never put a secret in a file, a test or a chat.
+- **Done when.** The existing server tests pass unchanged against the in-memory store, a reload keeps `original_complete`, Discord sign-in works against a fake Discord in tests, and a time sent by a client is refused.
+- **Prompt.** Follow `docs/BACKEND.md` step by step. Start with the store interface and migrations, with every existing test passing on the in-memory store. Use a fake Discord server in tests. Say in the PR what ran against a real database and what did not.
 
 ### Session 6: Overworld v0
 - **Goal.** The smallest Overworld. Promote `overworld` to built in the manifest with a `parking_lot` scene made from `world/Exterior.glb`, the table and chairs as the spawn, the Look Over There store doors, and one sky mode. Walking out of L4 after the Original continues into it. The store doors show an options screen: Original, or Going back in (disabled, "soon"). The link `lot.L4.front_doors>overworld` requires `original_complete`.

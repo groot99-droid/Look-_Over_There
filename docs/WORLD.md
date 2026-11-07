@@ -286,7 +286,8 @@ This is on the order of 150 hand-built spaces. The photos are all AI-generated, 
 - **The key integration point.** The server accepts only the five floors (`FLOORS` in `shared/world.js`, plus the puzzle and loot tables). New scenes, chambers and addons must be added there, so the manifest must drive that list or every addon needs a server change.
 - **Unverified:** a real controller, the live site after the merge, Safari, and the speeds. The unit tests pass; the browser flows were not all driven.
 - The owner's stated order: connection system and shared save, then the physics decision, then the Overworld from the existing exterior, then the options screen and safe houses, with a world manifest soon. Overworld, city, manifest and physics come before the hotel, mall, grocery, Going back in and Secret Operations. [SETTLED]
-- Weeks to months, no time limit, you and me, one repo. [SETTLED]
+- Weeks to months, no time limit, the owner and the planning assistant, one repo. [SETTLED]
+- Backend decided: PostgreSQL on Railway (Hobby now, Pro when needed), anonymous start and Discord sign-in, audience 18 and over. See `docs/BACKEND.md`. [SETTLED]
 - Addons are folders in one repo, loaded on demand through the manifest. [SETTLED]
 - A small editor for doors, spawn points and links. [SETTLED]
 
