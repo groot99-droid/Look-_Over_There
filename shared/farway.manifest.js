@@ -25,11 +25,11 @@ export const FARWAY = {
   // a mode is a way to play a round; `players.max` is the room size the server enforces
   modes: {
     original: {
-      status: "built", area: "lot", floors: ["B1", "L1", "L2", "L3", "L4"], startScene: "B1", players: {min: 1, max: 8},
+      status: "built", area: "lot", floors: ["B1", "L1", "L2", "L3", "L4"], startScene: "B1", players: {min: 1, max: 10},
       finish: {scene: "L4", trigger: "parking_lot", alarmMs: 60000}, results: ["place", "time", "bestOnBrowser"],
     },
     going_back_in: {
-      status: "planned", area: "lot", floors: ["L4", "L3", "L2", "L1", "B1"], players: {min: 1, max: 8}, chambersPerFloor: 4, waves: 20,
+      status: "planned", area: "lot", floors: ["L4", "L3", "L2", "L1", "B1"], players: {min: 1, max: 10}, chambersPerFloor: 4, waves: 20,
     },
   },
 

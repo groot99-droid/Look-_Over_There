@@ -83,7 +83,7 @@ Wrong Exit maze, keycard doors everywhere else, hardest boss (The Registrar), Ad
 ## 4. Places
 
 ### Overworld [SETTLED unless tagged]
-- Walking out of Look Over There onto the parking lot ends the Original. The results screen already shows place, time and your best time on this browser. [BUILT] Still to add: deaths, an online ranking, a congratulations and a welcome to Farway. [SETTLED]
+- Walking out of Look Over There onto the parking lot ends the Original. The results screen already shows place, time and your best time on this browser. [BUILT] Still to add: deaths (downs nobody revived), revives, a score that counts revives, an online ranking, a congratulations and a welcome to Farway. [SETTLED]
 - A first-time player sees the whole Overworld at once, and new facades appear as things are added.
 - The Market sells weapons, gear, food, keycards and cosmetics. It is also where lost ammo, consumables and perks are bought back (section 5).
 - Groundskeepers maintain the hedges. They watch you or ignore you.
@@ -99,7 +99,7 @@ Wrong Exit maze, keycard doors everywhere else, hardest boss (The Registrar), Ad
 
 ### Look Over There [SETTLED unless tagged]
 
-**Original (built).** A co-op round for 2 to 8 players, about 20 minutes, solo allowed. [BUILT]
+**Original (built).** A co-op round for 2 to 10 players, about 20 minutes, solo allowed. [BUILT]
 - You climb B1, L1, L2, L3, L4 together and get out. One puzzle gates each floor.
 
 | Floor | Puzzle |
@@ -253,8 +253,9 @@ Wrong Exit maze, keycard doors everywhere else, hardest boss (The Registrar), Ad
 **Cameras.** A sighting sends agents and sounds an alarm in that area, only in restricted areas. Cut the breaker or smash cameras: they stay damaged until fixed, and this can hurt players. Agents are killable.
 
 **Co-op.** Parties group by game so friends can join whenever, like Roblox's multi-lobby system. Hide and seek with friends: either side seeks.
-- Built: rooms of up to 8 on a Node server, with the monsters simulated on the server at 20 Hz. [BUILT]
-- You asked for lobbies up to 10 and for co-op everywhere. Today the room cap is 8, and the gates to Right Door, Wrong Exit and the Intern are solo only. [OPEN]
+- Built: rooms of up to 10 on a Node server, with the monsters simulated on the server at 20 Hz. [BUILT]
+- Room size is 10. Co-op inside the games is optional: players enter any game alone or together, and friends can pop in at any time, so a party of 10 can split across levels and games. Today the gates to Right Door, Wrong Exit and the Intern are solo only. [SETTLED]
+- A death is a down nobody revived. Revives given are counted and add to the total score. [SETTLED]
 
 **Accounts and saves.** Account-based. Checkpoints plus beds and safe houses. Achievements plus a found-things list. Online leaderboard. None of this exists yet. The best time is stored per browser.
 
@@ -276,11 +277,11 @@ This is on the order of 150 hand-built spaces. The photos are all AI-generated, 
 
 ## 7. Technology and plan
 
-- **Corrected from v1:** there is already a backend. A Node server (`server/server.js`, a Dockerfile, deployed to Railway) runs rooms of up to 8. It simulates the monsters per floor at 20 Hz, owns each player's HP, rounds and downs, and has message rate limits. The rules are shared with solo play in `shared/`. [BUILT]
+- **Corrected from v1:** there is already a backend. A Node server (`server/server.js`, a Dockerfile, deployed to Railway) runs rooms of up to 10. It simulates the monsters per floor at 20 Hz, owns each player's HP, rounds and downs, and has message rate limits. The rules are shared with solo play in `shared/`. [BUILT]
 - **What the server lacks for the plan:**
   - accounts and saves;
   - an online leaderboard (best time is per browser);
-  - parties by game and lobbies up to 10;
+  - parties that split across levels and games, and join at any time;
   - gates and addons inside rooms.
 - **The key integration point.** The server accepts only the five floors (`FLOORS` in `shared/world.js`, plus the puzzle and loot tables). New scenes, chambers and addons must be added there, so the manifest must drive that list or every addon needs a server change.
 - **Unverified:** a real controller, the live site after the merge, Safari, and the speeds. The unit tests pass; the browser flows were not all driven.
@@ -307,9 +308,9 @@ The smallest version where the world feels real:
 
 ## 10. Still open
 
-1. Room cap: 8 today, 10 in the plan. Co-op inside the games: gates are solo only today.
+1. The score formula, and whether a board ranks by time or by score.
 2. Name for the Going back in locker, since the existing locker is a one-time pickup.
-3. Ranking: deaths, an online leaderboard and accounts need a backend you have not chosen.
+3. Ranking: deaths, an online leaderboard and accounts need a backend the owner has not chosen yet.
 4. Company names for the Hallam Row jobs, if you want them.
 5. Lore truths per area.
 6. How the arsenal's ammo works, since only the ray has rounds today.

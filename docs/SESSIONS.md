@@ -12,12 +12,13 @@ Read first: `docs/WORLD.md` (what Farway is), `docs/ROUND.md` (what a round must
 | 2 | Gate return fix, links read from the manifest | 1 | not started |
 | 3 | Run record, player stats, results v2 | 1 | not started |
 | 4 | Modes and parties | 1 | not started |
-| 5 | Backend: decision, then accounts and leaderboard | 3 | not started, needs owner decision 2 |
+| 5 | Backend: decision, then accounts and leaderboard | 3 | not started, needs the backend decision (`docs/ROUND.md`, decision 1) |
 | 6 | Overworld v0 | 1, 3 (after 2) | not started |
 | 7 | Physics: decision and a playground prototype | | not started |
 | 8 | Going back in prototype | 3, 4 | not started |
 | 9 | City v0 on Hallam Row | 6 | not started |
 | 10 | Editor for scenes and links | 1 | not started |
+| 11 | Games inside parties (co-op in Right Door, Wrong Exit and the Intern) | 4 | not started |
 
 Update this table in the last commit of each session.
 
@@ -26,14 +27,15 @@ Update this table in the last commit of each session.
 ```
 1 -+-> 2 --------------+
    +-> 3 -+-> 5        +-> 6 -> 9
-   |      +-> 4 -> 8 --+
+   |      +-> 4 -+-> 8 --+
+   |             +-> 11
    +-> 10
 7 (independent)
 ```
 
 - **Wave A**, after session 1 merges: 2, 3, 7, 10. They touch different files.
 - **Wave B**: 4, 5 (decision document first), 6.
-- **Wave C**: 8, 9.
+- **Wave C**: 8, 9, 11.
 
 ## Rules for every session
 
@@ -79,14 +81,14 @@ Every prompt below starts with this line:
 - **Touches.** `server/playerstate.js`, `server/server.js` (stat hooks, the run record), `shared/finish.js`, the `#results` region of `index.html`.
 - **Does not touch.** Ranking and accounts.
 - **Done when.** The server counts downs, revives, shots, hits, beacons and time per floor. At the end it builds the run record from RND-21 and sends the rows with downs. The results screen shows time, downs and the best time. The first Original finish shows a welcome to Farway and sets `original_complete` on this device. Each counter has a test.
-- **Decision to carry on with a default.** "Deaths" means downs. Default: count every down.
+- **Decided.** A death is a down nobody revived (the 45 s ran out, or any down in solo play). Revives given are counted and add to the score. Start from the formula in RND-27 of `docs/ROUND.md`; it is a placeholder.
 - **Prompt.** Add per-player counters to the server's player state and tests. Build the run record in `shared/finish.js` as a pure function with tests. Extend the `results` message and the results screen. Store `original_complete` in `localStorage` under one key, wrapped in try and catch.
 
 ### Session 4: modes and parties
-- **Goal.** RND-10 to RND-14.
+- **Goal.** RND-10 to RND-14, and the first half of RND-12: a party is a room, each player's place is separate from the party, any player can join or leave a floor at any time, and "go to a friend" jumps to their floor.
 - **Touches.** The join and lobby code in `server/server.js` and the lobby overlay in `index.html`; `shared/registry.js` lookups for modes.
 - **Done when.** A client joins with a `mode`. The room takes its floors, size and finish from the manifest. A party key groups people by mode and code. `GET /rooms?mode=` lists open rooms. The server refuses to start if the manifest's room size exceeds the player colours.
-- **Decision to carry on with a default.** Room size stays 8. Only the guard is built.
+- **Decided.** Room size is 10 (done in the manifest PR). Make sure the lobby, name tags and spawns handle 10.
 
 ### Session 5: backend decision, then accounts and leaderboard
 - **Step 1, then stop.** Write `docs/BACKEND.md`: the storage options for the current Node server on Railway (a database add-on, a file database on a volume, a hosted service), what each costs and needs, how accounts start (anonymous device id first, upgradeable), and a recommendation. Push it and wait for the owner.
@@ -116,3 +118,9 @@ Every prompt below starts with this line:
 ### Session 10: editor for scenes and links
 - **Goal.** A local page for placing doors, spawn points and links and writing them to the manifest and the scene files. Decide first whether the manifest becomes JSON with a thin JS wrapper (so a tool can write it safely); `node tools/manifest.mjs export` already produces the JSON.
 - **Needs.** Session 1.
+
+### Session 11: games inside parties
+- **Goal.** RND-15. Co-op inside Right Door, Wrong Exit and the Intern is optional: a player can enter a game alone or with friends, and friends can pop in at any time. A party of 10 can split across levels and games.
+- **Needs.** Session 4 (a party is a room, and a player's place is separate from the party).
+- **Start with a design note** in `docs/ROUND.md` before code: one instance per party and game, which players are in it, and what is shared. Default for version 1: players in the same instance see each other walk (presence and positions only), and each player's puzzles stay their own. Shared puzzle state comes later.
+- **Done when.** Two clients enter Right Door, Wrong Exit separately, meet in one instance, and leave without breaking the other's game. The gate's `soloOnly` flag is dropped for that game in the manifest. Then the same for the Intern.
